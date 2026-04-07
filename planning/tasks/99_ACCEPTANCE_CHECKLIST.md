@@ -2,36 +2,48 @@
 
 Usa este archivo para control de cierre por fase.
 
+**Ultima actualizacion: ver historial de Git/PR**
+
 ## Fase A - Editor Foundations
 
-- [ ] Seleccion de entidad basada en EntityId estable.
-- [ ] Undo/Redo global de escena (paint, place, erase, property edit).
-- [ ] Escenas versionadas con validacion de carga.
-- [ ] Dirty state visible y protegido ante perdida de cambios.
+- [x] Seleccion de entidad basada en EntityId estable. *(Implementado: EntityData.id uint64_t, nextEntityId, allocateEntityId(), selectedEntityId_ en EditorApp, findEntityById())*
+- [ ] Undo/Redo global de escena (paint, place, erase, property edit). *(Pendiente: No existe src/editor/commands/. Solo hay undo/redo de texto en file editor.)*
+- [ ] Escenas versionadas con validacion de carga. *(Pendiente: No hay campo sceneVersion. Serializacion basica funciona pero sin validacion robusta.)*
+- [ ] Dirty state visible y protegido ante perdida de cambios. *(Parcial: SceneData.modified existe pero no hay confirmacion al cerrar/abrir/salir.)*
 
 ## Fase B - Asset Pipeline
 
-- [ ] Asset Database persistente con GUID por recurso.
-- [ ] Import incremental por hash/mtime.
-- [ ] Asset browser con metadata y accion Reimport.
-- [ ] Integracion estable de assets en editor sin crasheos.
+- [ ] Asset Database persistente con GUID por recurso. *(No iniciado)*
+- [ ] Import incremental por hash/mtime. *(No iniciado)*
+- [ ] Asset browser con metadata y accion Reimport. *(No iniciado)*
+- [ ] Integracion estable de assets en editor sin crasheos. *(No iniciado)*
 
 ## Fase C - Runtime Systems
 
-- [ ] Game update migrado a scheduler + sistemas.
-- [ ] Gameplay configurable desde archivos de datos.
-- [ ] AI con pathfinding A* usando costos de terreno.
+- [ ] Game update migrado a scheduler + sistemas. *(No iniciado — logica monolitica en Game.cpp)*
+- [ ] Gameplay configurable desde archivos de datos. *(No iniciado — stats hardcodeados en Character.cpp y Enemy.cpp)*
+- [ ] AI con pathfinding A* usando costos de terreno. *(No iniciado — enemigos usan persecucion directa)*
 - [ ] Paridad funcional mantenida respecto al comportamiento previo.
 
 ## Fase D - Produccion y QA
 
-- [ ] Play mode con rollback exacto al estado de edicion.
-- [ ] Save/load versionado con compatibilidad basica de versiones.
-- [ ] Tests automatizados minimos corriendo desde CMake.
-- [ ] Panel de rendimiento con metricas de frame y subsistemas.
+- [ ] Play mode con rollback exacto al estado de edicion. *(No iniciado)*
+- [ ] Save/load versionado con compatibilidad basica de versiones. *(No iniciado)*
+- [ ] Tests automatizados minimos corriendo desde CMake. *(No iniciado — no existe directorio tests/)*
+- [ ] Panel de rendimiento con metricas de frame y subsistemas. *(No iniciado)*
 
 ## Cierre de ciclo
 
 - [ ] Documentacion tecnica actualizada tras cada fase.
 - [ ] Deuda tecnica registrada y priorizada para el siguiente sprint.
 - [ ] Version estable de DashEngine instalada y validada.
+
+## Resumen de avance
+
+| Fase | Completado | Total | % |
+|------|-----------|-------|---|
+| A - Editor Foundations | 1 | 4 | 25% |
+| B - Asset Pipeline | 0 | 4 | 0% |
+| C - Runtime Systems | 0 | 4 | 0% |
+| D - Produccion y QA | 0 | 4 | 0% |
+| **Total** | **1** | **16** | **6%** |

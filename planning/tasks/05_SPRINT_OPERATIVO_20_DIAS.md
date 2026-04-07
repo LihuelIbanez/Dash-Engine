@@ -8,8 +8,6 @@ Usa este tablero para mover el estado diario del sprint. Solo debe haber 1 item 
 
 ### To Do
 
-- [ ] D01 - EntityId estable en escena (6h)
-- [ ] D02 - Seleccion por ID en editor (6h)
 - [ ] D03 - Infraestructura CommandStack (6h)
 - [ ] D04 - Comandos paint/place/erase (6h)
 - [ ] D05 - CMake + serializacion versionada (6h)
@@ -31,18 +29,19 @@ Usa este tablero para mover el estado diario del sprint. Solo debe haber 1 item 
 
 ### Doing
 
-- [ ] (Mover aqui el ID activo del dia, por ejemplo: D01)
+- [ ] D03 - Infraestructura CommandStack (proximo paso)
 
 ### Done
 
-- [ ] (Mover aqui los IDs completados)
+- [x] D01 - EntityId estable en escena (6h) — Completado: EntityData.id, nextEntityId, allocateEntityId(), backward compat
+- [x] D02 - Seleccion por ID en editor (6h) — Completado: selectedEntityId_, findEntityById(), jerarquia e inspector adaptados
 
 ## Registro Diario de Ejecucion
 
 Usa una linea por dia para dejar trazabilidad de avance real.
 
-- [ ] Dia 01 | ID: D01 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __
-- [ ] Dia 02 | ID: D02 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __
+- [x] Dia 01 | ID: D01 | Plan: 6h | Real: ~6h | Bloqueos: Ninguno | Resultado: EntityData.id, nextEntityId y allocateEntityId() implementados. Backward compat con escenas sin id.
+- [x] Dia 02 | ID: D02 | Plan: 6h | Real: ~6h | Bloqueos: Ninguno | Resultado: selectedEntityId_ reemplaza indice. findEntityById() integrado en jerarquia e inspector.
 - [ ] Dia 03 | ID: D03 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __
 - [ ] Dia 04 | ID: D04 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __
 - [ ] Dia 05 | ID: D05 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __

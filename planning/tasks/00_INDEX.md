@@ -2,6 +2,31 @@
 
 Este directorio separa las tareas por semana para ejecutar el escalado del editor y del juego.
 
+**Ultima actualizacion: 2026-04-07**
+
+## Estado actual del sprint
+
+| Semana | Estado | Progreso |
+|--------|--------|----------|
+| 1 - Editor Foundations | 🟡 En progreso | D01-D02 completados, D03-D06 pendientes |
+| 2 - Asset Pipeline | ⬜ No iniciada | D07-D12 pendientes |
+| 3 - Runtime Systems | ⬜ No iniciada | D13-D17 pendientes |
+| 4 - Produccion/QA | ⬜ No iniciada | D18-D20 pendientes |
+
+**Proximo paso:** D03 - Infraestructura CommandStack (Undo/Redo global de escena)
+
+## Funcionalidades ya implementadas (fuera del plan)
+
+El proyecto ya cuenta con una base funcional significativa:
+- Editor con docking layout completo (viewport isometrico, jerarquia, propiedades, tile palette, file browser, build log)
+- Herramientas: Select, Paint Tile, Place Enemy, Erase, Build & Run
+- Camera WASD + right-drag + scroll
+- File editor con tabs, undo/redo de texto (200 niveles), auto-save
+- Sistema de build integrado (CMake) con output en Build Log
+- Scene serialization JSON (load/save con backward compat)
+- Juego standalone con: movimiento WASD + click-to-move, combate con cooldowns/criticos, sistema de clases RPG (4 arquetipos), enemigos con FSM (Idle/Patrol/Chase/Attack), HUD estilo Diablo 2, mundo procedural 64x64 con Perlin noise
+- Packaging macOS (.app bundle)
+
 ## Orden recomendado
 
 1. Semana 1: Fundaciones del editor y modelo de datos.
