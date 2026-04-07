@@ -3,6 +3,7 @@
 #include "imgui.h"
 #include "SceneData.h"
 #include "World.h"
+#include "CommandStack.h"
 #include <string>
 #include <vector>
 #include <map>
@@ -23,11 +24,14 @@ private:
     bool          running_     = false;
 
     // ── Scene ────────────────────────────────────────────────────────────────
-    SceneData scene_;
-    World     world_;
-    uint64_t  selectedEntityId_ = 0;   // 0 = no selection
+    SceneData    scene_;
+    World        world_;
+    uint64_t     selectedEntityId_ = 0;   // 0 = no selection
+    CommandStack commandStack_;
 
     EntityData* findEntityById(uint64_t id);
+    void performUndo();
+    void performRedo();
 
     // ── Camera ───────────────────────────────────────────────────────────────
     float camX_ = 12.f;
