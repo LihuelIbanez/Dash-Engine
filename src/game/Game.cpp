@@ -1,9 +1,30 @@
 #include "Game.h"
+#include "MovementSystem.h"
+#include "AISystem.h"
+#include "CombatSystem.h"
+#include "SpawnRewardSystem.h"
+#include "GameplayDatabase.h"
 #include <cstdlib>
 #include <cmath>
 #include <algorithm>
 #include <cstdio>
 #include "Font5x7.h"
+
+// ═════════════════════════════════════════════════════════════════════════════
+// initSystems — register all gameplay systems in execution order
+// ═════════════════════════════════════════════════════════════════════════════
+void Game::initSystems()
+{
+    ctx_.world   = &world_;
+    ctx_.player  = &player_;
+    ctx_.enemies = &enemies_;
+    ctx_.score   = &score_;
+
+    scheduler_.addSystem(std::make_unique<MovementSystem>());
+    scheduler_.addSystem(std::make_unique<AISystem>());
+    scheduler_.addSystem(std::make_unique<CombatSystem>());
+    scheduler_.addSystem(std::make_unique<SpawnRewardSystem>());
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Font helpers (member versions so they can use renderer_)
@@ -72,18 +93,51 @@ Game::Game()
     std::srand(12345);
     world_.generate(12345);
 
-    // Spawn several goblins around the player
+    // Load gameplay data from JSON
+    gameDb_.load("assets");
+
+    // Apply player class data if available
+    if (auto* cls = gameDb_.findPlayerClass("warrior")) {
+        player_.stats.attack      = cls->attack;
+        player_.stats.defense     = cls->defense;
+        player_.stats.magicAttack = cls->magicAttack;
+        player_.stats.speed       = cls->speed;
+        player_.stats.critChance  = cls->critChance;
+        player_.maxHealth         = cls->maxHp;
+        player_.health            = cls->maxHp;
+        player_.maxMana           = cls->maxMana;
+        player_.mana              = cls->maxMana;
+        player_.attackCooldownMax = cls->attackCooldown;
+    }
+
+    spawnEnemiesFromData();
+}
+
+void Game::spawnEnemiesFromData()
+{
     const float cx = static_cast<float>(WORLD_W) / 2.f;
     const float cy = static_cast<float>(WORLD_H) / 2.f;
 
-    auto addEnemy = [&](float ox, float oy, const std::string& n) {
-        enemies_.push_back(std::make_unique<Enemy>(cx + ox, cy + oy, n));
+    // Spawn layout: name → offset pairs
+    struct SpawnInfo { const char* type; float ox; float oy; };
+    SpawnInfo spawns[] = {
+        { "skeleton",  4.f,  3.f },
+        { "zombie",   -5.f,  2.f },
+        { "skeleton",  2.f, -5.f },
+        { "fallen",   -3.f, -4.f },
+        { "zombie",    6.f, -2.f },
     };
-    addEnemy( 4.f,  3.f, "Skeleton");
-    addEnemy(-5.f,  2.f, "Zombie");
-    addEnemy( 2.f, -5.f, "Skeleton");
-    addEnemy(-3.f, -4.f, "Fallen");
-    addEnemy( 6.f, -2.f, "Zombie");
+
+    for (auto& s : spawns) {
+        if (auto* data = gameDb_.findEnemy(s.type)) {
+            enemies_.push_back(
+                std::make_unique<Enemy>(cx + s.ox, cy + s.oy, *data));
+        } else {
+            // Fallback: create with default constructor using type as name
+            enemies_.push_back(
+                std::make_unique<Enemy>(cx + s.ox, cy + s.oy, std::string(s.type)));
+        }
+    }
 }
 
 Game::~Game()
@@ -114,6 +168,8 @@ bool Game::init()
 
     SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
     running_ = true;
+
+    initSystems();
     return true;
 }
 
@@ -179,73 +235,16 @@ void Game::processEvents()
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Update
+// Update — delegates to SystemScheduler
 // ─────────────────────────────────────────────────────────────────────────────
 void Game::update(float dt)
 {
-    if (!player_.isAlive()) { running_ = false; return; }
+    ctx_.dt      = dt;
+    ctx_.running = running_;
 
-    const Uint8* keys = SDL_GetKeyboardState(nullptr);
-    player_.handleInput(keys, dt);
-    player_.update(dt);
+    scheduler_.updateAll(ctx_);
 
-    // Auto-attack nearby enemy when close enough (Diablo behaviour)
-    if (player_.hasTarget) {
-        for (auto& e : enemies_) {
-            if (!e->isAlive()) continue;
-            float dx = e->x - player_.x, dy = e->y - player_.y;
-            if (std::sqrt(dx*dx + dy*dy) < 1.2f && player_.canAttack()) {
-                player_.triggerAttack();
-                break;
-            }
-        }
-    }
-
-    for (auto& e : enemies_) {
-        if (!e->isAlive()) continue;
-        e->updateAI(dt, player_.x, player_.y);
-        e->update(dt);
-    }
-
-    resolveAttacks();
-
-    for (auto& e : enemies_) {
-        if (!e->isAlive() && e->health == 0) {
-            player_.gainExperience(e->expReward);
-            score_ += 10;
-            e->health = -1;
-        }
-    }
-    enemies_.erase(
-        std::remove_if(enemies_.begin(), enemies_.end(),
-            [](const std::unique_ptr<Enemy>& e){ return e->health < 0; }),
-        enemies_.end()
-    );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Combat
-// ─────────────────────────────────────────────────────────────────────────────
-void Game::resolveAttacks()
-{
-    if (player_.attackedThisFrame()) {
-        for (auto& e : enemies_) {
-            if (!e->isAlive()) continue;
-            float dx = e->x - player_.x, dy = e->y - player_.y;
-            if (std::sqrt(dx*dx + dy*dy) <= 1.8f) {
-                int dmg = player_.rollDamage() - e->stats.defense;
-                e->takeDamage(std::max(1, dmg));
-            }
-        }
-    }
-
-    for (auto& e : enemies_) {
-        if (!e->isAlive()) continue;
-        if (e->attackedThisFrame()) {
-            int dmg = e->rollDamage() - player_.stats.defense;
-            player_.takeDamage(std::max(1, dmg));
-        }
-    }
+    running_ = ctx_.running;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

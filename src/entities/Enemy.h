@@ -1,6 +1,8 @@
 #pragma once
 #include "Character.h"
 
+struct EnemyData;   // forward declaration (src/game/data/GameplayDatabase.h)
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Enemy AI behaviour states
 // ─────────────────────────────────────────────────────────────────────────────
@@ -21,6 +23,9 @@ public:
     int   expReward;        // XP granted to player on death
 
     Enemy(float x, float y, const std::string& name = "Goblin");
+
+    // Data-driven constructor: initialise from EnemyData loaded from JSON
+    Enemy(float x, float y, const EnemyData& data);
 
     // Call each frame with the player's current world position
     void updateAI(float dt, float playerX, float playerY);

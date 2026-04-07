@@ -1,0 +1,62 @@
+[
+    {
+        "id": "warrior",
+        "name": "Warrior",
+        "description": "High HP / defence, melee specialist",
+        "maxHp": 150,
+        "maxMana": 60,
+        "stats": {
+            "attack": 18,
+            "defense": 10,
+            "magicAttack": 2,
+            "speed": 3.0,
+            "critChance": 0.05
+        },
+        "attackCooldown": 1.0
+    },
+    {
+        "id": "mage",
+        "name": "Mage",
+        "description": "Low HP, high magic attack",
+        "maxHp": 80,
+        "maxMana": 160,
+        "stats": {
+            "attack": 8,
+            "defense": 4,
+            "magicAttack": 22,
+            "speed": 3.5,
+            "critChance": 0.08
+        },
+        "attackCooldown": 1.2
+    },
+    {
+        "id": "rogue",
+        "name": "Rogue",
+        "description": "Medium HP, high speed and crit chance",
+        "maxHp": 100,
+        "maxMana": 80,
+        "stats": {
+            "attack": 14,
+            "defense": 6,
+            "magicAttack": 4,
+            "speed": 5.0,
+            "critChance": 0.20
+        },
+        "attackCooldown": 0.7
+    },
+    {
+        "id": "ranger",
+        "name": "Ranger",
+        "description": "Ranged, balanced speed",
+        "maxHp": 110,
+        "maxMana": 100,
+        "stats": {
+            "attack": 12,
+            "defense": 7,
+            "magicAttack": 5,
+            "speed": 4.5,
+            "critChance": 0.12
+        },
+        "attackCooldown": 0.9
+    }
+]

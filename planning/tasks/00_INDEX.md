@@ -10,10 +10,10 @@ Este directorio separa las tareas por semana para ejecutar el escalado del edito
 |--------|--------|----------|
 | 1 - Editor Foundations | ✅ Completada | D01-D06 completados |
 | 2 - Asset Pipeline | ✅ Completada | D07-D12 completados |
-| 3 - Runtime Systems | ⬜ No iniciada | D13-D17 pendientes |
+| 3 - Runtime Systems | 🔧 En progreso | D13-D16 completados, D17 pendiente |
 | 4 - Produccion/QA | ⬜ No iniciada | D18-D20 pendientes |
 
-**Proximo paso:** D13 - RuntimeContext + scheduler (inicio Semana 3)
+**Proximo paso:** D17 - Pathfinding A*
 
 ## Funcionalidades ya implementadas (fuera del plan)
 

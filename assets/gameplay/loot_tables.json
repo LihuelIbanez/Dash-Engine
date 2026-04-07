@@ -1,0 +1,21 @@
+[
+    {
+        "id": "common_drop",
+        "enemies": ["skeleton", "zombie", "fallen"],
+        "drops": [
+            { "item": "gold",          "chance": 0.80, "minQty": 5,  "maxQty": 20 },
+            { "item": "health_potion",  "chance": 0.25, "minQty": 1,  "maxQty": 1  },
+            { "item": "mana_potion",    "chance": 0.15, "minQty": 1,  "maxQty": 1  }
+        ]
+    },
+    {
+        "id": "elite_drop",
+        "enemies": ["dark_mage"],
+        "drops": [
+            { "item": "gold",          "chance": 1.00, "minQty": 20, "maxQty": 50 },
+            { "item": "health_potion",  "chance": 0.40, "minQty": 1,  "maxQty": 2  },
+            { "item": "mana_potion",    "chance": 0.35, "minQty": 1,  "maxQty": 2  },
+            { "item": "rare_gem",       "chance": 0.10, "minQty": 1,  "maxQty": 1  }
+        ]
+    }
+]

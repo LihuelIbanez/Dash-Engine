@@ -8,18 +8,13 @@ Usa este tablero para mover el estado diario del sprint. Solo debe haber 1 item 
 
 ### To Do
 
-- [ ] D13 - RuntimeContext + scheduler (6h)
-- [ ] D14 - MovementSystem + CombatSystem (6h)
-- [ ] D15 - AISystem + SpawnRewardSystem (6h)
-- [ ] D16 - Gameplay data-driven (6h)
-- [ ] D17 - Pathfinding A* (6h)
 - [ ] D18 - Play Mode con rollback (6h)
 - [ ] D19 - Save/Load versionado (6h)
 - [ ] D20 - Tests + profiling + cierre (6h)
 
 ### Doing
 
-- [ ] D13 - RuntimeContext + scheduler (proximo paso)
+- [ ] D17 - Pathfinding A* (proximo paso)
 
 ### Done
 
@@ -35,6 +30,10 @@ Usa este tablero para mover el estado diario del sprint. Solo debe haber 1 item 
 - [x] D10 - ImportManager + IImporter (6h) — Completado: IImporter interfaz, ImportManager con importAsset/importAll/computeFileHash/inferAssetType, import incremental por hash
 - [x] D11 - Importers iniciales (6h) — Completado: SceneImporter, TileSetImporter, GameplayConfigImporter con validacion JSON y copia a library/
 - [x] D12 - Asset Browser + Inspector (6h) — Completado: AssetBrowserPanel con tabla/filtro/seleccion, AssetInspectorPanel con GUID/tipo/hash/deps/reimport, docking en layout
+- [x] D13 - RuntimeContext + scheduler (6h) — Completado: RuntimeContext con world/player/enemies/score/dt, ISystem interfaz, SystemScheduler, 4 sistemas inline (PlayerMovement, AIUpdate, CombatResolve, Cleanup), Game.cpp delegacion total a scheduler
+- [x] D14 - MovementSystem + CombatSystem (6h) — Completado: Extraidos a src/game/systems/MovementSystem.h/.cpp y CombatSystem.h/.cpp
+- [x] D15 - AISystem + SpawnRewardSystem (6h) — Completado: Extraidos a src/game/systems/AISystem.h/.cpp y SpawnRewardSystem.h/.cpp
+- [x] D16 - Gameplay data-driven (6h) — Completado: GameplayDatabase.h/.cpp, player_classes.json, enemies.json, loot_tables.json, Enemy constructor data-driven, Game.cpp usa GameplayDatabase
 
 ## Registro Diario de Ejecucion
 
@@ -52,10 +51,10 @@ Usa una linea por dia para dejar trazabilidad de avance real.
 - [x] Dia 10 | ID: D10 | Plan: 6h | Real: ~0.3h | Bloqueos: Ninguno | Resultado: IImporter.h interfaz, ImportManager.h/.cpp con hash incremental, inferAssetType por extension/carpeta.
 - [x] Dia 11 | ID: D11 | Plan: 6h | Real: ~0.3h | Bloqueos: Ninguno | Resultado: SceneImporter, TileSetImporter, GameplayConfigImporter. Validacion JSON, copia a library/. CMakeLists con IMPORTER_SOURCES.
 - [x] Dia 12 | ID: D12 | Plan: 6h | Real: ~0.5h | Bloqueos: Ninguno | Resultado: AssetBrowserPanel (tabla, filtro, seleccion por GUID), AssetInspectorPanel (metadata completa + Reimport boton), docking en layout, PANEL_SOURCES en CMakeLists.
-- [ ] Dia 13 | ID: D13 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __
-- [ ] Dia 14 | ID: D14 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __
-- [ ] Dia 15 | ID: D15 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __
-- [ ] Dia 16 | ID: D16 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __
+- [x] Dia 13 | ID: D13 | Plan: 6h | Real: ~0.5h | Bloqueos: Ninguno | Resultado: RuntimeContext.h, ISystem.h, SystemScheduler.h/.cpp. 4 sistemas inline en Game.cpp (PlayerMovement, AIUpdate, CombatResolve, Cleanup). update() delega a scheduler. resolveAttacks() eliminado.
+- [x] Dia 14 | ID: D14 | Plan: 6h | Real: ~0.3h | Bloqueos: Ninguno | Resultado: MovementSystem.h/.cpp y CombatSystem.h/.cpp extraidos de Game.cpp a src/game/systems/.
+- [x] Dia 15 | ID: D15 | Plan: 6h | Real: ~0.3h | Bloqueos: Ninguno | Resultado: AISystem.h/.cpp y SpawnRewardSystem.h/.cpp extraidos. Game.cpp limpio solo con includes e initSystems().
+- [x] Dia 16 | ID: D16 | Plan: 6h | Real: ~0.5h | Bloqueos: Ninguno | Resultado: GameplayDatabase.h/.cpp carga player_classes/enemies/loot_tables JSON. Enemy constructor data-driven. Game.cpp spawn desde datos.
 - [ ] Dia 17 | ID: D17 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __
 - [ ] Dia 18 | ID: D18 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __
 - [ ] Dia 19 | ID: D19 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __

@@ -1,4 +1,5 @@
 #include "Enemy.h"
+#include "GameplayDatabase.h"
 #include <cstdlib>
 #include <cmath>
 #include <algorithm>
@@ -10,6 +11,22 @@ Enemy::Enemy(float x, float y, const std::string& name)
     , expReward(40)
 {
     stats.speed = 2.2f;
+    idleTimer_  = 1.5f + static_cast<float>(std::rand() % 200) / 100.f;
+    pickNewPatrolDir();
+}
+
+Enemy::Enemy(float x, float y, const EnemyData& data)
+    : Character(x, y, CharacterClass::Enemy, data.maxHp, data.name)
+    , detectionRadius(data.detectionRadius)
+    , attackRadius(data.attackRadius)
+    , expReward(data.expReward)
+{
+    stats.attack      = data.attack;
+    stats.defense     = data.defense;
+    stats.magicAttack = data.magicAttack;
+    stats.speed       = data.speed;
+    stats.critChance  = data.critChance;
+    attackCooldownMax = data.attackCooldown;
     idleTimer_  = 1.5f + static_cast<float>(std::rand() % 200) / 100.f;
     pickNewPatrolDir();
 }

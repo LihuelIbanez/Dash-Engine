@@ -5,6 +5,9 @@
 #include "World.h"
 #include "Player.h"
 #include "Enemy.h"
+#include "RuntimeContext.h"
+#include "SystemScheduler.h"
+#include "GameplayDatabase.h"
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Game – owns the SDL window/renderer and the game loop
@@ -28,6 +31,13 @@ private:
 
     int           score_    = 0;
 
+    // ── Runtime systems ──────────────────────────────────────────────────────
+    RuntimeContext   ctx_;
+    SystemScheduler  scheduler_;
+    GameplayDatabase gameDb_;
+    void initSystems();
+    void spawnEnemiesFromData();
+
     // Diablo 2 HUD panel height (bottom strip)
     static constexpr int HUD_H       = 100;
     // Orb radius
@@ -43,9 +53,6 @@ private:
     void processEvents();
     void update(float dt);
     void render();
-
-    // --- combat --------------------------------------------------------------
-    void resolveAttacks();
 
     // --- HUD (Diablo 2 style) ------------------------------------------------
     void renderHUD();
