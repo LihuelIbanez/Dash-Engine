@@ -46,6 +46,10 @@ public:
     // Query walkability for a world-space float position
     bool isWalkable(float wx, float wy) const;
 
+    // Movement cost for a tile (used by A* pathfinding).
+    // Returns a high value for non-walkable tiles.
+    float terrainCost(int tx, int ty) const;
+
 private:
     void drawTile(SDL_Renderer* renderer,
                   int tx, int ty,

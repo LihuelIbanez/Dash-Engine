@@ -1,5 +1,7 @@
 #include "Enemy.h"
 #include "GameplayDatabase.h"
+#include "GridNav.h"
+#include "World.h"
 #include <cstdlib>
 #include <cmath>
 #include <algorithm>
@@ -47,7 +49,7 @@ void Enemy::pickNewPatrolDir()
 }
 
 // ─── AI update ────────────────────────────────────────────────────────────────
-void Enemy::updateAI(float dt, float playerX, float playerY)
+void Enemy::updateAI(float dt, float playerX, float playerY, const World* world)
 {
     float dist = distTo(playerX, playerY);
     vx = 0.f;  vy = 0.f;
@@ -60,7 +62,12 @@ void Enemy::updateAI(float dt, float playerX, float playerY)
             state_      = EnemyState::Patrol;
             pickNewPatrolDir();
         }
-        if (dist < detectionRadius) state_ = EnemyState::Chase;
+        if (dist < detectionRadius) {
+            state_ = EnemyState::Chase;
+            path_.clear();
+            pathIdx_ = 0;
+            pathRefreshT_ = 99.f; // force immediate pathfind
+        }
         break;
 
     // ── Patrol ────────────────────────────────────────────────────────────────
@@ -72,16 +79,63 @@ void Enemy::updateAI(float dt, float playerX, float playerY)
             state_      = EnemyState::Idle;
             idleTimer_  = 1.f + static_cast<float>(std::rand() % 100) / 100.f;
         }
-        if (dist < detectionRadius) state_ = EnemyState::Chase;
+        if (dist < detectionRadius) {
+            state_ = EnemyState::Chase;
+            path_.clear();
+            pathIdx_ = 0;
+            pathRefreshT_ = 99.f;
+        }
         break;
 
-    // ── Chase ─────────────────────────────────────────────────────────────────
+    // ── Chase (A* pathfinding) ────────────────────────────────────────────────
     case EnemyState::Chase: {
-        float dx = playerX - x, dy = playerY - y;
-        float len = std::sqrt(dx * dx + dy * dy);
-        if (len > 1e-3f) { vx = dx / len;  vy = dy / len; }
-        if (dist <= attackRadius)              state_ = EnemyState::Attack;
-        if (dist > detectionRadius * 1.5f)    state_ = EnemyState::Idle;
+        // Refresh path every ~0.5 seconds or if path was cleared
+        pathRefreshT_ += dt;
+        if (world && (pathRefreshT_ >= 0.5f || path_.empty())) {
+            pathRefreshT_ = 0.f;
+            NavPoint start = GridNav::worldToTile(x, y);
+            NavPoint goal  = GridNav::worldToTile(playerX, playerY);
+            path_ = GridNav::findPath(start.x, start.y,
+                                      goal.x,  goal.y, *world);
+            pathIdx_ = 0;
+            // Skip the first waypoint if we're already on it
+            if (path_.size() > 1) pathIdx_ = 1;
+        }
+
+        // Follow the current waypoint
+        if (!path_.empty() && pathIdx_ < static_cast<int>(path_.size())) {
+            float wpx, wpy;
+            GridNav::tileToCentre(path_[pathIdx_].x, path_[pathIdx_].y, wpx, wpy);
+            float dx = wpx - x, dy = wpy - y;
+            float wdist = std::sqrt(dx * dx + dy * dy);
+            if (wdist < 0.3f) {
+                // Reached waypoint, advance to next
+                ++pathIdx_;
+            }
+            if (pathIdx_ < static_cast<int>(path_.size())) {
+                GridNav::tileToCentre(path_[pathIdx_].x, path_[pathIdx_].y, wpx, wpy);
+                dx = wpx - x; dy = wpy - y;
+                wdist = std::sqrt(dx * dx + dy * dy);
+                if (wdist > 1e-3f) {
+                    vx = dx / wdist;
+                    vy = dy / wdist;
+                }
+            }
+        } else {
+            // Fallback: direct chase if no path (shouldn't happen often)
+            float dx = playerX - x, dy = playerY - y;
+            float len = std::sqrt(dx * dx + dy * dy);
+            if (len > 1e-3f) { vx = dx / len;  vy = dy / len; }
+        }
+
+        if (dist <= attackRadius) {
+            state_ = EnemyState::Attack;
+            path_.clear();
+        }
+        if (dist > detectionRadius * 1.5f) {
+            state_ = EnemyState::Idle;
+            path_.clear();
+        }
         break;
     }
 

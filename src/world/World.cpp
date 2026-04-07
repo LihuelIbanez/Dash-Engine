@@ -316,6 +316,24 @@ bool World::isWalkable(float wx, float wy) const
     return grid[row][col].walkable;
 }
 
+float World::terrainCost(int tx, int ty) const
+{
+    if (tx < 0 || tx >= WORLD_W || ty < 0 || ty >= WORLD_H) return 1e6f;
+    const Tile& t = grid[ty][tx];
+    if (!t.walkable) return 1e6f;
+
+    switch (t.type) {
+    case TileType::Grass:   return 1.0f;
+    case TileType::Dirt:    return 1.0f;
+    case TileType::Sand:    return 1.3f;   // sand is slower
+    case TileType::Forest:  return 1.5f;   // trees slow movement
+    case TileType::Stone:   return 1.1f;
+    case TileType::Mountain:return 2.0f;   // walkable mountain tiles are expensive
+    case TileType::Snow:    return 1.8f;
+    default:                return 1e6f;   // water / deep water
+    }
+}
+
 // ─── Rendering ────────────────────────────────────────────────────────────────
 void World::drawTile(SDL_Renderer* renderer,
                      int tx, int ty,

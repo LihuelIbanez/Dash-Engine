@@ -8,13 +8,12 @@ Usa este tablero para mover el estado diario del sprint. Solo debe haber 1 item 
 
 ### To Do
 
-- [ ] D18 - Play Mode con rollback (6h)
 - [ ] D19 - Save/Load versionado (6h)
 - [ ] D20 - Tests + profiling + cierre (6h)
 
 ### Doing
 
-- [ ] D17 - Pathfinding A* (proximo paso)
+- [ ] D18 - Play Mode con rollback (proximo paso)
 
 ### Done
 
@@ -34,6 +33,7 @@ Usa este tablero para mover el estado diario del sprint. Solo debe haber 1 item 
 - [x] D14 - MovementSystem + CombatSystem (6h) — Completado: Extraidos a src/game/systems/MovementSystem.h/.cpp y CombatSystem.h/.cpp
 - [x] D15 - AISystem + SpawnRewardSystem (6h) — Completado: Extraidos a src/game/systems/AISystem.h/.cpp y SpawnRewardSystem.h/.cpp
 - [x] D16 - Gameplay data-driven (6h) — Completado: GameplayDatabase.h/.cpp, player_classes.json, enemies.json, loot_tables.json, Enemy constructor data-driven, Game.cpp usa GameplayDatabase
+- [x] D17 - Pathfinding A* (6h) — Completado: GridNav.h/.cpp con A* 8-dir, terrainCost por tipo de tile, Enemy Chase usa waypoints A*, path refresh 0.5s, corner-cutting prevention
 
 ## Registro Diario de Ejecucion
 
@@ -55,7 +55,7 @@ Usa una linea por dia para dejar trazabilidad de avance real.
 - [x] Dia 14 | ID: D14 | Plan: 6h | Real: ~0.3h | Bloqueos: Ninguno | Resultado: MovementSystem.h/.cpp y CombatSystem.h/.cpp extraidos de Game.cpp a src/game/systems/.
 - [x] Dia 15 | ID: D15 | Plan: 6h | Real: ~0.3h | Bloqueos: Ninguno | Resultado: AISystem.h/.cpp y SpawnRewardSystem.h/.cpp extraidos. Game.cpp limpio solo con includes e initSystems().
 - [x] Dia 16 | ID: D16 | Plan: 6h | Real: ~0.5h | Bloqueos: Ninguno | Resultado: GameplayDatabase.h/.cpp carga player_classes/enemies/loot_tables JSON. Enemy constructor data-driven. Game.cpp spawn desde datos.
-- [ ] Dia 17 | ID: D17 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __
+- [x] Dia 17 | ID: D17 | Plan: 6h | Real: ~0.5h | Bloqueos: Ninguno | Resultado: GridNav.h/.cpp A* 8-dir con octile heuristic, terrainCost() en World (Sand 1.3, Forest 1.5, Mountain 2.0), Enemy Chase sigue waypoints con refresh 0.5s, prevencion corner-cutting.
 - [ ] Dia 18 | ID: D18 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __
 - [ ] Dia 19 | ID: D19 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __
 - [ ] Dia 20 | ID: D20 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __

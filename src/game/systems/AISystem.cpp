@@ -16,7 +16,7 @@ void AISystem::update(RuntimeContext& ctx)
     }
     for (auto& e : *ctx.enemies) {
         if (!e->isAlive()) continue;
-        e->updateAI(ctx.dt, ctx.player->x, ctx.player->y);
+        e->updateAI(ctx.dt, ctx.player->x, ctx.player->y, ctx.world);
         e->update(ctx.dt);
     }
 }

@@ -50,6 +50,7 @@ file(GLOB CORE_SOURCES
     "src/core/*.cpp"
     "src/entities/*.cpp"
     "src/world/*.cpp"
+    "src/game/nav/*.cpp"
 )
 add_library(game_core STATIC ${CORE_SOURCES})
 target_include_directories(game_core PUBLIC
@@ -59,6 +60,7 @@ target_include_directories(game_core PUBLIC
     src/world
     src/rendering
     src/game/data
+    src/game/nav
     ${SDL2_INCLUDE_DIRS}
 )
 target_link_libraries(game_core PUBLIC ${SDL2_LIBRARIES})
@@ -76,7 +78,7 @@ add_executable(${PROJECT_NAME}
 )
 target_include_directories(${PROJECT_NAME} PRIVATE
     src src/core src/entities src/world src/rendering src/game
-    src/game/runtime src/game/systems src/game/data
+    src/game/runtime src/game/systems src/game/data src/game/nav
     ${SDL2_INCLUDE_DIRS}
 )
 target_link_libraries(${PROJECT_NAME} PRIVATE game_core nlohmann_json::nlohmann_json ${SDL2_LIBRARIES})

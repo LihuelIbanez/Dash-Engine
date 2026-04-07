@@ -1,5 +1,7 @@
 #pragma once
 #include "Character.h"
+#include "GridNav.h"
+#include <vector>
 
 struct EnemyData;   // forward declaration (src/game/data/GameplayDatabase.h)
 
@@ -28,7 +30,8 @@ public:
     Enemy(float x, float y, const EnemyData& data);
 
     // Call each frame with the player's current world position
-    void updateAI(float dt, float playerX, float playerY);
+    void updateAI(float dt, float playerX, float playerY,
+                  const class World* world = nullptr);
 
     void update(float dt)                                        override;
     void draw(SDL_Renderer* renderer, float camX, float camY) const override;
@@ -42,6 +45,11 @@ private:
     float      patrolDirX_ = 0.f;
     float      patrolDirY_ = 0.f;
     float      patrolTimer_= 0.f;
+
+    // A* path cache
+    std::vector<NavPoint> path_;
+    int                   pathIdx_       = 0;
+    float                 pathRefreshT_  = 0.f; // time since last pathfind
 
     void pickNewPatrolDir();
     float distTo(float px, float py) const;
