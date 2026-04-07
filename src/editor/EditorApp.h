@@ -6,6 +6,8 @@
 #include "CommandStack.h"
 #include "AssetDatabase.h"
 #include "ImportManager.h"
+#include "AssetBrowserPanel.h"
+#include "AssetInspectorPanel.h"
 #include <string>
 #include <vector>
 #include <map>
@@ -41,6 +43,8 @@ private:
     ImportManager  importManager_;
     std::string    assetsRoot_;
     std::string    libraryRoot_;
+    AssetBrowserPanel   assetBrowserPanel_;
+    AssetInspectorPanel assetInspectorPanel_;
 
     // ── Camera ───────────────────────────────────────────────────────────────
     float camX_ = 12.f;

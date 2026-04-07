@@ -8,7 +8,7 @@ Marca cada item con [x] cuando este completado.
 ## Objetivos de Escalado
 
 - [x] Reducir acoplamiento entre editor, datos y runtime.
-- [ ] Soportar crecimiento de contenido (assets, escenas, entidades).
+- [x] Soportar crecimiento de contenido (assets, escenas, entidades).
 - [ ] Mejorar mantenibilidad y velocidad de iteracion.
 - [ ] Preparar base para trabajo en equipo y features de produccion.
 
@@ -40,23 +40,23 @@ Marca cada item con [x] cuando este completado.
 - [x] Titulo de ventana con indicador `*` de cambios sin guardar.
 - [x] SDL_QUIT interceptado por guard de confirmacion.
 
-## Semana 2 - Asset Pipeline minimo (estilo Unity/Godot)
+## Semana 2 - Asset Pipeline minimo (estilo Unity/Godot) ✅ COMPLETADA
 
 ### 5) Asset Database
-- [ ] Crear `assets/` como origen y `library/` como cache/importados.
-- [ ] Definir GUID por asset (persistente).
-- [ ] Crear indice de assets (`asset_db.json`).
-- [ ] Evitar depender solo de path absoluto para referencias.
+- [x] Crear `assets/` como origen y `library/` como cache/importados.
+- [x] Definir GUID por asset (persistente).
+- [x] Crear indice de assets (`asset_db.json`).
+- [x] Evitar depender solo de path absoluto para referencias.
 
 ### 6) Importers iniciales
-- [ ] Importer de texturas/tilesets.
-- [ ] Importer de escenas.
-- [ ] Deteccion de cambios por hash/mtime.
-- [ ] Reimport solo de lo modificado.
+- [x] Importer de texturas/tilesets.
+- [x] Importer de escenas.
+- [x] Deteccion de cambios por hash/mtime.
+- [x] Reimport solo de lo modificado.
 
 ### 7) File Browser / Inspector mejorados
-- [ ] Mostrar metadata de asset (GUID, tipo, dependencias).
-- [ ] Boton Reimport en assets seleccionados.
+- [x] Mostrar metadata de asset (GUID, tipo, dependencias).
+- [x] Boton Reimport en assets seleccionados.
 - [x] Mostrar estado dirty/no guardado en escena y assets.
 
 ## Semana 3 - Runtime escalable (Juego)
@@ -113,7 +113,7 @@ Marca cada item con [x] cuando este completado.
 Marca como completado cuando se cumpla todo:
 
 - [x] Editor con undo/redo global para operaciones de escena.
-- [ ] Asset DB con GUID + import/cache incremental.
+- [x] Asset DB con GUID + import/cache incremental.
 - [ ] Runtime separado por sistemas principales.
 - [ ] Save/load versionado funcionando.
 - [ ] Suite minima de tests automatizados.
@@ -124,7 +124,7 @@ Marca como completado cuando se cumpla todo:
 | Semana | Estado | Avance |
 |--------|--------|--------|
 | 1 - Editor Foundations | ✅ Completada | 100% |
-| 2 - Asset Pipeline | ⬜ No iniciada | 0% |
+| 2 - Asset Pipeline | ✅ Completada | 100% |
 | 3 - Runtime Systems | ⬜ No iniciada | 0% |
 | 4 - Produccion/QA | ⬜ No iniciada | 0% |
 

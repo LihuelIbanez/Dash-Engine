@@ -231,6 +231,8 @@ void EditorApp::buildDefaultLayout(ImGuiID dockspaceId)
     ImGui::DockBuilderDockWindow("File Editor",      dockViewport);
     ImGui::DockBuilderDockWindow("Properties",       dockProperties);
     ImGui::DockBuilderDockWindow("File Browser",     dockFileBrowser);
+    ImGui::DockBuilderDockWindow("Asset Browser",     dockBottom);
+    ImGui::DockBuilderDockWindow("Asset Inspector",   dockProperties);
     ImGui::DockBuilderDockWindow("Build Log",        dockBottom);
 
     ImGui::DockBuilderFinish(dockspaceId);
@@ -302,6 +304,13 @@ void EditorApp::run()
         drawBuildLog();
         drawFileBrowser();
         drawFileEditor();
+        assetBrowserPanel_.draw(assetDb_, importManager_, assetsRoot_,
+                                libraryRoot_, assetDbPath_,
+                                [this](const std::string& m){ addLog(m); });
+        assetInspectorPanel_.draw(assetBrowserPanel_.selectedGuid(),
+                                  assetDb_, importManager_, assetsRoot_,
+                                  libraryRoot_, assetDbPath_,
+                                  [this](const std::string& m){ addLog(m); });
         if (showOpenDialog_) drawOpenDialog();
         if (showSaveDialog_) drawSaveDialog();
         if (showConfirmDialog_) drawConfirmDialog();

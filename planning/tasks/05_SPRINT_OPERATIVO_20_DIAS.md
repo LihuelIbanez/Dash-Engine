@@ -8,7 +8,6 @@ Usa este tablero para mover el estado diario del sprint. Solo debe haber 1 item 
 
 ### To Do
 
-- [ ] D12 - Asset Browser + Inspector (6h)
 - [ ] D13 - RuntimeContext + scheduler (6h)
 - [ ] D14 - MovementSystem + CombatSystem (6h)
 - [ ] D15 - AISystem + SpawnRewardSystem (6h)
@@ -20,7 +19,7 @@ Usa este tablero para mover el estado diario del sprint. Solo debe haber 1 item 
 
 ### Doing
 
-- [ ] D12 - Asset Browser + Inspector (proximo paso)
+- [ ] D13 - RuntimeContext + scheduler (proximo paso)
 
 ### Done
 
@@ -35,6 +34,7 @@ Usa este tablero para mover el estado diario del sprint. Solo debe haber 1 item 
 - [x] D09 - Integracion AssetDatabase en editor (6h) — Completado: importAll en init, Reimport All en File Browser, assetDb_.save() en destructor
 - [x] D10 - ImportManager + IImporter (6h) — Completado: IImporter interfaz, ImportManager con importAsset/importAll/computeFileHash/inferAssetType, import incremental por hash
 - [x] D11 - Importers iniciales (6h) — Completado: SceneImporter, TileSetImporter, GameplayConfigImporter con validacion JSON y copia a library/
+- [x] D12 - Asset Browser + Inspector (6h) — Completado: AssetBrowserPanel con tabla/filtro/seleccion, AssetInspectorPanel con GUID/tipo/hash/deps/reimport, docking en layout
 
 ## Registro Diario de Ejecucion
 
@@ -51,7 +51,7 @@ Usa una linea por dia para dejar trazabilidad de avance real.
 - [x] Dia 09 | ID: D09 | Plan: 6h | Real: ~0.3h | Bloqueos: Ninguno | Resultado: ImportManager.importAll en init, Reimport All boton en File Browser, save DB tras import.
 - [x] Dia 10 | ID: D10 | Plan: 6h | Real: ~0.3h | Bloqueos: Ninguno | Resultado: IImporter.h interfaz, ImportManager.h/.cpp con hash incremental, inferAssetType por extension/carpeta.
 - [x] Dia 11 | ID: D11 | Plan: 6h | Real: ~0.3h | Bloqueos: Ninguno | Resultado: SceneImporter, TileSetImporter, GameplayConfigImporter. Validacion JSON, copia a library/. CMakeLists con IMPORTER_SOURCES.
-- [ ] Dia 12 | ID: D12 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __
+- [x] Dia 12 | ID: D12 | Plan: 6h | Real: ~0.5h | Bloqueos: Ninguno | Resultado: AssetBrowserPanel (tabla, filtro, seleccion por GUID), AssetInspectorPanel (metadata completa + Reimport boton), docking en layout, PANEL_SOURCES en CMakeLists.
 - [ ] Dia 13 | ID: D13 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __
 - [ ] Dia 14 | ID: D14 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __
 - [ ] Dia 15 | ID: D15 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __
