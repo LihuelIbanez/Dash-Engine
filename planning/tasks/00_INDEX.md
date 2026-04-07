@@ -2,7 +2,7 @@
 
 Este directorio separa las tareas por semana para ejecutar el escalado del editor y del juego.
 
-**Ultima actualizacion: 2025-04-07**
+**Ultima actualizacion: 2026-04-07**
 
 ## Estado actual del sprint
 
