@@ -40,12 +40,13 @@ void AssetBrowserPanel::draw(AssetDatabase& db,
     // Table of assets
     if (ImGui::BeginTable("##assets", 3,
             ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg
-            | ImGuiTableFlags_Resizable | ImGuiTableFlags_ScrollY,
+            | ImGuiTableFlags_Resizable | ImGuiTableFlags_ScrollY
+            | ImGuiTableFlags_SizingFixedFit,
             ImGui::GetContentRegionAvail())) {
 
-        ImGui::TableSetupColumn("Source Path", ImGuiTableColumnFlags_None, 200.f);
+        ImGui::TableSetupColumn("Source Path", ImGuiTableColumnFlags_WidthStretch);
         ImGui::TableSetupColumn("Type",        ImGuiTableColumnFlags_WidthFixed, 90.f);
-        ImGui::TableSetupColumn("GUID",        ImGuiTableColumnFlags_None, 180.f);
+        ImGui::TableSetupColumn("GUID",        ImGuiTableColumnFlags_WidthStretch);
         ImGui::TableHeadersRow();
 
         for (auto& [guid, rec] : db.records()) {
