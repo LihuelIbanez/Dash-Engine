@@ -3,58 +3,65 @@
 Este plan prioriza primero el Editor (como Unity/Unreal/Godot) y luego el Runtime del juego.
 Marca cada item con [x] cuando este completado.
 
+**Ultima actualizacion: 2026-04-07**
+
 ## Objetivos de Escalado
 
-- [ ] Reducir acoplamiento entre editor, datos y runtime.
+- [x] Reducir acoplamiento entre editor, datos y runtime.
 - [ ] Soportar crecimiento de contenido (assets, escenas, entidades).
 - [ ] Mejorar mantenibilidad y velocidad de iteracion.
 - [ ] Preparar base para trabajo en equipo y features de produccion.
 
-## Semana 1 - Fundaciones del Editor (Arquitectura)
+## Semana 1 - Fundaciones del Editor (Arquitectura) ✅ COMPLETADA
 
 ### 1) Modelo de datos de escena y componentes
-- [ ] Definir `EntityId` estable (int/uint64) para editor y runtime.
-- [ ] Separar datos de escena de la logica visual del editor.
+- [x] Definir `EntityId` estable (int/uint64) para editor y runtime.
+- [x] Separar datos de escena de la logica visual del editor.
 - [ ] Crear estructuras base de componentes (`Transform`, `Render`, `Combat`, etc.).
-- [ ] Versionar formato de escena (`scene_version`).
+- [x] Versionar formato de escena (`scene_version`).
 
 ### 2) Command System global (Undo/Redo real)
-- [ ] Crear interfaz `ICommand` (`apply()`, `undo()`, `name()`).
-- [ ] Implementar `CommandStack` global del editor.
-- [ ] Migrar acciones actuales a comandos:
-- [ ] Pintar tile.
-- [ ] Colocar enemigo.
-- [ ] Borrar entidad/tile.
-- [ ] Mover/editar propiedades de entidad.
-- [ ] Añadir atajos globales: Cmd+Z (undo), Cmd+Shift+Z (redo).
+- [x] Crear interfaz `ICommand` (`apply()`, `undo()`, `name()`).
+- [x] Implementar `CommandStack` global del editor.
+- [x] Migrar acciones actuales a comandos:
+  - [x] Pintar tile.
+  - [x] Colocar enemigo.
+  - [x] Borrar entidad/tile.
+  - [ ] Mover/editar propiedades de entidad.
+- [x] Añadir atajos globales: Cmd+Z (undo), Cmd+Shift+Z (redo).
 
 ### 3) Persistencia robusta
-- [ ] Guardado canonico (orden estable en JSON).
-- [ ] Validacion basica al cargar escenas (campos requeridos).
-- [ ] Manejo de errores de parseo con mensajes claros en Build Log.
+- [x] Guardado canonico (orden estable en JSON).
+- [x] Validacion basica al cargar escenas (campos requeridos).
+- [x] Manejo de errores de parseo con mensajes claros en Build Log.
+
+### 4) Dirty state y proteccion de cambios *(agregado)*
+- [x] Modal "Unsaved Changes" (Save/Discard/Cancel) en New/Open/Exit.
+- [x] Titulo de ventana con indicador `*` de cambios sin guardar.
+- [x] SDL_QUIT interceptado por guard de confirmacion.
 
 ## Semana 2 - Asset Pipeline minimo (estilo Unity/Godot)
 
-### 4) Asset Database
+### 5) Asset Database
 - [ ] Crear `assets/` como origen y `library/` como cache/importados.
 - [ ] Definir GUID por asset (persistente).
 - [ ] Crear indice de assets (`asset_db.json`).
 - [ ] Evitar depender solo de path absoluto para referencias.
 
-### 5) Importers iniciales
+### 6) Importers iniciales
 - [ ] Importer de texturas/tilesets.
 - [ ] Importer de escenas.
 - [ ] Deteccion de cambios por hash/mtime.
 - [ ] Reimport solo de lo modificado.
 
-### 6) File Browser / Inspector mejorados
+### 7) File Browser / Inspector mejorados
 - [ ] Mostrar metadata de asset (GUID, tipo, dependencias).
 - [ ] Boton Reimport en assets seleccionados.
-- [ ] Mostrar estado dirty/no guardado en escena y assets.
+- [x] Mostrar estado dirty/no guardado en escena y assets.
 
 ## Semana 3 - Runtime escalable (Juego)
 
-### 7) Separacion por sistemas
+### 8) Separacion por sistemas
 - [ ] Crear modulos por sistema:
 - [ ] `MovementSystem`.
 - [ ] `CombatSystem`.
@@ -63,29 +70,29 @@ Marca cada item con [x] cuando este completado.
 - [ ] `InteractionSystem`.
 - [ ] Evitar logica grande centralizada en `Game.cpp`.
 
-### 8) Data-driven gameplay
+### 9) Data-driven gameplay
 - [ ] Mover stats de enemigos/jugador a archivos de datos.
 - [ ] Definir tablas para loot/exp/dificultad.
 - [ ] Cargar configuraciones por semilla y por biome.
 
-### 9) Navegacion/pathfinding
+### 10) Navegacion/pathfinding
 - [ ] Implementar A* sobre grid walkable.
 - [ ] Soportar costo por tipo de terreno.
 - [ ] Enemigos usan navegacion en lugar de persecucion directa simple.
 
 ## Semana 4 - Produccion, QA y rendimiento
 
-### 10) Play Mode estable (Editor)
+### 11) Play Mode estable (Editor)
 - [ ] Snapshot del estado de escena al entrar en Play.
 - [ ] Restaurar estado al salir de Play (sin contaminar datos).
 - [ ] Separar claramente modo Edit vs Play en UI.
 
-### 11) Guardado/carga de partida
+### 12) Guardado/carga de partida
 - [ ] Definir formato de savegame versionado.
 - [ ] Cargar/guardar estado completo del mundo + entidades.
 - [ ] Estrategia de migracion de versiones de save.
 
-### 12) Testing y profiling minimo
+### 13) Testing y profiling minimo
 - [ ] Test de determinismo procedural por seed.
 - [ ] Test de carga de escenas invalidas/validas.
 - [ ] Test basico de comandos undo/redo del editor.
@@ -105,12 +112,21 @@ Marca cada item con [x] cuando este completado.
 
 Marca como completado cuando se cumpla todo:
 
-- [ ] Editor con undo/redo global para operaciones de escena.
+- [x] Editor con undo/redo global para operaciones de escena.
 - [ ] Asset DB con GUID + import/cache incremental.
 - [ ] Runtime separado por sistemas principales.
 - [ ] Save/load versionado funcionando.
 - [ ] Suite minima de tests automatizados.
 - [ ] Metricas de rendimiento visibles en editor.
+
+## Resumen de Progreso
+
+| Semana | Estado | Avance |
+|--------|--------|--------|
+| 1 - Editor Foundations | ✅ Completada | 100% |
+| 2 - Asset Pipeline | ⬜ No iniciada | 0% |
+| 3 - Runtime Systems | ⬜ No iniciada | 0% |
+| 4 - Produccion/QA | ⬜ No iniciada | 0% |
 
 ## Notas
 

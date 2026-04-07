@@ -8,7 +8,6 @@ Usa este tablero para mover el estado diario del sprint. Solo debe haber 1 item 
 
 ### To Do
 
-- [ ] D07 - Base Asset System (6h)
 - [ ] D08 - AssetDatabase persistente (6h)
 - [ ] D09 - Integracion AssetDatabase en editor (6h)
 - [ ] D10 - ImportManager + IImporter (6h)
@@ -25,7 +24,7 @@ Usa este tablero para mover el estado diario del sprint. Solo debe haber 1 item 
 
 ### Doing
 
-- [ ] D07 - Base Asset System (proximo paso)
+- [ ] D08 - AssetDatabase persistente (proximo paso)
 
 ### Done
 
@@ -35,6 +34,7 @@ Usa este tablero para mover el estado diario del sprint. Solo debe haber 1 item 
 - [x] D04 - Comandos paint/place/erase (6h) — Completado
 - [x] D05 - CMake + serializacion versionada (6h) — Completado
 - [x] D06 - Dirty state y confirmaciones (5h) — Completado: modal Unsaved Changes (Save/Discard/Cancel), requestAction guard, titulo ventana con *
+- [x] D07 - Base Asset System (6h) — Completado: AssetTypes.h, AssetRecord.h, carpetas assets/ y library/
 
 ## Registro Diario de Ejecucion
 
@@ -46,7 +46,7 @@ Usa una linea por dia para dejar trazabilidad de avance real.
 - [x] Dia 04 | ID: D04 | Plan: 6h | Real: ~3h | Bloqueos: Ninguno | Resultado: PaintTileCommand, PlaceEnemyCommand, EraseCommand. handleToolClick y drawSceneHierarchy refactorizados. Build limpio 0 warnings.
 - [x] Dia 05 | ID: D05 | Plan: 6h | Real: ~2h | Bloqueos: Ninguno | Resultado: sceneVersion en SceneData, kCurrentVersion=1, validacion de JSON/bounds/types/entities, loadErrors, mensajes en Build Log.
 - [x] Dia 06 | ID: D06 | Plan: 5h | Real: ~1h | Bloqueos: Ninguno | Resultado: PendingAction enum, requestAction/executePendingAction, modal Save/Discard/Cancel, titulo ventana con *, SDL_QUIT guard.
-- [ ] Dia 07 | ID: D07 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __
+- [x] Dia 07 | ID: D07 | Plan: 6h | Real: ~0.5h | Bloqueos: Ninguno | Resultado: AssetTypes.h (enum AssetType), AssetRecord.h (struct con guid/sourcePath/importPath/hash/deps), carpetas assets/ y library/ creadas.
 - [ ] Dia 08 | ID: D08 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __
 - [ ] Dia 09 | ID: D09 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __
 - [ ] Dia 10 | ID: D10 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __
