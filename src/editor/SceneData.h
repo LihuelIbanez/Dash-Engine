@@ -1,4 +1,5 @@
 #pragma once
+#include <cstdint>
 #include <string>
 #include <vector>
 #include "IsoRenderer.h"
@@ -9,6 +10,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 struct EntityData {
     enum class Type { Player, Enemy };
+
+    uint64_t    id        = 0;           // stable entity identifier
     Type        type      = Type::Enemy;
     std::string name      = "Enemy";
     float       x         = 0.f;
@@ -35,9 +38,12 @@ struct SceneData {
     std::vector<TileOverride> tileOverrides;
     std::vector<EntityData>   entities;
 
+    uint64_t    nextEntityId = 1;        // monotonic ID generator
+
     std::string filePath;
     bool        modified = false;
 
+    uint64_t allocateEntityId();
     void createDefault();
     bool saveToFile(const std::string& path);
     bool loadFromFile(const std::string& path);

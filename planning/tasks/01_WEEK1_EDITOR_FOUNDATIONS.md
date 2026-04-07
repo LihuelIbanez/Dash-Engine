@@ -4,12 +4,21 @@
 
 Construir una base escalable para edicion de escenas: modelo de datos limpio, sistema de comandos global para undo/redo y serializacion versionada.
 
+**Estado: EN PROGRESO — Tareas 1.1 y parte de 1.2 completadas (2025-04-07)**
+
 ---
 
-## Tarea 1.1 - Introducir EntityId estable y modelo de entidades
+## Tarea 1.1 - Introducir EntityId estable y modelo de entidades ✅ COMPLETADA
 
 ### Objetivo
 Desacoplar la seleccion y modificacion de entidades del indice de vector para evitar errores cuando se borra o reordena contenido.
+
+### Resultado implementado
+- `EntityData.id` (uint64_t) en SceneData.h
+- `nextEntityId` en SceneData con helper `allocateEntityId()`
+- Serializacion bidireccional con backward compat (escenas sin id reciben id auto)
+- `selectedEntityId_` en EditorApp con `findEntityById()`
+- Jerarquia e inspector adaptados a busqueda por ID
 
 ### Archivos a modificar
 
@@ -48,7 +57,7 @@ Desacoplar la seleccion y modificacion de entidades del indice de vector para ev
 
 ---
 
-## Tarea 1.2 - Sistema global de comandos (Undo/Redo de escena)
+## Tarea 1.2 - Sistema global de comandos (Undo/Redo de escena) ⬜ PENDIENTE
 
 ### Objetivo
 Aplicar patron Command para que toda accion de escena sea reversible.
@@ -100,7 +109,7 @@ Aplicar patron Command para que toda accion de escena sea reversible.
 
 ---
 
-## Tarea 1.3 - Serializacion versionada y validacion de escena
+## Tarea 1.3 - Serializacion versionada y validacion de escena ⬜ PENDIENTE
 
 ### Objetivo
 Evitar corrupcion silenciosa y preparar migraciones de datos.
@@ -130,7 +139,9 @@ Evitar corrupcion silenciosa y preparar migraciones de datos.
 
 ---
 
-## Tarea 1.4 - Dirty state y proteccion de cambios no guardados
+## Tarea 1.4 - Dirty state y proteccion de cambios no guardados ⬜ PENDIENTE
+
+> **Nota:** SceneData.modified existe como flag basico, pero falta la confirmacion en New/Open/Quit.
 
 ### Objetivo
 Evitar perdida de trabajo al cerrar/abrir escena.
@@ -153,7 +164,9 @@ Evitar perdida de trabajo al cerrar/abrir escena.
 
 ## Entregables de la semana
 
-- Modelo de escena con IDs estables.
-- Undo/Redo global de operaciones de escena.
-- Carga/guardado versionado con validacion.
-- Indicador de escena dirty y proteccion de perdida de datos.
+- [x] Modelo de escena con IDs estables.
+- [ ] Undo/Redo global de operaciones de escena.
+- [ ] Carga/guardado versionado con validacion.
+- [ ] Indicador de escena dirty y proteccion de perdida de datos.
+
+**Progreso: 1/4 entregables completados (25%)**

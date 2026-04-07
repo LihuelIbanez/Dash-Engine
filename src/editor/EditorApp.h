@@ -25,7 +25,9 @@ private:
     // ── Scene ────────────────────────────────────────────────────────────────
     SceneData scene_;
     World     world_;
-    int       selectedEntity_ = -1;
+    uint64_t  selectedEntityId_ = 0;   // 0 = no selection
+
+    EntityData* findEntityById(uint64_t id);
 
     // ── Camera ───────────────────────────────────────────────────────────────
     float camX_ = 12.f;

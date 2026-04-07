@@ -113,6 +113,14 @@ void EditorApp::addLog(const std::string& msg)
     if (log_.size() > 500) log_.erase(log_.begin());
 }
 
+EntityData* EditorApp::findEntityById(uint64_t id)
+{
+    if (id == 0) return nullptr;
+    for (auto& e : scene_.entities)
+        if (e.id == id) return &e;
+    return nullptr;
+}
+
 // ═════════════════════════════════════════════════════════════════════════════
 // Default Layout — Unity-style arrangement
 //
@@ -326,30 +334,34 @@ void EditorApp::drawSceneHierarchy()
         char label[128];
         std::snprintf(label, sizeof(label), "%s %s##%d", icon, e.name.c_str(), i);
 
-        if (ImGui::Selectable(label, selectedEntity_ == i))
-            selectedEntity_ = i;
+        if (ImGui::Selectable(label, selectedEntityId_ == e.id))
+            selectedEntityId_ = e.id;
     }
 
     ImGui::Separator();
     if (ImGui::Button("+ Add Enemy", {-1, 0})) {
         EntityData enemy;
+        enemy.id   = scene_.allocateEntityId();
         enemy.type = EntityData::Type::Enemy;
         enemy.name = "NewEnemy";
         enemy.x    = camX_;
         enemy.y    = camY_;
         scene_.entities.push_back(enemy);
-        selectedEntity_ = (int)scene_.entities.size() - 1;
-        scene_.modified  = true;
+        selectedEntityId_ = enemy.id;
+        scene_.modified   = true;
         addLog("Entity added.");
     }
 
-    if (selectedEntity_ >= 0 && selectedEntity_ < (int)scene_.entities.size()) {
-        if (scene_.entities[selectedEntity_].type != EntityData::Type::Player) {
-            if (ImGui::Button("- Remove Selected", {-1, 0})) {
-                scene_.entities.erase(scene_.entities.begin() + selectedEntity_);
-                selectedEntity_ = -1;
-                scene_.modified = true;
-            }
+    EntityData* sel = findEntityById(selectedEntityId_);
+    if (sel && sel->type != EntityData::Type::Player) {
+        if (ImGui::Button("- Remove Selected", {-1, 0})) {
+            uint64_t removeId = selectedEntityId_;
+            selectedEntityId_ = 0;
+            scene_.entities.erase(
+                std::remove_if(scene_.entities.begin(), scene_.entities.end(),
+                    [removeId](const EntityData& e) { return e.id == removeId; }),
+                scene_.entities.end());
+            scene_.modified = true;
         }
     }
 
@@ -384,13 +396,14 @@ void EditorApp::drawPropertiesPanel()
 
     ImGui::Separator();
 
-    if (selectedEntity_ < 0 || selectedEntity_ >= (int)scene_.entities.size()) {
+    EntityData* ep = findEntityById(selectedEntityId_);
+    if (!ep) {
         ImGui::TextDisabled("Select an entity to edit.");
         ImGui::End();
         return;
     }
 
-    auto& e = scene_.entities[selectedEntity_];
+    auto& e = *ep;
 
     if (ImGui::CollapsingHeader("Entity", ImGuiTreeNodeFlags_DefaultOpen)) {
         char name[128];
@@ -574,43 +587,47 @@ void EditorApp::handleToolClick(float wx, float wy)
 
     case Tool::PlaceEnemy: {
         EntityData enemy;
+        enemy.id   = scene_.allocateEntityId();
         enemy.type = EntityData::Type::Enemy;
         enemy.name = "Enemy";
         enemy.x    = wx;
         enemy.y    = wy;
         scene_.entities.push_back(enemy);
-        selectedEntity_ = (int)scene_.entities.size() - 1;
-        scene_.modified  = true;
+        selectedEntityId_ = enemy.id;
+        scene_.modified   = true;
         addLog("Placed enemy.");
         break;
     }
 
     case Tool::Select: {
-        selectedEntity_ = -1;
+        selectedEntityId_ = 0;
         float best = 2.f;
-        for (int i = 0; i < (int)scene_.entities.size(); ++i) {
-            float dx = scene_.entities[i].x - wx;
-            float dy = scene_.entities[i].y - wy;
+        for (auto& e : scene_.entities) {
+            float dx = e.x - wx;
+            float dy = e.y - wy;
             float d  = std::sqrt(dx * dx + dy * dy);
-            if (d < best) { best = d; selectedEntity_ = i; }
+            if (d < best) { best = d; selectedEntityId_ = e.id; }
         }
         break;
     }
 
     case Tool::Erase: {
-        float best = 2.f;
-        int   idx  = -1;
-        for (int i = 0; i < (int)scene_.entities.size(); ++i) {
-            if (scene_.entities[i].type == EntityData::Type::Player) continue;
-            float dx = scene_.entities[i].x - wx;
-            float dy = scene_.entities[i].y - wy;
+        float    best     = 2.f;
+        uint64_t eraseId  = 0;
+        for (auto& e : scene_.entities) {
+            if (e.type == EntityData::Type::Player) continue;
+            float dx = e.x - wx;
+            float dy = e.y - wy;
             float d  = std::sqrt(dx * dx + dy * dy);
-            if (d < best) { best = d; idx = i; }
+            if (d < best) { best = d; eraseId = e.id; }
         }
-        if (idx >= 0) {
-            scene_.entities.erase(scene_.entities.begin() + idx);
-            selectedEntity_ = -1;
-            scene_.modified  = true;
+        if (eraseId != 0) {
+            scene_.entities.erase(
+                std::remove_if(scene_.entities.begin(), scene_.entities.end(),
+                    [eraseId](const EntityData& e) { return e.id == eraseId; }),
+                scene_.entities.end());
+            selectedEntityId_ = 0;
+            scene_.modified   = true;
         }
         break;
     }
@@ -673,7 +690,7 @@ void EditorApp::renderWorldToTexture()
         }
 
         // Selection ring
-        if (selectedEntity_ == i) {
+        if (selectedEntityId_ == e.id) {
             SDL_SetRenderDrawColor(renderer_, 255, 255, 0, 255);
             int r2 = radius + 3;
             for (int dy = -r2; dy <= r2; ++dy) {
@@ -795,7 +812,7 @@ void EditorApp::newScene()
 {
     scene_.createDefault();
     world_.generate(scene_.worldSeed);
-    selectedEntity_ = -1;
+    selectedEntityId_ = 0;
     camX_ = WORLD_W / 2.f;
     camY_ = WORLD_H / 2.f;
     addLog("New scene created.");
@@ -825,7 +842,7 @@ void EditorApp::openScene(const std::string& path)
     if (scene_.loadFromFile(path)) {
         world_.generate(scene_.worldSeed);
         applySceneToWorld();
-        selectedEntity_ = -1;
+        selectedEntityId_ = 0;
         camX_ = WORLD_W / 2.f;
         camY_ = WORLD_H / 2.f;
         addLog("Loaded: " + path);
