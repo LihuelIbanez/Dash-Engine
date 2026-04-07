@@ -4,7 +4,7 @@
 
 Construir una base escalable para edicion de escenas: modelo de datos limpio, sistema de comandos global para undo/redo y serializacion versionada.
 
-**Estado: EN PROGRESO — Tareas 1.1 y parte de 1.2 completadas (2025-04-07)**
+**Estado: EN PROGRESO — Tareas 1.1 y parte de 1.2 completadas (2026-04-07)**
 
 ---
 
