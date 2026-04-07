@@ -2,7 +2,7 @@
 
 Usa este archivo para control de cierre por fase.
 
-**Ultima actualizacion: 2025-04-07**
+**Ultima actualizacion: ver historial de Git/PR**
 
 ## Fase A - Editor Foundations
 
