@@ -32,8 +32,11 @@ struct TileOverride {
 // SceneData – everything needed to describe one scenario / level
 // ─────────────────────────────────────────────────────────────────────────────
 struct SceneData {
-    std::string  sceneName = "Untitled";
-    unsigned int worldSeed = 12345;
+    static constexpr int kCurrentVersion = 1;
+
+    std::string  sceneName    = "Untitled";
+    unsigned int worldSeed    = 12345;
+    int          sceneVersion = kCurrentVersion;
 
     std::vector<TileOverride> tileOverrides;
     std::vector<EntityData>   entities;
@@ -42,6 +45,9 @@ struct SceneData {
 
     std::string filePath;
     bool        modified = false;
+
+    // Last load/validation errors (empty = OK)
+    std::vector<std::string> loadErrors;
 
     uint64_t allocateEntityId();
     void createDefault();

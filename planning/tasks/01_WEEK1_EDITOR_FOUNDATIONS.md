@@ -4,7 +4,7 @@
 
 Construir una base escalable para edicion de escenas: modelo de datos limpio, sistema de comandos global para undo/redo y serializacion versionada.
 
-**Estado: EN PROGRESO — Tareas 1.1 y parte de 1.2 completadas (2026-04-07)**
+**Estado: COMPLETADA — Todas las tareas de Semana 1 finalizadas (2026-04-07)**
 
 ---
 
@@ -120,10 +120,19 @@ Aplicar patron Command para que toda accion de escena sea reversible.
 
 ---
 
-## Tarea 1.3 - Serializacion versionada y validacion de escena ⬜ PENDIENTE
+## Tarea 1.3 - Serializacion versionada y validacion de escena ✅ COMPLETADA
 
 ### Objetivo
 Evitar corrupcion silenciosa y preparar migraciones de datos.
+
+### Resultado implementado
+- `sceneVersion` (int) en SceneData con `kCurrentVersion = 1`
+- `loadErrors` vector para recolectar warnings/errores durante la carga
+- Save escribe `sceneVersion` en JSON
+- Load valida: JSON parse, root object, version futura rechazada, tileOverrides bounds, tile type range, entity positions clamped, player existence check
+- Escenas legacy (sin version) se cargan como v0 con warning
+- EditorApp muestra todos los errores/warnings en Build Log al abrir/guardar
+- Save muestra warning si no hay Player
 
 ### Archivos a modificar
 
@@ -150,12 +159,17 @@ Evitar corrupcion silenciosa y preparar migraciones de datos.
 
 ---
 
-## Tarea 1.4 - Dirty state y proteccion de cambios no guardados ⬜ PENDIENTE
-
-> **Nota:** SceneData.modified existe como flag basico, pero falta la confirmacion en New/Open/Quit.
+## Tarea 1.4 - Dirty state y proteccion de cambios no guardados ✅ COMPLETADA
 
 ### Objetivo
 Evitar perdida de trabajo al cerrar/abrir escena.
+
+### Resultado implementado
+- `PendingAction` enum (None, NewScene, OpenScene, Exit) con `requestAction()` y `executePendingAction()`
+- Modal "Unsaved Changes" con 3 botones: Save / Discard / Cancel
+- File > New Scene, Open Scene, Exit y SDL_QUIT pasan por `requestAction()` que bloquea si `scene_.modified`
+- Titulo de ventana actualizado dinamicamente con `*` cuando hay cambios sin guardar
+- No se agrego `sceneDirty_` separado: se usa `scene_.modified` que ya es mantenido por comandos y ediciones de propiedades
 
 ### Archivos a modificar
 
@@ -177,7 +191,7 @@ Evitar perdida de trabajo al cerrar/abrir escena.
 
 - [x] Modelo de escena con IDs estables.
 - [x] Undo/Redo global de operaciones de escena.
-- [ ] Carga/guardado versionado con validacion.
-- [ ] Indicador de escena dirty y proteccion de perdida de datos.
+- [x] Carga/guardado versionado con validacion.
+- [x] Indicador de escena dirty y proteccion de perdida de datos.
 
-**Progreso: 2/4 entregables completados (50%)**
+**Progreso: 4/4 entregables completados (100%) — Semana 1 COMPLETADA**

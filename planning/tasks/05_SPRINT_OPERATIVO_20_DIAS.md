@@ -8,8 +8,6 @@ Usa este tablero para mover el estado diario del sprint. Solo debe haber 1 item 
 
 ### To Do
 
-- [ ] D05 - CMake + serializacion versionada (6h)
-- [ ] D06 - Dirty state y confirmaciones (5h)
 - [ ] D07 - Base Asset System (6h)
 - [ ] D08 - AssetDatabase persistente (6h)
 - [ ] D09 - Integracion AssetDatabase en editor (6h)
@@ -27,14 +25,16 @@ Usa este tablero para mover el estado diario del sprint. Solo debe haber 1 item 
 
 ### Doing
 
-- [ ] D05 - CMake + serializacion versionada (proximo paso)
+- [ ] D07 - Base Asset System (proximo paso)
 
 ### Done
 
-- [x] D01 - EntityId estable en escena (6h) — Completado: EntityData.id, nextEntityId, allocateEntityId(), backward compat
-- [x] D02 - Seleccion por ID en editor (6h) — Completado: selectedEntityId_, findEntityById(), jerarquia e inspector adaptados
-- [x] D03 - Infraestructura CommandStack (6h) — Completado: ICommand, CommandStack, performUndo/Redo, menu Edit, shortcuts Cmd+Z
-- [x] D04 - Comandos paint/place/erase (6h) — Completado: PaintTileCommand, PlaceEnemyCommand, EraseCommand, mutacion directa eliminada
+- [x] D01 - EntityId estable en escena (6h) — Completado
+- [x] D02 - Seleccion por ID en editor (6h) — Completado
+- [x] D03 - Infraestructura CommandStack (6h) — Completado
+- [x] D04 - Comandos paint/place/erase (6h) — Completado
+- [x] D05 - CMake + serializacion versionada (6h) — Completado
+- [x] D06 - Dirty state y confirmaciones (5h) — Completado: modal Unsaved Changes (Save/Discard/Cancel), requestAction guard, titulo ventana con *
 
 ## Registro Diario de Ejecucion
 
@@ -44,8 +44,8 @@ Usa una linea por dia para dejar trazabilidad de avance real.
 - [x] Dia 02 | ID: D02 | Plan: 6h | Real: ~6h | Bloqueos: Ninguno | Resultado: selectedEntityId_ reemplaza indice. findEntityById() integrado en jerarquia e inspector.
 - [x] Dia 03 | ID: D03 | Plan: 6h | Real: ~3h | Bloqueos: Ninguno | Resultado: ICommand, CommandStack con execute/undo/redo/clear, performUndo/Redo en EditorApp, menu Edit, Cmd+Z shortcuts.
 - [x] Dia 04 | ID: D04 | Plan: 6h | Real: ~3h | Bloqueos: Ninguno | Resultado: PaintTileCommand, PlaceEnemyCommand, EraseCommand. handleToolClick y drawSceneHierarchy refactorizados. Build limpio 0 warnings.
-- [ ] Dia 05 | ID: D05 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __
-- [ ] Dia 06 | ID: D06 | Plan: 5h | Real: __h | Bloqueos: __ | Resultado: __
+- [x] Dia 05 | ID: D05 | Plan: 6h | Real: ~2h | Bloqueos: Ninguno | Resultado: sceneVersion en SceneData, kCurrentVersion=1, validacion de JSON/bounds/types/entities, loadErrors, mensajes en Build Log.
+- [x] Dia 06 | ID: D06 | Plan: 5h | Real: ~1h | Bloqueos: Ninguno | Resultado: PendingAction enum, requestAction/executePendingAction, modal Save/Discard/Cancel, titulo ventana con *, SDL_QUIT guard.
 - [ ] Dia 07 | ID: D07 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __
 - [ ] Dia 08 | ID: D08 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __
 - [ ] Dia 09 | ID: D09 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __

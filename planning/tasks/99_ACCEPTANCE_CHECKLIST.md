@@ -8,8 +8,8 @@ Usa este archivo para control de cierre por fase.
 
 - [x] Seleccion de entidad basada en EntityId estable. *(Implementado: EntityData.id uint64_t, nextEntityId, allocateEntityId(), selectedEntityId_ en EditorApp, findEntityById())*
 - [x] Undo/Redo global de escena (paint, place, erase, property edit). *(Implementado: ICommand + CommandStack + PaintTileCommand/PlaceEnemyCommand/EraseCommand. Cmd+Z/Shift+Z. Menu Edit. 200 niveles max.)*
-- [ ] Escenas versionadas con validacion de carga. *(Pendiente: No hay campo sceneVersion. Serializacion basica funciona pero sin validacion robusta.)*
-- [ ] Dirty state visible y protegido ante perdida de cambios. *(Parcial: SceneData.modified existe pero no hay confirmacion al cerrar/abrir/salir.)*
+- [x] Escenas versionadas con validacion de carga. *(Implementado: sceneVersion field, kCurrentVersion=1, validacion JSON parse/bounds/types/player, loadErrors con mensajes detallados en Build Log)*
+- [x] Dirty state visible y protegido ante perdida de cambios. *(Implementado: modal Unsaved Changes con Save/Discard/Cancel, requestAction guard en New/Open/Exit/SDL_QUIT, titulo ventana con * en dirty)*
 
 ## Fase B - Asset Pipeline
 
@@ -42,8 +42,8 @@ Usa este archivo para control de cierre por fase.
 
 | Fase | Completado | Total | % |
 |------|-----------|-------|---|
-| A - Editor Foundations | 2 | 4 | 50% |
+| A - Editor Foundations | 4 | 4 | 100% |
 | B - Asset Pipeline | 0 | 4 | 0% |
 | C - Runtime Systems | 0 | 4 | 0% |
 | D - Produccion y QA | 0 | 4 | 0% |
-| **Total** | **2** | **16** | **12%** |
+| **Total** | **4** | **16** | **25%** |

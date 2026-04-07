@@ -216,7 +216,8 @@ void EditorApp::run()
         SDL_Event ev;
         while (SDL_PollEvent(&ev)) {
             ImGui_ImplSDL2_ProcessEvent(&ev);
-            if (ev.type == SDL_QUIT) running_ = false;
+            if (ev.type == SDL_QUIT)
+                requestAction(PendingAction::Exit);
 
             // Global scene undo/redo shortcuts (Cmd+Z / Cmd+Shift+Z)
             if (ev.type == SDL_KEYDOWN && (ev.key.keysym.mod & KMOD_GUI)) {
@@ -274,6 +275,14 @@ void EditorApp::run()
         drawFileEditor();
         if (showOpenDialog_) drawOpenDialog();
         if (showSaveDialog_) drawSaveDialog();
+        if (showConfirmDialog_) drawConfirmDialog();
+
+        // Update window title with dirty indicator
+        {
+            std::string title = "Isometric RPG Editor - " + scene_.sceneName;
+            if (scene_.modified) title += " *";
+            SDL_SetWindowTitle(window_, title.c_str());
+        }
 
         // Render
         ImGui::Render();
@@ -292,18 +301,18 @@ void EditorApp::drawMenuBar()
     if (!ImGui::BeginMenuBar()) return;
 
     if (ImGui::BeginMenu("File")) {
-        if (ImGui::MenuItem("New Scene",  "Ctrl+N")) newScene();
-        if (ImGui::MenuItem("Open Scene...", "Ctrl+O")) {
-            refreshSceneFiles();
-            showOpenDialog_ = true;
-        }
+        if (ImGui::MenuItem("New Scene",  "Ctrl+N"))
+            requestAction(PendingAction::NewScene);
+        if (ImGui::MenuItem("Open Scene...", "Ctrl+O"))
+            requestAction(PendingAction::OpenScene);
         if (ImGui::MenuItem("Save", "Ctrl+S")) {
             if (scene_.filePath.empty()) showSaveDialog_ = true;
             else saveScene(scene_.filePath);
         }
         if (ImGui::MenuItem("Save As...")) showSaveDialog_ = true;
         ImGui::Separator();
-        if (ImGui::MenuItem("Exit")) running_ = false;
+        if (ImGui::MenuItem("Exit"))
+            requestAction(PendingAction::Exit);
         ImGui::EndMenu();
     }
     if (ImGui::BeginMenu("View")) {
@@ -848,24 +857,39 @@ void EditorApp::refreshSceneFiles()
 
 void EditorApp::saveScene(const std::string& path)
 {
-    if (scene_.saveToFile(path))
-        addLog("Saved: " + path);
-    else
-        addLog("ERROR: Could not save scene.");
+    // Validate before save
+    bool hasPlayer = false;
+    for (auto& e : scene_.entities)
+        if (e.type == EntityData::Type::Player) { hasPlayer = true; break; }
+    if (!hasPlayer) {
+        addLog("WARNING: Scene has no Player entity. Saving anyway.");
+    }
+
+    if (scene_.saveToFile(path)) {
+        addLog("Saved: " + path + " (v" + std::to_string(SceneData::kCurrentVersion) + ")");
+    } else {
+        addLog("ERROR: Could not write scene file: " + path);
+    }
 }
 
 void EditorApp::openScene(const std::string& path)
 {
     if (scene_.loadFromFile(path)) {
+        // Report any warnings collected during load
+        for (auto& err : scene_.loadErrors)
+            addLog("  [load] " + err);
+
         world_.generate(scene_.worldSeed);
         applySceneToWorld();
         selectedEntityId_ = 0;
         commandStack_.clear();
         camX_ = WORLD_W / 2.f;
         camY_ = WORLD_H / 2.f;
-        addLog("Loaded: " + path);
+        addLog("Loaded: " + path + " (v" + std::to_string(scene_.sceneVersion) + ")");
     } else {
-        addLog("ERROR: Could not load scene.");
+        addLog("ERROR: Could not load scene: " + path);
+        for (auto& err : scene_.loadErrors)
+            addLog("  [load] " + err);
     }
 }
 
@@ -876,6 +900,75 @@ void EditorApp::applySceneToWorld()
             world_.grid[ovr.y][ovr.x].type     = static_cast<TileType>(ovr.tileType);
             world_.grid[ovr.y][ovr.x].walkable  = ovr.walkable;
         }
+    }
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Unsaved-changes guard
+// ═════════════════════════════════════════════════════════════════════════════
+void EditorApp::requestAction(PendingAction action)
+{
+    if (scene_.modified) {
+        pendingAction_     = action;
+        showConfirmDialog_ = true;
+    } else {
+        pendingAction_ = action;
+        executePendingAction();
+    }
+}
+
+void EditorApp::executePendingAction()
+{
+    PendingAction action = pendingAction_;
+    pendingAction_     = PendingAction::None;
+    showConfirmDialog_ = false;
+
+    switch (action) {
+    case PendingAction::NewScene:
+        newScene();
+        break;
+    case PendingAction::OpenScene:
+        refreshSceneFiles();
+        showOpenDialog_ = true;
+        break;
+    case PendingAction::Exit:
+        running_ = false;
+        break;
+    case PendingAction::None:
+        break;
+    }
+}
+
+void EditorApp::drawConfirmDialog()
+{
+    ImGui::OpenPopup("Unsaved Changes");
+    if (ImGui::BeginPopupModal("Unsaved Changes", &showConfirmDialog_,
+                               ImGuiWindowFlags_AlwaysAutoResize))
+    {
+        ImGui::Text("The current scene has unsaved changes.");
+        ImGui::Text("Do you want to save before continuing?");
+        ImGui::Separator();
+
+        if (ImGui::Button("Save", {100, 0})) {
+            if (scene_.filePath.empty())
+                showSaveDialog_ = true;
+            else
+                saveScene(scene_.filePath);
+            executePendingAction();
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Discard", {100, 0})) {
+            executePendingAction();
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel", {100, 0})) {
+            pendingAction_     = PendingAction::None;
+            showConfirmDialog_ = false;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
     }
 }
 
