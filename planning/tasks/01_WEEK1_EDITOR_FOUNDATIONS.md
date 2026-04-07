@@ -57,10 +57,21 @@ Desacoplar la seleccion y modificacion de entidades del indice de vector para ev
 
 ---
 
-## Tarea 1.2 - Sistema global de comandos (Undo/Redo de escena) ⬜ PENDIENTE
+## Tarea 1.2 - Sistema global de comandos (Undo/Redo de escena) ✅ COMPLETADA
 
 ### Objetivo
 Aplicar patron Command para que toda accion de escena sea reversible.
+
+### Resultado implementado
+- `ICommand` interfaz base con apply/undo/name virtuales
+- `CommandStack` con execute/undo/redo, limite 200 entradas, clear en new/open scene
+- `PaintTileCommand` — captura estado previo del tile, restaura en undo
+- `PlaceEnemyCommand` — agrega/elimina entidad por ID
+- `EraseCommand` — elimina entidad capturando backup + posicion para restore
+- CMakeLists.txt actualizado para incluir `src/editor/commands/*.cpp`
+- Menu Edit con Undo/Redo (muestra nombre del comando)
+- Shortcuts globales: Cmd+Z (undo) y Cmd+Shift+Z (redo) via SDL_KEYDOWN
+- handleToolClick(), paintTileAt() y drawSceneHierarchy() refactorizados para usar comandos
 
 ### Archivos a crear
 
@@ -165,8 +176,8 @@ Evitar perdida de trabajo al cerrar/abrir escena.
 ## Entregables de la semana
 
 - [x] Modelo de escena con IDs estables.
-- [ ] Undo/Redo global de operaciones de escena.
+- [x] Undo/Redo global de operaciones de escena.
 - [ ] Carga/guardado versionado con validacion.
 - [ ] Indicador de escena dirty y proteccion de perdida de datos.
 
-**Progreso: 1/4 entregables completados (25%)**
+**Progreso: 2/4 entregables completados (50%)**

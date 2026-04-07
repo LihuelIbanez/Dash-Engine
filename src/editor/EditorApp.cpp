@@ -4,6 +4,9 @@
 #include "imgui_impl_sdlrenderer2.h"
 #include "imgui_internal.h"
 #include "IsoRenderer.h"
+#include "PaintTileCommand.h"
+#include "PlaceEnemyCommand.h"
+#include "EraseCommand.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -121,6 +124,23 @@ EntityData* EditorApp::findEntityById(uint64_t id)
     return nullptr;
 }
 
+void EditorApp::performUndo()
+{
+    if (commandStack_.canUndo()) {
+        commandStack_.undo(scene_, world_);
+        addLog(std::string("Undo: ") + (commandStack_.redoName() ? commandStack_.redoName() : ""));
+    }
+}
+
+void EditorApp::performRedo()
+{
+    if (commandStack_.canRedo()) {
+        const char* n = commandStack_.redoName();
+        commandStack_.redo(scene_, world_);
+        addLog(std::string("Redo: ") + (n ? n : ""));
+    }
+}
+
 // ═════════════════════════════════════════════════════════════════════════════
 // Default Layout — Unity-style arrangement
 //
@@ -197,6 +217,16 @@ void EditorApp::run()
         while (SDL_PollEvent(&ev)) {
             ImGui_ImplSDL2_ProcessEvent(&ev);
             if (ev.type == SDL_QUIT) running_ = false;
+
+            // Global scene undo/redo shortcuts (Cmd+Z / Cmd+Shift+Z)
+            if (ev.type == SDL_KEYDOWN && (ev.key.keysym.mod & KMOD_GUI)) {
+                if (ev.key.keysym.sym == SDLK_z) {
+                    if (ev.key.keysym.mod & KMOD_SHIFT)
+                        performRedo();
+                    else
+                        performUndo();
+                }
+            }
         }
 
         ImGui_ImplSDLRenderer2_NewFrame();
@@ -280,6 +310,21 @@ void EditorApp::drawMenuBar()
         ImGui::MenuItem("Build Log", nullptr, &showBuildLog_);
         ImGui::EndMenu();
     }
+    if (ImGui::BeginMenu("Edit")) {
+        std::string undoLabel = "Undo";
+        if (commandStack_.canUndo())
+            undoLabel += std::string(" (") + commandStack_.undoName() + ")";
+        if (ImGui::MenuItem(undoLabel.c_str(), "Cmd+Z", false, commandStack_.canUndo()))
+            performUndo();
+
+        std::string redoLabel = "Redo";
+        if (commandStack_.canRedo())
+            redoLabel += std::string(" (") + commandStack_.redoName() + ")";
+        if (ImGui::MenuItem(redoLabel.c_str(), "Cmd+Shift+Z", false, commandStack_.canRedo()))
+            performRedo();
+
+        ImGui::EndMenu();
+    }
     ImGui::EndMenuBar();
 }
 
@@ -340,28 +385,19 @@ void EditorApp::drawSceneHierarchy()
 
     ImGui::Separator();
     if (ImGui::Button("+ Add Enemy", {-1, 0})) {
-        EntityData enemy;
-        enemy.id   = scene_.allocateEntityId();
-        enemy.type = EntityData::Type::Enemy;
-        enemy.name = "NewEnemy";
-        enemy.x    = camX_;
-        enemy.y    = camY_;
-        scene_.entities.push_back(enemy);
-        selectedEntityId_ = enemy.id;
-        scene_.modified   = true;
+        uint64_t newId = scene_.allocateEntityId();
+        auto cmd = std::make_unique<PlaceEnemyCommand>(camX_, camY_, newId, "NewEnemy");
+        commandStack_.execute(std::move(cmd), scene_, world_);
+        selectedEntityId_ = newId;
         addLog("Entity added.");
     }
 
     EntityData* sel = findEntityById(selectedEntityId_);
     if (sel && sel->type != EntityData::Type::Player) {
         if (ImGui::Button("- Remove Selected", {-1, 0})) {
-            uint64_t removeId = selectedEntityId_;
+            auto cmd = std::make_unique<EraseCommand>(selectedEntityId_);
+            commandStack_.execute(std::move(cmd), scene_, world_);
             selectedEntityId_ = 0;
-            scene_.entities.erase(
-                std::remove_if(scene_.entities.begin(), scene_.entities.end(),
-                    [removeId](const EntityData& e) { return e.id == removeId; }),
-                scene_.entities.end());
-            scene_.modified = true;
         }
     }
 
@@ -586,15 +622,10 @@ void EditorApp::handleToolClick(float wx, float wy)
         break;
 
     case Tool::PlaceEnemy: {
-        EntityData enemy;
-        enemy.id   = scene_.allocateEntityId();
-        enemy.type = EntityData::Type::Enemy;
-        enemy.name = "Enemy";
-        enemy.x    = wx;
-        enemy.y    = wy;
-        scene_.entities.push_back(enemy);
-        selectedEntityId_ = enemy.id;
-        scene_.modified   = true;
+        uint64_t newId = scene_.allocateEntityId();
+        auto cmd = std::make_unique<PlaceEnemyCommand>(wx, wy, newId, "Enemy");
+        commandStack_.execute(std::move(cmd), scene_, world_);
+        selectedEntityId_ = newId;
         addLog("Placed enemy.");
         break;
     }
@@ -622,12 +653,9 @@ void EditorApp::handleToolClick(float wx, float wy)
             if (d < best) { best = d; eraseId = e.id; }
         }
         if (eraseId != 0) {
-            scene_.entities.erase(
-                std::remove_if(scene_.entities.begin(), scene_.entities.end(),
-                    [eraseId](const EntityData& e) { return e.id == eraseId; }),
-                scene_.entities.end());
+            auto cmd = std::make_unique<EraseCommand>(eraseId);
+            commandStack_.execute(std::move(cmd), scene_, world_);
             selectedEntityId_ = 0;
-            scene_.modified   = true;
         }
         break;
     }
@@ -640,20 +668,8 @@ void EditorApp::paintTileAt(float wx, float wy)
     if (tx < 0 || tx >= WORLD_W || ty < 0 || ty >= WORLD_H) return;
     if (world_.grid[ty][tx].type == selectedTileType_) return;
 
-    world_.grid[ty][tx].type     = selectedTileType_;
-    bool notWalkable = (selectedTileType_ == TileType::Water ||
-                        selectedTileType_ == TileType::DeepWater ||
-                        selectedTileType_ == TileType::Mountain ||
-                        selectedTileType_ == TileType::Snow);
-    world_.grid[ty][tx].walkable = !notWalkable;
-
-    TileOverride ovr{tx, ty, (int)selectedTileType_, world_.grid[ty][tx].walkable};
-    bool found = false;
-    for (auto& to : scene_.tileOverrides) {
-        if (to.x == tx && to.y == ty) { to = ovr; found = true; break; }
-    }
-    if (!found) scene_.tileOverrides.push_back(ovr);
-    scene_.modified = true;
+    auto cmd = std::make_unique<PaintTileCommand>(tx, ty, selectedTileType_);
+    commandStack_.execute(std::move(cmd), scene_, world_);
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -813,6 +829,7 @@ void EditorApp::newScene()
     scene_.createDefault();
     world_.generate(scene_.worldSeed);
     selectedEntityId_ = 0;
+    commandStack_.clear();
     camX_ = WORLD_W / 2.f;
     camY_ = WORLD_H / 2.f;
     addLog("New scene created.");
@@ -843,6 +860,7 @@ void EditorApp::openScene(const std::string& path)
         world_.generate(scene_.worldSeed);
         applySceneToWorld();
         selectedEntityId_ = 0;
+        commandStack_.clear();
         camX_ = WORLD_W / 2.f;
         camY_ = WORLD_H / 2.f;
         addLog("Loaded: " + path);
