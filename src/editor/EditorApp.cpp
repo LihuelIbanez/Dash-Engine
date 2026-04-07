@@ -91,6 +91,20 @@ bool EditorApp::init()
         addLog("Asset DB not found, starting fresh.");
     }
 
+    // ── Initial asset import ─────────────────────────────────────────────────
+    assetsRoot_  = std::string(PROJECT_DIR) + "/assets";
+    libraryRoot_ = std::string(PROJECT_DIR) + "/library";
+    {
+        std::vector<std::string> importErrors;
+        int count = importManager_.importAll(assetsRoot_, libraryRoot_, assetDb_, importErrors);
+        if (count > 0)
+            addLog("Imported " + std::to_string(count) + " asset(s).");
+        for (auto& err : importErrors)
+            addLog("[IMPORT] " + err);
+        if (count > 0)
+            assetDb_.save(assetDbPath_);
+    }
+
     newScene();
     running_ = true;
     addLog("Editor ready.");
@@ -1129,6 +1143,21 @@ static void drawDirectoryTree(const fs::path& dir, EditorApp* /*unused*/,
 void EditorApp::drawFileBrowser()
 {
     ImGui::Begin("File Browser");
+
+    // Reimport All button
+    if (ImGui::Button("Reimport All")) {
+        std::vector<std::string> importErrors;
+        int count = importManager_.importAll(assetsRoot_, libraryRoot_, assetDb_, importErrors);
+        addLog("Reimported " + std::to_string(count) + " asset(s).");
+        for (auto& err : importErrors)
+            addLog("[IMPORT] " + err);
+        if (count > 0)
+            assetDb_.save(assetDbPath_);
+    }
+    ImGui::SameLine();
+    ImGui::TextDisabled("(%zu assets)", assetDb_.records().size());
+    ImGui::Separator();
+
     ImGui::TextColored({0.6f,0.9f,0.6f,1.f}, "src/");
     ImGui::Separator();
 

@@ -5,6 +5,7 @@
 #include "World.h"
 #include "CommandStack.h"
 #include "AssetDatabase.h"
+#include "ImportManager.h"
 #include <string>
 #include <vector>
 #include <map>
@@ -35,8 +36,11 @@ private:
     void performRedo();
 
     // ── Asset Database ────────────────────────────────────────────────────────
-    AssetDatabase assetDb_;
-    std::string   assetDbPath_;
+    AssetDatabase  assetDb_;
+    std::string    assetDbPath_;
+    ImportManager  importManager_;
+    std::string    assetsRoot_;
+    std::string    libraryRoot_;
 
     // ── Camera ───────────────────────────────────────────────────────────────
     float camX_ = 12.f;

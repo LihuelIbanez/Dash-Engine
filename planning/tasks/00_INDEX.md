@@ -9,11 +9,11 @@ Este directorio separa las tareas por semana para ejecutar el escalado del edito
 | Semana | Estado | Progreso |
 |--------|--------|----------|
 | 1 - Editor Foundations | ✅ Completada | D01-D06 completados |
-| 2 - Asset Pipeline | 🔧 En progreso | D07-D08 completados, D09-D12 pendientes |
+| 2 - Asset Pipeline | 🔧 En progreso | D07-D11 completados, D12 pendiente |
 | 3 - Runtime Systems | ⬜ No iniciada | D13-D17 pendientes |
 | 4 - Produccion/QA | ⬜ No iniciada | D18-D20 pendientes |
 
-**Proximo paso:** D09 - Integracion AssetDatabase en editor (scan assets/, upsert records)
+**Proximo paso:** D12 - Asset Browser + Inspector (paneles UI de assets)
 
 ## Funcionalidades ya implementadas (fuera del plan)
 

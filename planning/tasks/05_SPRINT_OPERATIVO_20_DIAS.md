@@ -8,9 +8,6 @@ Usa este tablero para mover el estado diario del sprint. Solo debe haber 1 item 
 
 ### To Do
 
-- [ ] D09 - Integracion AssetDatabase en editor (6h)
-- [ ] D10 - ImportManager + IImporter (6h)
-- [ ] D11 - Importers iniciales (6h)
 - [ ] D12 - Asset Browser + Inspector (6h)
 - [ ] D13 - RuntimeContext + scheduler (6h)
 - [ ] D14 - MovementSystem + CombatSystem (6h)
@@ -23,7 +20,7 @@ Usa este tablero para mover el estado diario del sprint. Solo debe haber 1 item 
 
 ### Doing
 
-- [ ] D09 - Integracion AssetDatabase en editor (proximo paso)
+- [ ] D12 - Asset Browser + Inspector (proximo paso)
 
 ### Done
 
@@ -35,6 +32,9 @@ Usa este tablero para mover el estado diario del sprint. Solo debe haber 1 item 
 - [x] D06 - Dirty state y confirmaciones (5h) — Completado: modal Unsaved Changes (Save/Discard/Cancel), requestAction guard, titulo ventana con *
 - [x] D07 - Base Asset System (6h) — Completado: AssetTypes.h, AssetRecord.h, carpetas assets/ y library/
 - [x] D08 - AssetDatabase persistente (6h) — Completado: AssetDatabase.h/.cpp con load/save/upsert/findByGuid/findBySourcePath/removeMissing, integrado en EditorApp init/destructor, GUID v4
+- [x] D09 - Integracion AssetDatabase en editor (6h) — Completado: importAll en init, Reimport All en File Browser, assetDb_.save() en destructor
+- [x] D10 - ImportManager + IImporter (6h) — Completado: IImporter interfaz, ImportManager con importAsset/importAll/computeFileHash/inferAssetType, import incremental por hash
+- [x] D11 - Importers iniciales (6h) — Completado: SceneImporter, TileSetImporter, GameplayConfigImporter con validacion JSON y copia a library/
 
 ## Registro Diario de Ejecucion
 
@@ -48,9 +48,9 @@ Usa una linea por dia para dejar trazabilidad de avance real.
 - [x] Dia 06 | ID: D06 | Plan: 5h | Real: ~1h | Bloqueos: Ninguno | Resultado: PendingAction enum, requestAction/executePendingAction, modal Save/Discard/Cancel, titulo ventana con *, SDL_QUIT guard.
 - [x] Dia 07 | ID: D07 | Plan: 6h | Real: ~0.5h | Bloqueos: Ninguno | Resultado: AssetTypes.h (enum AssetType), AssetRecord.h (struct con guid/sourcePath/importPath/hash/deps), carpetas assets/ y library/ creadas.
 - [x] Dia 08 | ID: D08 | Plan: 6h | Real: ~0.5h | Bloqueos: Ninguno | Resultado: AssetDatabase con GUID v4, load/save JSON, upsert, find, removeMissing. CMakeLists con ASSET_SOURCES glob. EditorApp carga DB en init y persiste en destructor.
-- [ ] Dia 09 | ID: D09 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __
-- [ ] Dia 10 | ID: D10 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __
-- [ ] Dia 11 | ID: D11 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __
+- [x] Dia 09 | ID: D09 | Plan: 6h | Real: ~0.3h | Bloqueos: Ninguno | Resultado: ImportManager.importAll en init, Reimport All boton en File Browser, save DB tras import.
+- [x] Dia 10 | ID: D10 | Plan: 6h | Real: ~0.3h | Bloqueos: Ninguno | Resultado: IImporter.h interfaz, ImportManager.h/.cpp con hash incremental, inferAssetType por extension/carpeta.
+- [x] Dia 11 | ID: D11 | Plan: 6h | Real: ~0.3h | Bloqueos: Ninguno | Resultado: SceneImporter, TileSetImporter, GameplayConfigImporter. Validacion JSON, copia a library/. CMakeLists con IMPORTER_SOURCES.
 - [ ] Dia 12 | ID: D12 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __
 - [ ] Dia 13 | ID: D13 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __
 - [ ] Dia 14 | ID: D14 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __
