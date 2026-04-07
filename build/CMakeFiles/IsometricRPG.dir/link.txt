@@ -1,0 +1,1 @@
+/usr/bin/c++ -g -Wl,-search_paths_first -Wl,-headerpad_max_install_names CMakeFiles/IsometricRPG.dir/src/main.cpp.o CMakeFiles/IsometricRPG.dir/src/game/Game.cpp.o -o IsometricRPG   -L/opt/homebrew/Cellar/sdl2/2.32.10/lib  libgame_core.a /opt/homebrew/Cellar/sdl2/2.32.10/lib/libSDL2.dylib -framework Cocoa

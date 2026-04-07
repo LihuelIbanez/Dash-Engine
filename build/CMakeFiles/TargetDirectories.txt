@@ -1,0 +1,8 @@
+/Users/lihuelibanez/Development/proyects/isometric-rpg/build/CMakeFiles/imgui_lib.dir
+/Users/lihuelibanez/Development/proyects/isometric-rpg/build/CMakeFiles/game_core.dir
+/Users/lihuelibanez/Development/proyects/isometric-rpg/build/CMakeFiles/IsometricRPG.dir
+/Users/lihuelibanez/Development/proyects/isometric-rpg/build/CMakeFiles/DashEngine.dir
+/Users/lihuelibanez/Development/proyects/isometric-rpg/build/CMakeFiles/edit_cache.dir
+/Users/lihuelibanez/Development/proyects/isometric-rpg/build/CMakeFiles/rebuild_cache.dir
+/Users/lihuelibanez/Development/proyects/isometric-rpg/build/_deps/json-build/CMakeFiles/edit_cache.dir
+/Users/lihuelibanez/Development/proyects/isometric-rpg/build/_deps/json-build/CMakeFiles/rebuild_cache.dir

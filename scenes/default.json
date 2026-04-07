@@ -1,0 +1,13 @@
+{
+  "name": "Default Scene",
+  "worldSeed": 12345,
+  "tileOverrides": [],
+  "entities": [
+    {"type": "Player", "name": "Hero", "x": 32.0, "y": 32.0, "class": "Warrior"},
+    {"type": "Enemy",  "name": "Skeleton", "x": 36.0, "y": 35.0},
+    {"type": "Enemy",  "name": "Zombie",   "x": 27.0, "y": 34.0},
+    {"type": "Enemy",  "name": "Fallen",   "x": 29.0, "y": 28.0},
+    {"type": "Enemy",  "name": "Zombie",   "x": 34.0, "y": 30.0},
+    {"type": "Enemy",  "name": "Skeleton", "x": 38.0, "y": 30.0}
+  ]
+}

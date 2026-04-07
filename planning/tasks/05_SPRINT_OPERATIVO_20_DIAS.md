@@ -1,0 +1,427 @@
+# Sprint Operativo (20 dias)
+
+Objetivo: ejecutar el plan de escalado en 20 dias laborables, con orden diario, horas estimadas y dependencias claras.
+
+## Tablero del Sprint (To Do / Doing / Done)
+
+Usa este tablero para mover el estado diario del sprint. Solo debe haber 1 item en Doing al mismo tiempo.
+
+### To Do
+
+- [ ] D01 - EntityId estable en escena (6h)
+- [ ] D02 - Seleccion por ID en editor (6h)
+- [ ] D03 - Infraestructura CommandStack (6h)
+- [ ] D04 - Comandos paint/place/erase (6h)
+- [ ] D05 - CMake + serializacion versionada (6h)
+- [ ] D06 - Dirty state y confirmaciones (5h)
+- [ ] D07 - Base Asset System (6h)
+- [ ] D08 - AssetDatabase persistente (6h)
+- [ ] D09 - Integracion AssetDatabase en editor (6h)
+- [ ] D10 - ImportManager + IImporter (6h)
+- [ ] D11 - Importers iniciales (6h)
+- [ ] D12 - Asset Browser + Inspector (6h)
+- [ ] D13 - RuntimeContext + scheduler (6h)
+- [ ] D14 - MovementSystem + CombatSystem (6h)
+- [ ] D15 - AISystem + SpawnRewardSystem (6h)
+- [ ] D16 - Gameplay data-driven (6h)
+- [ ] D17 - Pathfinding A* (6h)
+- [ ] D18 - Play Mode con rollback (6h)
+- [ ] D19 - Save/Load versionado (6h)
+- [ ] D20 - Tests + profiling + cierre (6h)
+
+### Doing
+
+- [ ] (Mover aqui el ID activo del dia, por ejemplo: D01)
+
+### Done
+
+- [ ] (Mover aqui los IDs completados)
+
+## Registro Diario de Ejecucion
+
+Usa una linea por dia para dejar trazabilidad de avance real.
+
+- [ ] Dia 01 | ID: D01 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __
+- [ ] Dia 02 | ID: D02 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __
+- [ ] Dia 03 | ID: D03 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __
+- [ ] Dia 04 | ID: D04 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __
+- [ ] Dia 05 | ID: D05 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __
+- [ ] Dia 06 | ID: D06 | Plan: 5h | Real: __h | Bloqueos: __ | Resultado: __
+- [ ] Dia 07 | ID: D07 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __
+- [ ] Dia 08 | ID: D08 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __
+- [ ] Dia 09 | ID: D09 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __
+- [ ] Dia 10 | ID: D10 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __
+- [ ] Dia 11 | ID: D11 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __
+- [ ] Dia 12 | ID: D12 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __
+- [ ] Dia 13 | ID: D13 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __
+- [ ] Dia 14 | ID: D14 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __
+- [ ] Dia 15 | ID: D15 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __
+- [ ] Dia 16 | ID: D16 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __
+- [ ] Dia 17 | ID: D17 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __
+- [ ] Dia 18 | ID: D18 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __
+- [ ] Dia 19 | ID: D19 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __
+- [ ] Dia 20 | ID: D20 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __
+
+## Reglas de ejecucion
+
+- Jornada objetivo: 6 horas efectivas por dia.
+- Cada dia cierra con build y smoke test basico.
+- No iniciar una tarea si su dependencia directa no esta completada.
+- Si una tarea excede +25% de horas, dividir y mover remanente al siguiente dia.
+
+## Leyenda
+
+- ID: identificador de tarea diaria.
+- Horas: estimacion total del dia.
+- Dependencias: IDs previos obligatorios.
+- Archivos: rutas a crear/modificar.
+
+---
+
+## Dia 1
+
+- ID: D01
+- Meta: Base de EntityId estable en modelo de escena.
+- Horas: 6h
+- Dependencias: Ninguna
+- Tareas:
+  - Agregar id y nextEntityId al modelo.
+  - Definir helper allocateEntityId().
+  - Compatibilidad minima con escenas antiguas sin id.
+- Archivos:
+  - Modificar: src/editor/SceneData.h
+  - Modificar: src/editor/SceneData.cpp
+
+## Dia 2
+
+- ID: D02
+- Meta: Migrar seleccion de entidad por ID en editor.
+- Horas: 6h
+- Dependencias: D01
+- Tareas:
+  - Reemplazar seleccion por indice con selectedEntityId.
+  - Adaptar jerarquia e inspector a busqueda por id.
+- Archivos:
+  - Modificar: src/editor/EditorApp.h
+  - Modificar: src/editor/EditorApp.cpp
+
+## Dia 3
+
+- ID: D03
+- Meta: Crear infraestructura de comandos (undo/redo global).
+- Horas: 6h
+- Dependencias: D02
+- Tareas:
+  - Crear ICommand y CommandStack.
+  - Integrar execute/undo/redo en editor.
+- Archivos:
+  - Crear: src/editor/commands/ICommand.h
+  - Crear: src/editor/commands/CommandStack.h
+  - Crear: src/editor/commands/CommandStack.cpp
+  - Modificar: src/editor/EditorApp.h
+  - Modificar: src/editor/EditorApp.cpp
+
+## Dia 4
+
+- ID: D04
+- Meta: Comandos de paint/place/erase.
+- Horas: 6h
+- Dependencias: D03
+- Tareas:
+  - Implementar PaintTileCommand.
+  - Implementar PlaceEnemyCommand.
+  - Implementar EraseCommand.
+  - Reemplazar mutacion directa en handleToolClick().
+- Archivos:
+  - Crear: src/editor/commands/PaintTileCommand.h
+  - Crear: src/editor/commands/PaintTileCommand.cpp
+  - Crear: src/editor/commands/PlaceEnemyCommand.h
+  - Crear: src/editor/commands/PlaceEnemyCommand.cpp
+  - Crear: src/editor/commands/EraseCommand.h
+  - Crear: src/editor/commands/EraseCommand.cpp
+  - Modificar: src/editor/EditorApp.cpp
+
+## Dia 5
+
+- ID: D05
+- Meta: Integracion de build para nuevos modulos y hardening de serializacion.
+- Horas: 6h
+- Dependencias: D04
+- Tareas:
+  - Ajustar CMake para incluir subcarpetas del editor.
+  - Agregar sceneVersion y validacion de carga.
+  - Mejorar mensajes de error en open/save.
+- Archivos:
+  - Modificar: CMakeLists.txt
+  - Modificar: src/editor/SceneData.h
+  - Modificar: src/editor/SceneData.cpp
+  - Modificar: src/editor/EditorApp.cpp
+
+## Dia 6
+
+- ID: D06
+- Meta: Dirty state y proteccion de cambios no guardados.
+- Horas: 5h
+- Dependencias: D05
+- Tareas:
+  - Agregar sceneDirty_.
+  - Confirmaciones en New/Open/Quit.
+- Archivos:
+  - Modificar: src/editor/EditorApp.h
+  - Modificar: src/editor/EditorApp.cpp
+
+## Dia 7
+
+- ID: D07
+- Meta: Crear base de Asset System (tipos y registro).
+- Horas: 6h
+- Dependencias: D06
+- Tareas:
+  - Crear tipos y estructura AssetRecord.
+  - Crear carpetas assets y library.
+- Archivos:
+  - Crear: src/assets/AssetTypes.h
+  - Crear: src/assets/AssetRecord.h
+  - Crear: assets/.gitkeep
+  - Crear: library/.gitkeep
+
+## Dia 8
+
+- ID: D08
+- Meta: AssetDatabase persistente.
+- Horas: 6h
+- Dependencias: D07
+- Tareas:
+  - Implementar carga/guardado JSON de asset_db.
+  - Búsqueda por GUID y por sourcePath.
+- Archivos:
+  - Crear: src/assets/AssetDatabase.h
+  - Crear: src/assets/AssetDatabase.cpp
+  - Crear: assets/asset_db.json
+  - Modificar: CMakeLists.txt
+
+## Dia 9
+
+- ID: D09
+- Meta: Integrar AssetDatabase al ciclo de vida del editor.
+- Horas: 6h
+- Dependencias: D08
+- Tareas:
+  - Cargar DB en init.
+  - Persistir DB en salida.
+  - Registrar logs de estado.
+- Archivos:
+  - Modificar: src/editor/EditorApp.h
+  - Modificar: src/editor/EditorApp.cpp
+
+## Dia 10
+
+- ID: D10
+- Meta: ImportManager e interfaz base de importers.
+- Horas: 6h
+- Dependencias: D09
+- Tareas:
+  - Definir IImporter.
+  - Implementar ImportManager.
+  - Resolver importer por tipo.
+- Archivos:
+  - Crear: src/assets/importers/IImporter.h
+  - Crear: src/assets/ImportManager.h
+  - Crear: src/assets/ImportManager.cpp
+
+## Dia 11
+
+- ID: D11
+- Meta: Importers iniciales (scene/tileset/gameplay).
+- Horas: 6h
+- Dependencias: D10
+- Tareas:
+  - Implementar importers.
+  - Soportar hash/mtime para import incremental.
+- Archivos:
+  - Crear: src/assets/importers/SceneImporter.h
+  - Crear: src/assets/importers/SceneImporter.cpp
+  - Crear: src/assets/importers/TileSetImporter.h
+  - Crear: src/assets/importers/TileSetImporter.cpp
+  - Crear: src/assets/importers/GameplayConfigImporter.h
+  - Crear: src/assets/importers/GameplayConfigImporter.cpp
+
+## Dia 12
+
+- ID: D12
+- Meta: UI de Asset Browser e inspector de metadata.
+- Horas: 6h
+- Dependencias: D11
+- Tareas:
+  - Crear paneles dedicados.
+  - Integrar seleccion por GUID y boton Reimport.
+  - Docking en layout por defecto.
+- Archivos:
+  - Crear: src/editor/panels/AssetBrowserPanel.h
+  - Crear: src/editor/panels/AssetBrowserPanel.cpp
+  - Crear: src/editor/panels/AssetInspectorPanel.h
+  - Crear: src/editor/panels/AssetInspectorPanel.cpp
+  - Modificar: src/editor/EditorApp.h
+  - Modificar: src/editor/EditorApp.cpp
+
+## Dia 13
+
+- ID: D13
+- Meta: RuntimeContext, ISystem y scheduler.
+- Horas: 6h
+- Dependencias: D12
+- Tareas:
+  - Crear contratos de sistema.
+  - Inicializar scheduler en runtime.
+- Archivos:
+  - Crear: src/game/runtime/RuntimeContext.h
+  - Crear: src/game/runtime/ISystem.h
+  - Crear: src/game/runtime/SystemScheduler.h
+  - Crear: src/game/runtime/SystemScheduler.cpp
+  - Modificar: src/game/Game.h
+  - Modificar: src/game/Game.cpp
+
+## Dia 14
+
+- ID: D14
+- Meta: MovementSystem y CombatSystem.
+- Horas: 6h
+- Dependencias: D13
+- Tareas:
+  - Migrar movimiento a MovementSystem.
+  - Migrar combate/daño/recompensa base a CombatSystem.
+- Archivos:
+  - Crear: src/game/systems/MovementSystem.h
+  - Crear: src/game/systems/MovementSystem.cpp
+  - Crear: src/game/systems/CombatSystem.h
+  - Crear: src/game/systems/CombatSystem.cpp
+  - Modificar: src/game/Game.cpp
+
+## Dia 15
+
+- ID: D15
+- Meta: AISystem y SpawnRewardSystem.
+- Horas: 6h
+- Dependencias: D14
+- Tareas:
+  - Migrar IA enemiga a AISystem.
+  - Separar recompensas/spawn logic.
+- Archivos:
+  - Crear: src/game/systems/AISystem.h
+  - Crear: src/game/systems/AISystem.cpp
+  - Crear: src/game/systems/SpawnRewardSystem.h
+  - Crear: src/game/systems/SpawnRewardSystem.cpp
+  - Modificar: src/game/Game.cpp
+
+## Dia 16
+
+- ID: D16
+- Meta: Gameplay data-driven.
+- Horas: 6h
+- Dependencias: D15
+- Tareas:
+  - Crear JSON de clases, enemigos y loot.
+  - Crear GameplayDatabase.
+  - Cargar datos en inicializacion de runtime.
+- Archivos:
+  - Crear: assets/gameplay/player_classes.json
+  - Crear: assets/gameplay/enemies.json
+  - Crear: assets/gameplay/loot_tables.json
+  - Crear: src/game/data/GameplayDatabase.h
+  - Crear: src/game/data/GameplayDatabase.cpp
+  - Modificar: src/game/Game.cpp
+
+## Dia 17
+
+- ID: D17
+- Meta: Pathfinding A* con costos de terreno.
+- Horas: 6h
+- Dependencias: D16
+- Tareas:
+  - Implementar GridNav.
+  - Exponer costo de tiles en World.
+  - Integrar pathfinding en AISystem.
+- Archivos:
+  - Crear: src/game/nav/GridNav.h
+  - Crear: src/game/nav/GridNav.cpp
+  - Modificar: src/world/World.h
+  - Modificar: src/world/World.cpp
+  - Modificar: src/game/systems/AISystem.cpp
+
+## Dia 18
+
+- ID: D18
+- Meta: Play mode seguro en editor (snapshot + rollback).
+- Horas: 6h
+- Dependencias: D17
+- Tareas:
+  - Crear PlaySession.
+  - Agregar botones Play/Stop.
+  - Restaurar estado al salir de Play.
+- Archivos:
+  - Crear: src/editor/playmode/PlaySession.h
+  - Crear: src/editor/playmode/PlaySession.cpp
+  - Modificar: src/editor/EditorApp.h
+  - Modificar: src/editor/EditorApp.cpp
+
+## Dia 19
+
+- ID: D19
+- Meta: Save/load versionado del juego.
+- Horas: 6h
+- Dependencias: D18
+- Tareas:
+  - Implementar SaveGame y versioning.
+  - Integrar persistencia de estado core.
+- Archivos:
+  - Crear: src/game/save/SaveGame.h
+  - Crear: src/game/save/SaveGame.cpp
+  - Crear: src/game/save/SaveVersioning.h
+  - Crear: src/game/save/SaveVersioning.cpp
+  - Modificar: src/game/Game.h
+  - Modificar: src/game/Game.cpp
+  - Crear: saves/.gitkeep
+
+## Dia 20
+
+- ID: D20
+- Meta: Testing + profiling + cierre de sprint.
+- Horas: 6h
+- Dependencias: D19
+- Tareas:
+  - Crear suite minima de tests.
+  - Integrar tests en CMake.
+  - Crear profiler base y panel en editor.
+  - Cierre con checklist de aceptacion.
+- Archivos:
+  - Crear: tests/CMakeLists.txt
+  - Crear: tests/test_scene_serialization.cpp
+  - Crear: tests/test_undo_redo_commands.cpp
+  - Crear: tests/test_world_seed_determinism.cpp
+  - Crear: tests/test_pathfinding.cpp
+  - Crear: src/core/profiling/Profiler.h
+  - Crear: src/core/profiling/Profiler.cpp
+  - Modificar: CMakeLists.txt
+  - Modificar: src/game/Game.cpp
+  - Modificar: src/editor/EditorApp.cpp
+
+---
+
+## Dependencias globales (resumen)
+
+- Bloque Editor Foundations: D01 -> D06
+- Bloque Asset Pipeline: D07 -> D12
+- Bloque Runtime Systems: D13 -> D17
+- Bloque Produccion/QA: D18 -> D20
+
+No paralelizar bloques sin completar su base anterior.
+
+## Estimacion total
+
+- Horas totales: 119h
+- Promedio diario: 5.95h
+
+## Buffer recomendado
+
+- Reservar 1 dia extra (fuera de los 20) para contingencia de integracion.
+- Si no se usa buffer, invertirlo en hardening de tests y documentacion tecnica.
