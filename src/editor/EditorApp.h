@@ -4,6 +4,7 @@
 #include "SceneData.h"
 #include "World.h"
 #include "CommandStack.h"
+#include "AssetDatabase.h"
 #include <string>
 #include <vector>
 #include <map>
@@ -32,6 +33,10 @@ private:
     EntityData* findEntityById(uint64_t id);
     void performUndo();
     void performRedo();
+
+    // ── Asset Database ────────────────────────────────────────────────────────
+    AssetDatabase assetDb_;
+    std::string   assetDbPath_;
 
     // ── Camera ───────────────────────────────────────────────────────────────
     float camX_ = 12.f;

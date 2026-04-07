@@ -76,10 +76,11 @@ target_link_libraries(${PROJECT_NAME} PRIVATE game_core ${SDL2_LIBRARIES})
 # ── Editor executable (DashEngine) ───────────────────────────────────────────
 file(GLOB EDITOR_SOURCES "src/editor/*.cpp")
 file(GLOB EDITOR_CMD_SOURCES "src/editor/commands/*.cpp")
-add_executable(DashEngine ${EDITOR_SOURCES} ${EDITOR_CMD_SOURCES})
+file(GLOB ASSET_SOURCES "src/assets/*.cpp")
+add_executable(DashEngine ${EDITOR_SOURCES} ${EDITOR_CMD_SOURCES} ${ASSET_SOURCES})
 target_include_directories(DashEngine PRIVATE
     src src/core src/entities src/world src/rendering src/editor
-    src/editor/commands
+    src/editor/commands src/assets
     ${SDL2_INCLUDE_DIRS}
 )
 target_link_libraries(DashEngine PRIVATE

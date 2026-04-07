@@ -80,6 +80,17 @@ bool EditorApp::init()
     // ── File browser root ────────────────────────────────────────────────────
     fileBrowserRoot_ = std::string(PROJECT_DIR) + "/src";
 
+    // ── Asset Database ─────────────────────────────────────────────────────
+    assetDbPath_ = std::string(PROJECT_DIR) + "/assets/asset_db.json";
+    if (fs::exists(assetDbPath_)) {
+        if (assetDb_.load(assetDbPath_))
+            addLog("Asset DB loaded (" + std::to_string(assetDb_.records().size()) + " records).");
+        else
+            addLog("[WARN] Failed to load asset DB.");
+    } else {
+        addLog("Asset DB not found, starting fresh.");
+    }
+
     newScene();
     running_ = true;
     addLog("Editor ready.");
@@ -95,6 +106,10 @@ bool EditorApp::init()
 
 EditorApp::~EditorApp()
 {
+    // Persist asset database on shutdown
+    if (!assetDbPath_.empty())
+        assetDb_.save(assetDbPath_);
+
     SDL_FreeCursor(cursorArrow_);
     SDL_FreeCursor(cursorCrosshair_);
     SDL_FreeCursor(cursorHand_);

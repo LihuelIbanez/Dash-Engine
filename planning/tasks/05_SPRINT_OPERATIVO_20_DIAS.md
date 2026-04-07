@@ -8,7 +8,6 @@ Usa este tablero para mover el estado diario del sprint. Solo debe haber 1 item 
 
 ### To Do
 
-- [ ] D08 - AssetDatabase persistente (6h)
 - [ ] D09 - Integracion AssetDatabase en editor (6h)
 - [ ] D10 - ImportManager + IImporter (6h)
 - [ ] D11 - Importers iniciales (6h)
@@ -24,7 +23,7 @@ Usa este tablero para mover el estado diario del sprint. Solo debe haber 1 item 
 
 ### Doing
 
-- [ ] D08 - AssetDatabase persistente (proximo paso)
+- [ ] D09 - Integracion AssetDatabase en editor (proximo paso)
 
 ### Done
 
@@ -35,6 +34,7 @@ Usa este tablero para mover el estado diario del sprint. Solo debe haber 1 item 
 - [x] D05 - CMake + serializacion versionada (6h) — Completado
 - [x] D06 - Dirty state y confirmaciones (5h) — Completado: modal Unsaved Changes (Save/Discard/Cancel), requestAction guard, titulo ventana con *
 - [x] D07 - Base Asset System (6h) — Completado: AssetTypes.h, AssetRecord.h, carpetas assets/ y library/
+- [x] D08 - AssetDatabase persistente (6h) — Completado: AssetDatabase.h/.cpp con load/save/upsert/findByGuid/findBySourcePath/removeMissing, integrado en EditorApp init/destructor, GUID v4
 
 ## Registro Diario de Ejecucion
 
@@ -47,7 +47,7 @@ Usa una linea por dia para dejar trazabilidad de avance real.
 - [x] Dia 05 | ID: D05 | Plan: 6h | Real: ~2h | Bloqueos: Ninguno | Resultado: sceneVersion en SceneData, kCurrentVersion=1, validacion de JSON/bounds/types/entities, loadErrors, mensajes en Build Log.
 - [x] Dia 06 | ID: D06 | Plan: 5h | Real: ~1h | Bloqueos: Ninguno | Resultado: PendingAction enum, requestAction/executePendingAction, modal Save/Discard/Cancel, titulo ventana con *, SDL_QUIT guard.
 - [x] Dia 07 | ID: D07 | Plan: 6h | Real: ~0.5h | Bloqueos: Ninguno | Resultado: AssetTypes.h (enum AssetType), AssetRecord.h (struct con guid/sourcePath/importPath/hash/deps), carpetas assets/ y library/ creadas.
-- [ ] Dia 08 | ID: D08 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __
+- [x] Dia 08 | ID: D08 | Plan: 6h | Real: ~0.5h | Bloqueos: Ninguno | Resultado: AssetDatabase con GUID v4, load/save JSON, upsert, find, removeMissing. CMakeLists con ASSET_SOURCES glob. EditorApp carga DB en init y persiste en destructor.
 - [ ] Dia 09 | ID: D09 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __
 - [ ] Dia 10 | ID: D10 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __
 - [ ] Dia 11 | ID: D11 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __
