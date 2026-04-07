@@ -1,2 +1,0 @@
-/usr/bin/ar qc libgame_core.a CMakeFiles/game_core.dir/src/core/Character.cpp.o CMakeFiles/game_core.dir/src/core/Entity.cpp.o CMakeFiles/game_core.dir/src/entities/Enemy.cpp.o CMakeFiles/game_core.dir/src/entities/Player.cpp.o CMakeFiles/game_core.dir/src/world/World.cpp.o
-/usr/bin/ranlib libgame_core.a

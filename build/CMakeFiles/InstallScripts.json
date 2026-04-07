@@ -1,8 +1,0 @@
-{
-	"InstallScripts" : 
-	[
-		"/Users/lihuelibanez/Development/proyects/isometric-rpg/build/cmake_install.cmake",
-		"/Users/lihuelibanez/Development/proyects/isometric-rpg/build/_deps/json-build/cmake_install.cmake"
-	],
-	"Parallel" : false
-}
