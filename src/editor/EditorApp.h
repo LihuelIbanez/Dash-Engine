@@ -53,6 +53,14 @@ private:
     bool  showSaveDialog_ = false;
     char  saveFileName_[256] = "scene.json";
 
+    // ── Unsaved-changes confirmation ─────────────────────────────────────────
+    enum class PendingAction { None, NewScene, OpenScene, Exit };
+    PendingAction pendingAction_     = PendingAction::None;
+    bool          showConfirmDialog_ = false;
+    void requestAction(PendingAction action);
+    void executePendingAction();
+    void drawConfirmDialog();
+
     // ── Build / log ──────────────────────────────────────────────────────────
     std::vector<std::string> log_;
     bool showBuildLog_ = true;

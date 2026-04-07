@@ -36,6 +36,7 @@ void SceneData::createDefault()
 bool SceneData::saveToFile(const std::string& path)
 {
     json j;
+    j["sceneVersion"] = kCurrentVersion;
     j["name"]         = sceneName;
     j["worldSeed"]    = worldSeed;
     j["nextEntityId"] = nextEntityId;
@@ -74,47 +75,122 @@ bool SceneData::saveToFile(const std::string& path)
 // ─────────────────────────────────────────────────────────────────────────────
 bool SceneData::loadFromFile(const std::string& path)
 {
+    loadErrors.clear();
+
     std::ifstream file(path);
-    if (!file.is_open()) return false;
+    if (!file.is_open()) {
+        loadErrors.push_back("Cannot open file: " + path);
+        return false;
+    }
 
     json j;
     try { file >> j; }
-    catch (...) { return false; }
+    catch (const json::parse_error& e) {
+        loadErrors.push_back("JSON parse error: " + std::string(e.what()));
+        return false;
+    }
+    catch (...) {
+        loadErrors.push_back("Unknown error parsing JSON");
+        return false;
+    }
 
+    if (!j.is_object()) {
+        loadErrors.push_back("Root is not a JSON object");
+        return false;
+    }
+
+    // ── Version check ────────────────────────────────────────────────────────
+    sceneVersion = j.value("sceneVersion", 0);
+    if (sceneVersion > kCurrentVersion) {
+        loadErrors.push_back("Scene version " + std::to_string(sceneVersion)
+                           + " is newer than supported (" + std::to_string(kCurrentVersion) + ")");
+        return false;
+    }
+    if (sceneVersion == 0) {
+        loadErrors.push_back("Warning: scene has no version field, treating as legacy (v0)");
+    }
+
+    // ── Core fields ──────────────────────────────────────────────────────────
     sceneName    = j.value("name", "Untitled");
     worldSeed    = j.value("worldSeed", 12345u);
     nextEntityId = j.value("nextEntityId", (uint64_t)1);
 
+    // ── Tile overrides ───────────────────────────────────────────────────────
     tileOverrides.clear();
     if (j.contains("tileOverrides")) {
-        for (auto& t : j["tileOverrides"]) {
-            tileOverrides.push_back({
-                t.value("x", 0), t.value("y", 0),
-                t.value("type", 0), t.value("walkable", true)
-            });
+        if (!j["tileOverrides"].is_array()) {
+            loadErrors.push_back("'tileOverrides' is not an array, skipping");
+        } else {
+            int idx = 0;
+            for (auto& t : j["tileOverrides"]) {
+                if (!t.is_object()) {
+                    loadErrors.push_back("tileOverrides[" + std::to_string(idx) + "] is not an object, skipping");
+                    ++idx; continue;
+                }
+                int tx = t.value("x", -1);
+                int ty = t.value("y", -1);
+                if (tx < 0 || tx >= WORLD_W || ty < 0 || ty >= WORLD_H) {
+                    loadErrors.push_back("tileOverrides[" + std::to_string(idx) + "] out of bounds ("
+                                       + std::to_string(tx) + "," + std::to_string(ty) + "), skipping");
+                    ++idx; continue;
+                }
+                int tileType = t.value("type", 0);
+                if (tileType < 0 || tileType > 8) {
+                    loadErrors.push_back("tileOverrides[" + std::to_string(idx) + "] invalid type "
+                                       + std::to_string(tileType) + ", clamping");
+                    tileType = std::max(0, std::min(8, tileType));
+                }
+                tileOverrides.push_back({tx, ty, tileType, t.value("walkable", true)});
+                ++idx;
+            }
         }
     }
 
+    // ── Entities ─────────────────────────────────────────────────────────────
     entities.clear();
+    bool hasPlayer = false;
     if (j.contains("entities")) {
-        for (auto& e : j["entities"]) {
-            EntityData ed;
-            std::string typeStr = e.value("type", "Enemy");
-            ed.type      = (typeStr == "Player") ? EntityData::Type::Player
-                                                 : EntityData::Type::Enemy;
-            ed.name      = e.value("name", "Entity");
-            ed.x         = e.value("x", 0.f);
-            ed.y         = e.value("y", 0.f);
-            ed.charClass = e.value("class", "Warrior");
+        if (!j["entities"].is_array()) {
+            loadErrors.push_back("'entities' is not an array, skipping");
+        } else {
+            int idx = 0;
+            for (auto& e : j["entities"]) {
+                if (!e.is_object()) {
+                    loadErrors.push_back("entities[" + std::to_string(idx) + "] is not an object, skipping");
+                    ++idx; continue;
+                }
+                EntityData ed;
+                std::string typeStr = e.value("type", "Enemy");
+                ed.type = (typeStr == "Player") ? EntityData::Type::Player
+                                                : EntityData::Type::Enemy;
+                ed.name      = e.value("name", "Entity");
+                ed.x         = e.value("x", 0.f);
+                ed.y         = e.value("y", 0.f);
+                ed.charClass = e.value("class", "Warrior");
 
-            // Backward compat: assign ID if missing from old scene files
-            if (e.contains("id"))
-                ed.id = e["id"].get<uint64_t>();
-            else
-                ed.id = allocateEntityId();
+                // Validate position bounds
+                if (ed.x < 0 || ed.x >= WORLD_W || ed.y < 0 || ed.y >= WORLD_H) {
+                    loadErrors.push_back("entities[" + std::to_string(idx) + "] '"
+                                       + ed.name + "' position out of bounds, clamping");
+                    ed.x = std::max(0.f, std::min((float)(WORLD_W - 1), ed.x));
+                    ed.y = std::max(0.f, std::min((float)(WORLD_H - 1), ed.y));
+                }
 
-            entities.push_back(ed);
+                // Backward compat: assign ID if missing from old scene files
+                if (e.contains("id"))
+                    ed.id = e["id"].get<uint64_t>();
+                else
+                    ed.id = allocateEntityId();
+
+                if (ed.type == EntityData::Type::Player) hasPlayer = true;
+                entities.push_back(ed);
+                ++idx;
+            }
         }
+    }
+
+    if (!hasPlayer) {
+        loadErrors.push_back("Warning: scene has no Player entity");
     }
 
     // Ensure nextEntityId is above all loaded IDs

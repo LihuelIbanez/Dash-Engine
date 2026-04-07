@@ -8,12 +8,12 @@ Este directorio separa las tareas por semana para ejecutar el escalado del edito
 
 | Semana | Estado | Progreso |
 |--------|--------|----------|
-| 1 - Editor Foundations | 🟡 En progreso | D01-D04 completados, D05-D06 pendientes |
+| 1 - Editor Foundations | ✅ Completada | D01-D06 completados |
 | 2 - Asset Pipeline | ⬜ No iniciada | D07-D12 pendientes |
 | 3 - Runtime Systems | ⬜ No iniciada | D13-D17 pendientes |
 | 4 - Produccion/QA | ⬜ No iniciada | D18-D20 pendientes |
 
-**Proximo paso:** D05 - CMake + serializacion versionada
+**Proximo paso:** D07 - Base Asset System (tipos, AssetRecord, carpetas assets/ y library/)
 
 ## Funcionalidades ya implementadas (fuera del plan)
 
