@@ -371,6 +371,12 @@ void EditorApp::run()
                                   assetDb_, importManager_, assetsRoot_,
                                   libraryRoot_, assetDbPath_,
                                   [this](const std::string& m){ addLog(m); });
+        if (showValidationPanel_)
+            validationPanel_.draw(validationIssues_, selectedEntityId_, camX_, camY_,
+                [this]() {
+                    validationIssues_ = contentValidator_.validate(scene_, world_, assetDb_);
+                    addLog("Validation: " + std::to_string(validationIssues_.size()) + " issue(s) found.");
+                });
         if (showOpenDialog_) drawOpenDialog();
         if (showSaveDialog_) drawSaveDialog();
         if (showConfirmDialog_) drawConfirmDialog();
@@ -417,6 +423,7 @@ void EditorApp::drawMenuBar()
     }
     if (ImGui::BeginMenu("View")) {
         ImGui::MenuItem("Build Log", nullptr, &showBuildLog_);
+        ImGui::MenuItem("Validation Panel", nullptr, &showValidationPanel_);
         ImGui::Separator();
         ImGui::MenuItem("Auto-Reload Assets", nullptr, &autoReload_);
         ImGui::EndMenu();
@@ -462,11 +469,16 @@ void EditorApp::drawMenuBar()
 
         ImGui::EndMenu();
     }
+    if (ImGui::BeginMenu("Tools")) {
+        if (ImGui::MenuItem("Validate Scene", "Shift+V")) {
+            validationIssues_ = contentValidator_.validate(scene_, world_, assetDb_);
+            showValidationPanel_ = true;
+            addLog("Validation: " + std::to_string(validationIssues_.size()) + " issue(s) found.");
+        }
+        ImGui::EndMenu();
+    }
     ImGui::EndMenuBar();
 }
-
-// ═════════════════════════════════════════════════════════════════════════════
-// Toolbar
 // ═════════════════════════════════════════════════════════════════════════════
 void EditorApp::drawToolbar()
 {
@@ -518,6 +530,20 @@ void EditorApp::drawToolbar()
     toolBtn("Paint Tile",  Tool::PaintTile);
     toolBtn("Place Enemy", Tool::PlaceEnemy);
     toolBtn("Erase",       Tool::Erase);
+
+    ImGui::TextDisabled("|");
+    ImGui::SameLine();
+
+    // ✔ Validate Scene
+    ImGui::PushStyleColor(ImGuiCol_Button,        {0.35f, 0.20f, 0.55f, 1.f});
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,  {0.50f, 0.30f, 0.75f, 1.f});
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,   {0.60f, 0.40f, 0.85f, 1.f});
+    if (ImGui::Button("  Validate  ", {120, 34})) {
+        validationIssues_ = contentValidator_.validate(scene_, world_, assetDb_);
+        showValidationPanel_ = true;
+        addLog("Validation: " + std::to_string(validationIssues_.size()) + " issue(s) found.");
+    }
+    ImGui::PopStyleColor(3);
 
     ImGui::End();
 }

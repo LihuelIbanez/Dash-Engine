@@ -75,6 +75,7 @@ file(GLOB RUNTIME_SOURCES "src/game/runtime/*.cpp")
 file(GLOB SYSTEM_SOURCES  "src/game/systems/*.cpp")
 file(GLOB DATA_SOURCES    "src/game/data/*.cpp")
 file(GLOB SAVE_SOURCES    "src/game/save/*.cpp")
+file(GLOB NAV_SOURCES     "src/game/nav/*.cpp")
 add_executable(${PROJECT_NAME}
     src/main.cpp
     src/game/Game.cpp
@@ -95,20 +96,22 @@ target_link_libraries(${PROJECT_NAME} PRIVATE game_core nlohmann_json::nlohmann_
 file(GLOB EDITOR_SOURCES "src/editor/*.cpp")
 file(GLOB EDITOR_CMD_SOURCES "src/editor/commands/*.cpp")
 file(GLOB EDITOR_PLAYMODE_SOURCES "src/editor/playmode/*.cpp")
+file(GLOB EDITOR_VALIDATION_SOURCES "src/editor/validation/*.cpp")
 file(GLOB ASSET_SOURCES "src/assets/*.cpp")
 file(GLOB IMPORTER_SOURCES "src/assets/importers/*.cpp")
 file(GLOB PANEL_SOURCES "src/editor/panels/*.cpp")
 add_executable(DashEngine
     ${EDITOR_SOURCES} ${EDITOR_CMD_SOURCES} ${EDITOR_PLAYMODE_SOURCES}
+    ${EDITOR_VALIDATION_SOURCES}
     ${ASSET_SOURCES} ${IMPORTER_SOURCES} ${PANEL_SOURCES}
     src/game/Game.cpp
     ${RUNTIME_SOURCES} ${SYSTEM_SOURCES} ${DATA_SOURCES} ${SAVE_SOURCES}
 )
 target_include_directories(DashEngine PRIVATE
     src src/core src/core/components src/entities src/world src/rendering src/editor
-    src/editor/commands src/editor/panels src/editor/playmode
+    src/editor/commands src/editor/panels src/editor/playmode src/editor/validation
     src/assets src/assets/importers
-    src/game src/game/runtime src/game/systems src/game/data src/game/save
+    src/game src/game/runtime src/game/systems src/game/data src/game/save src/game/nav
     ${SDL2_INCLUDE_DIRS}
 )
 target_link_libraries(DashEngine PRIVATE

@@ -150,3 +150,28 @@ target_link_libraries(test_prefab_system PRIVATE
 )
 target_compile_options(test_prefab_system PRIVATE -Wall -Wextra -O2)
 add_test(NAME test_prefab_system COMMAND test_prefab_system)
+
+# ── Content validation (D28) ──────────────────────────────────────────────────
+add_executable(test_content_validation
+    test_content_validation.cpp
+    ${CMAKE_SOURCE_DIR}/src/editor/validation/ContentValidator.cpp
+    ${CMAKE_SOURCE_DIR}/src/assets/AssetDatabase.cpp
+)
+target_include_directories(test_content_validation PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/src/core
+    ${CMAKE_SOURCE_DIR}/src/core/components
+    ${CMAKE_SOURCE_DIR}/src/entities
+    ${CMAKE_SOURCE_DIR}/src/world
+    ${CMAKE_SOURCE_DIR}/src/rendering
+    ${CMAKE_SOURCE_DIR}/src/editor
+    ${CMAKE_SOURCE_DIR}/src/editor/validation
+    ${CMAKE_SOURCE_DIR}/src/game/nav
+    ${CMAKE_SOURCE_DIR}/src/assets
+    ${SDL2_INCLUDE_DIRS}
+)
+target_link_libraries(test_content_validation PRIVATE
+    game_core nlohmann_json::nlohmann_json ${SDL2_LIBRARIES}
+)
+target_compile_options(test_content_validation PRIVATE -Wall -Wextra -O2)
+add_test(NAME test_content_validation COMMAND test_content_validation)

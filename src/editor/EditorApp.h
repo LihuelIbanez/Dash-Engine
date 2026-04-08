@@ -13,6 +13,8 @@
 #include "Game.h"
 #include "Reflection.h"
 #include "EntityRegistry.h"
+#include "ContentValidator.h"
+#include "ValidationPanel.h"
 #include <string>
 #include <vector>
 #include <map>
@@ -63,6 +65,12 @@ private:
     FileWatcher fileWatcher_;
     bool        autoReload_ = true;
     std::vector<FileWatcher::FileChange> deferredReloads_;
+
+    // ── Content Validation ─────────────────────────────────────────
+    ContentValidator             contentValidator_;
+    ValidationPanel              validationPanel_;
+    std::vector<ValidationIssue> validationIssues_;
+    bool                         showValidationPanel_ = false;
     // ── Camera ───────────────────────────────────────────────────────────────
     float camX_ = 12.f;
     float camY_ = 12.f;
