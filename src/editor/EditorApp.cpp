@@ -1,4 +1,5 @@
 #include "EditorApp.h"
+#include "icon_data.h"
 #include "imgui.h"
 #include "imgui_impl_sdl2.h"
 #include "imgui_impl_sdlrenderer2.h"
@@ -42,6 +43,19 @@ bool EditorApp::init()
         SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
     if (!window_) return false;
 
+    // Set window icon from embedded BMP data
+    SDL_RWops* rw = SDL_RWFromConstMem(kIconBmpData, static_cast<int>(kIconBmpLen));
+    if (rw) {
+        SDL_Surface* icon = SDL_LoadBMP_RW(rw, 1);
+        if (icon) {
+            // Key out the background colour (sample top-left corner pixel)
+            Uint32 bgColor = *static_cast<Uint32*>(icon->pixels);
+            SDL_SetColorKey(icon, SDL_TRUE, bgColor);
+            SDL_SetWindowIcon(window_, icon);
+            SDL_FreeSurface(icon);
+        }
+    }
+
     renderer_ = SDL_CreateRenderer(window_, -1,
         SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
     if (!renderer_) return false;
@@ -53,6 +67,15 @@ bool EditorApp::init()
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO(); (void)io;
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+
+    // Load SF Pro (SFNS) — falls back to ImGui default if not found
+    const char* sfProPath = "/System/Library/Fonts/SFNS.ttf";
+    if (FILE* f = fopen(sfProPath, "rb")) {
+        fclose(f);
+        io.Fonts->AddFontFromFileTTF(sfProPath, 15.0f);
+    } else {
+        io.Fonts->AddFontDefault();
+    }
 
     // Dark style with Unreal-like colour scheme
     ImGui::StyleColorsDark();
