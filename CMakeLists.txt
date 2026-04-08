@@ -83,6 +83,36 @@ if(NOT EXISTS "${FA_HEADER_PATH}")
     endif()
 endif()
 
+# ── stb (header-only image read/write for the sprite editor) ─────────────────
+set(STB_WRITE_PATH "${CMAKE_SOURCE_DIR}/src/editor/stb_image_write.h")
+set(STB_READ_PATH  "${CMAKE_SOURCE_DIR}/src/editor/stb_image.h")
+
+if(NOT EXISTS "${STB_WRITE_PATH}")
+    message(STATUS "[stb] Downloading stb_image_write.h...")
+    file(DOWNLOAD
+        "https://raw.githubusercontent.com/nothings/stb/master/stb_image_write.h"
+        "${STB_WRITE_PATH}"
+        SHOW_PROGRESS STATUS _stbw_status)
+    list(GET _stbw_status 0 _stbw_code)
+    if(NOT _stbw_code EQUAL 0)
+        message(WARNING "[stb] stb_image_write.h download failed.")
+        file(REMOVE "${STB_WRITE_PATH}")
+    endif()
+endif()
+
+if(NOT EXISTS "${STB_READ_PATH}")
+    message(STATUS "[stb] Downloading stb_image.h...")
+    file(DOWNLOAD
+        "https://raw.githubusercontent.com/nothings/stb/master/stb_image.h"
+        "${STB_READ_PATH}"
+        SHOW_PROGRESS STATUS _stbr_status)
+    list(GET _stbr_status 0 _stbr_code)
+    if(NOT _stbr_code EQUAL 0)
+        message(WARNING "[stb] stb_image.h download failed.")
+        file(REMOVE "${STB_READ_PATH}")
+    endif()
+endif()
+
 # ── Core game library (shared between game & editor) ─────────────────────────
 file(GLOB CORE_SOURCES
     "src/core/*.cpp"

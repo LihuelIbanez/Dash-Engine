@@ -3,6 +3,7 @@
 #include "importers/TileSetImporter.h"
 #include "importers/GameplayConfigImporter.h"
 #include "importers/PrefabImporter.h"
+#include "importers/SpriteImporter.h"
 
 #include <filesystem>
 #include <fstream>
@@ -42,8 +43,12 @@ AssetType ImportManager::inferAssetType(const std::string& relativePath)
     // Lowercase
     for (auto& c : ext) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
 
-    if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp")
+    if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp") {
+        // PNGs inside assets/sprites/ are registered as Sprite assets
+        std::string parent = p.parent_path().filename().string();
+        if (parent == "sprites") return AssetType::Sprite;
         return AssetType::Texture;
+    }
 
     if (ext == ".json") {
         // Try to differentiate by parent folder or filename convention
@@ -75,6 +80,7 @@ ImportManager::ImportManager()
     importers_[AssetType::TileSet]        = std::make_unique<TileSetImporter>();
     importers_[AssetType::GameplayConfig] = std::make_unique<GameplayConfigImporter>();
     importers_[AssetType::Prefab]         = std::make_unique<PrefabImporter>();
+    importers_[AssetType::Sprite]         = std::make_unique<SpriteImporter>();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

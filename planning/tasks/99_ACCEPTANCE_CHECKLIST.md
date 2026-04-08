@@ -45,6 +45,14 @@ Usa este archivo para control de cierre por fase.
 - [ ] Game Over screen y pantalla de titulo con seleccion de clase. *(D33)*
 - [ ] Loot runtime: drops al matar enemigos via loot_tables.json. *(D34)*
 
+## Sprint 4 — Sprite Editor
+
+- [x] Sprite Editor integrado al editor con canvas, herramientas y capas. *(D36-D41)*
+- [x] Export/Load PNG y asignacion a entidades via RenderComponent con undo/redo. *(D42)*
+- [x] Pipeline de SpriteImporter y render runtime con TextureCache en viewport. *(D43)*
+- [x] Preview isometrico con anchor/pivot y metadatos .sprite.json usados por runtime. *(D44)*
+- [x] Tests de logica de sprite editor y pulido UI final. *(D45, ctest 14/14)*
+
 ## Resumen de avance
 
 | Fase | Completado | Total | % |
@@ -54,5 +62,6 @@ Usa este archivo para control de cierre por fase.
 | C - Runtime Systems | 4 | 4 | 100% |
 | D - Produccion y QA | 4 | 4 | 100% |
 | Sprint 3 - Polish | 0 | 4 | 0% |
+| Sprint 4 - Sprite Editor | 5 | 5 | 100% |
 | **Total S1+S2** | **16** | **16** | **100%** |
-| **Total incluyendo S3** | **16** | **20** | **80%** |
+| **Total incluyendo S3+S4** | **21** | **25** | **84%** |

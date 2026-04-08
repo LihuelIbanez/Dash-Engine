@@ -189,6 +189,7 @@ add_executable(test_hot_reload
     ${CMAKE_SOURCE_DIR}/src/assets/importers/TileSetImporter.cpp
     ${CMAKE_SOURCE_DIR}/src/assets/importers/GameplayConfigImporter.cpp
     ${CMAKE_SOURCE_DIR}/src/assets/importers/PrefabImporter.cpp
+    ${CMAKE_SOURCE_DIR}/src/assets/importers/SpriteImporter.cpp
 )
 target_include_directories(test_hot_reload PRIVATE
     ${CMAKE_SOURCE_DIR}/src
@@ -261,4 +262,33 @@ target_link_libraries(test_gameplay_database PRIVATE
 )
 target_compile_options(test_gameplay_database PRIVATE -Wall -Wextra -O2)
 add_test(NAME test_gameplay_database COMMAND test_gameplay_database)
+
+# ── Sprite editor pure logic + PNG roundtrip (D45) ──────────────────────────
+add_executable(test_sprite_editor
+    test_sprite_editor.cpp
+    ${CMAKE_SOURCE_DIR}/src/editor/stb_impl.cpp
+)
+target_include_directories(test_sprite_editor PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/src/core
+    ${CMAKE_SOURCE_DIR}/src/entities
+    ${CMAKE_SOURCE_DIR}/src/world
+    ${CMAKE_SOURCE_DIR}/src/rendering
+    ${CMAKE_SOURCE_DIR}/src/editor
+    ${CMAKE_SOURCE_DIR}/src/editor/commands
+    ${CMAKE_SOURCE_DIR}/src/game
+    ${CMAKE_SOURCE_DIR}/src/game/runtime
+    ${CMAKE_SOURCE_DIR}/src/game/systems
+    ${CMAKE_SOURCE_DIR}/src/game/data
+    ${CMAKE_SOURCE_DIR}/src/game/nav
+    ${CMAKE_SOURCE_DIR}/src/game/save
+    ${SDL2_INCLUDE_DIRS}
+)
+target_link_libraries(test_sprite_editor PRIVATE
+    game_core
+    nlohmann_json::nlohmann_json
+    ${SDL2_LIBRARIES}
+)
+target_compile_options(test_sprite_editor PRIVATE -Wall -Wextra -O2)
+add_test(NAME test_sprite_editor COMMAND test_sprite_editor)
 

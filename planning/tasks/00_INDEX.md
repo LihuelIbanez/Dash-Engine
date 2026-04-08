@@ -14,8 +14,9 @@ Este directorio separa las tareas por semana para ejecutar el escalado del edito
 | 4 - Produccion/QA | ✅ Completada | D18-D20 completados |
 | Sprint 2 - Features Avanzadas | ✅ Completada | D21-D30 completados, tag v2.0-alpha |
 | Sprint 3 - Polish & Ship | 🔧 En progreso | D31-D35 pendientes |
+| Sprint 4 - Sprite Editor | ✅ Completada | D36-D45 completados |
 
-**Proximo paso:** D31 - Rutas de bundle + infraestructura
+**Proximo paso:** Iniciar nuevo sprint/roadmap post-Sprite Editor (pendiente de definicion).
 
 ## Funcionalidades ya implementadas (fuera del plan)
 
@@ -33,7 +34,8 @@ El proyecto ya cuenta con una base funcional significativa:
 - ContentValidator con ValidationPanel
 - EventDispatcher tipado (DamageEvent/DeathEvent/LevelUpEvent/HealthChangeEvent)
 - Inspector generico con reflection y undo/redo de componentes
-- 11 suites de tests automatizados (ctest)
+- Sprite Editor completo con preview isometrico y metadatos de pivot (.sprite.json)
+- 14 suites de tests automatizados (ctest)
 
 ## Orden recomendado
 
@@ -53,7 +55,8 @@ El proyecto ya cuenta con una base funcional significativa:
 - 04_WEEK4_PRODUCTION_QA.md
 - 05_SPRINT_OPERATIVO_20_DIAS.md
 
-### Sprint 2 (D21-D30)
+### Sprint 4 (D36-D45)
+- 10_SPRINT4_SPRITE_EDITOR.md
 - 06_SPRINT_2_FEATURES_AVANZADAS.md (tablero + registro diario)
 - 07_WEEK5_COMPONENT_ARCHITECTURE.md (D21-D25: eventos, comandos, componentes, registry, inspector)
 - 08_WEEK6_PRODUCTION_TOOLS.md (D26-D30: prefabs, hot-reload, validacion, packaging, cierre)

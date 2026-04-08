@@ -6,6 +6,7 @@ enum class AssetType {
     Scene,
     GameplayConfig,
     Prefab,
+    Sprite,
     Unknown
 };
 
@@ -16,6 +17,7 @@ inline const char* assetTypeToStr(AssetType t) {
         case AssetType::Scene:          return "Scene";
         case AssetType::GameplayConfig: return "GameplayConfig";
         case AssetType::Prefab:         return "Prefab";
+        case AssetType::Sprite:         return "Sprite";
         default:                        return "Unknown";
     }
 }

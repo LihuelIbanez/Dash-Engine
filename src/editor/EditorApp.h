@@ -15,10 +15,13 @@
 #include "EntityRegistry.h"
 #include "ContentValidator.h"
 #include "ValidationPanel.h"
+#include "SpriteEditorPanel.h"
 #include <string>
 #include <vector>
 #include <map>
 #include <memory>
+#include <unordered_map>
+#include <filesystem>
 
 // ─────────────────────────────────────────────────────────────────────────────
 // EditorApp – Unreal-style level editor for the Isometric RPG
@@ -72,6 +75,17 @@ private:
     std::vector<ValidationIssue> validationIssues_;
     bool                         showValidationPanel_ = false;
     bool                         showAboutModal_      = false;
+
+    // ── Sprite Editor ─────────────────────────────────────────────────────
+    SpriteEditorPanel spriteEditor_;
+
+    struct SpritePivotMeta {
+        float pivotX = 0.5f;
+        float pivotY = 1.0f;
+        std::filesystem::file_time_type mtime{};
+        bool hasMtime = false;
+    };
+    std::unordered_map<std::string, SpritePivotMeta> spritePivotCache_;
     // ── Camera ───────────────────────────────────────────────────────────────
     float camX_ = 12.f;
     float camY_ = 12.f;
@@ -162,6 +176,7 @@ private:
 
     // ── Viewport helpers ─────────────────────────────────────────────────────
     void renderWorldToTexture();
+    void getSpritePivot(const std::string& spriteName, float& outPivotX, float& outPivotY);
     bool viewportScreenToWorld(float vx, float vy, float& wx, float& wy);
     void handleToolClick(float wx, float wy);
     void paintTileAt(float wx, float wy);

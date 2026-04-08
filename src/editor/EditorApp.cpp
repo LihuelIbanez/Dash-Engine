@@ -19,6 +19,7 @@
 #include "Profiler.h"
 #include "AppPaths.h"
 #include "IconsFontAwesome6.h"
+#include "TextureCache.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -28,8 +29,10 @@
 #include <filesystem>
 #include <fstream>
 #include <sstream>
+#include <nlohmann/json.hpp>
 
 namespace fs = std::filesystem;
+using json = nlohmann::json;
 
 // ═════════════════════════════════════════════════════════════════════════════
 // Initialisation
@@ -155,6 +158,14 @@ bool EditorApp::init()
     fileWatcher_ = FileWatcher(assetsRoot_, 1.0f);
     fileWatcher_.reset(); // establish baseline (no spurious Added events)
 
+    spriteEditor_.init(renderer_);
+    spriteEditor_.selectedEntityId = &selectedEntityId_;
+    spriteEditor_.scene            = &scene_;
+    spriteEditor_.commandStack     = &commandStack_;
+    spriteEditor_.world            = &world_;
+    spriteEditor_.importManager    = &importManager_;
+    spriteEditor_.assetsRoot       = &assetsRoot_;
+    spriteEditor_.libraryRoot      = &libraryRoot_;
     newScene();
     running_ = true;
     addLog("Editor ready.");
@@ -184,6 +195,7 @@ EditorApp::~EditorApp()
     ImGui::DestroyContext();
 
     if (viewportTex_) SDL_DestroyTexture(viewportTex_);
+    TextureCache::instance().clear(renderer_);
     if (renderer_)    SDL_DestroyRenderer(renderer_);
     if (window_)      SDL_DestroyWindow(window_);
     SDL_Quit();
@@ -392,6 +404,8 @@ void EditorApp::run()
                     validationIssues_ = contentValidator_.validate(scene_, world_, assetDb_);
                     addLog("Validation: " + std::to_string(validationIssues_.size()) + " issue(s) found.");
                 });
+        if (spriteEditor_.isOpen)
+            spriteEditor_.draw();
         // ── About modal ────────────────────────────────────────────────────
         if (showAboutModal_) {
             ImGui::OpenPopup("About DashEngine");
@@ -458,6 +472,8 @@ void EditorApp::drawMenuBar()
         ImGui::EndMenu();
     }
     if (ImGui::BeginMenu("Assets")) {
+        if (ImGui::MenuItem(ICON_FA_PAINTBRUSH " Sprite Editor")) spriteEditor_.isOpen = true;
+        ImGui::Separator();
         if (ImGui::MenuItem(ICON_FA_ARROWS_ROTATE " Scan for Changes")) {
             // Force immediate scan regardless of poll interval
             fileWatcher_ = FileWatcher(assetsRoot_, 0.0f);
@@ -1236,6 +1252,52 @@ void EditorApp::paintTileAt(float wx, float wy)
     commandStack_.execute(std::move(cmd), scene_, world_);
 }
 
+void EditorApp::getSpritePivot(const std::string& spriteName, float& outPivotX, float& outPivotY)
+{
+    outPivotX = 0.5f;
+    outPivotY = 1.0f;
+
+    fs::path metaPath = fs::path(assetsRoot_) / "sprites" / (spriteName + ".sprite.json");
+    std::error_code ec;
+    bool exists = fs::exists(metaPath, ec);
+    if (!exists || ec) return;
+
+    auto nowMtime = fs::last_write_time(metaPath, ec);
+    if (ec) return;
+
+    auto key = metaPath.string();
+    auto it = spritePivotCache_.find(key);
+    if (it != spritePivotCache_.end() && it->second.hasMtime && it->second.mtime == nowMtime) {
+        outPivotX = it->second.pivotX;
+        outPivotY = it->second.pivotY;
+        return;
+    }
+
+    SpritePivotMeta meta;
+    meta.hasMtime = true;
+    meta.mtime = nowMtime;
+
+    std::ifstream in(metaPath);
+    if (in) {
+        try {
+            json j;
+            in >> j;
+            if (j.contains("pivotX") && j["pivotX"].is_number())
+                meta.pivotX = j["pivotX"].get<float>();
+            if (j.contains("pivotY") && j["pivotY"].is_number())
+                meta.pivotY = j["pivotY"].get<float>();
+        } catch (...) {
+            // Keep defaults if metadata is invalid.
+        }
+    }
+
+    meta.pivotX = std::clamp(meta.pivotX, 0.f, 1.f);
+    meta.pivotY = std::clamp(meta.pivotY, 0.f, 1.f);
+    spritePivotCache_[key] = meta;
+    outPivotX = meta.pivotX;
+    outPivotY = meta.pivotY;
+}
+
 // ═════════════════════════════════════════════════════════════════════════════
 // Viewport rendering (render the isometric world into the texture)
 // ═════════════════════════════════════════════════════════════════════════════
@@ -1264,20 +1326,50 @@ void EditorApp::renderWorldToTexture()
         auto& e = scene_.entities[i];
         Vec2f s = worldToScreen(e.x, e.y, camX_, camY_);
 
-        int radius = 10;
-        SDL_Color col;
-        if (e.type == EntityData::Type::Player)
-            col = {60, 140, 255, 255};
-        else
-            col = {220, 60, 60, 255};
+        const int radius = 10;
 
-        // Filled circle
-        SDL_SetRenderDrawColor(renderer_, col.r, col.g, col.b, col.a);
-        for (int dy = -radius; dy <= radius; ++dy) {
-            int half = (int)std::sqrt((float)(radius * radius - dy * dy));
-            SDL_RenderDrawLine(renderer_,
-                (int)s.x - half, (int)s.y + dy,
-                (int)s.x + half, (int)s.y + dy);
+        // Try sprite first via TextureCache
+        bool drewSprite = false;
+        for (auto& comp : e.components) {
+            if (getVariantType(comp) != ComponentType::Render) continue;
+            const auto& rc = std::get<RenderComponent>(comp);
+            if (rc.visible && rc.sprite != "default") {
+                std::string texPath = assetsRoot_ + "/sprites/" + rc.sprite + ".png";
+                SDL_Texture* spriteTex = TextureCache::instance().load(renderer_, texPath);
+                if (spriteTex) {
+                    int tw = 0, th = 0;
+                    SDL_QueryTexture(spriteTex, nullptr, nullptr, &tw, &th);
+                    float pivotX = 0.5f;
+                    float pivotY = 1.0f;
+                    getSpritePivot(rc.sprite, pivotX, pivotY);
+                    SDL_Rect dst = {
+                        static_cast<int>(s.x - pivotX * tw),
+                        static_cast<int>(s.y - pivotY * th),
+                        tw,
+                        th
+                    };
+                    SDL_RenderCopy(renderer_, spriteTex, nullptr, &dst);
+                    drewSprite = true;
+                }
+            }
+            break;
+        }
+
+        if (!drewSprite) {
+            SDL_Color col;
+            if (e.type == EntityData::Type::Player)
+                col = {60, 140, 255, 255};
+            else
+                col = {220, 60, 60, 255};
+
+            // Filled circle
+            SDL_SetRenderDrawColor(renderer_, col.r, col.g, col.b, col.a);
+            for (int dy = -radius; dy <= radius; ++dy) {
+                int half = (int)std::sqrt((float)(radius * radius - dy * dy));
+                SDL_RenderDrawLine(renderer_,
+                    (int)s.x - half, (int)s.y + dy,
+                    (int)s.x + half, (int)s.y + dy);
+            }
         }
 
         // Selection ring
