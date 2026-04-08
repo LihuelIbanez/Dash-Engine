@@ -1,4 +1,5 @@
 #include "SceneData.h"
+#include "ComponentSerialization.h"
 #include <nlohmann/json.hpp>
 #include <fstream>
 
@@ -60,6 +61,12 @@ bool SceneData::saveToFile(const std::string& path)
         ej["y"]    = e.y;
         if (e.type == EntityData::Type::Player)
             ej["class"] = e.charClass;
+        if (!e.components.empty()) {
+            json compsArr = json::array();
+            for (auto& c : e.components)
+                compsArr.push_back(componentToJson(c));
+            ej["components"] = compsArr;
+        }
         entsArr.push_back(ej);
     }
     j["entities"] = entsArr;
@@ -181,6 +188,43 @@ bool SceneData::loadFromFile(const std::string& path)
                     ed.id = e["id"].get<uint64_t>();
                 else
                     ed.id = allocateEntityId();
+
+                // ── Components: load from JSON or migrate from legacy fields ──
+                if (e.contains("components") && e["components"].is_array()) {
+                    for (auto& cj : e["components"]) {
+                        try {
+                            ed.components.push_back(componentFromJson(cj));
+                        } catch (...) {
+                            loadErrors.push_back("entities[" + std::to_string(idx)
+                                + "] '" + ed.name + "': failed to parse a component, skipping");
+                        }
+                    }
+                } else {
+                    // Migrate legacy entity → components (v0/v1 or saved without components)
+                    ed.components.push_back(TransformComponent{ed.x, ed.y});
+                    ed.components.push_back(HealthComponent{100, 100});
+                    if (ed.type == EntityData::Type::Player) {
+                        StatsComponent stats;
+                        if (ed.charClass == "Mage") {
+                            stats.attack = 10; stats.defense = 5;
+                            stats.magicAttack = 15; stats.speed = 4;
+                        } else if (ed.charClass == "Rogue") {
+                            stats.attack = 12; stats.defense = 7;
+                            stats.speed = 5;
+                        } else { // Warrior and default
+                            stats.attack = 15; stats.defense = 10;
+                            stats.speed = 3;
+                        }
+                        ed.components.push_back(stats);
+                        ed.components.push_back(ManaComponent{
+                            ed.charClass == "Mage" ? 100 : 50,
+                            ed.charClass == "Mage" ? 100 : 50});
+                    } else {
+                        ed.components.push_back(StatsComponent{});
+                        ed.components.push_back(AIComponent{});
+                    }
+                    ed.components.push_back(RenderComponent{});
+                }
 
                 if (ed.type == EntityData::Type::Player) hasPlayer = true;
                 entities.push_back(ed);

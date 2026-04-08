@@ -5,7 +5,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 set -e
 
-PROJECT_DIR="/Users/lihuelibanez/Development/proyects/isometric-rpg"
+PROJECT_DIR="/Users/lihuelibanez/Development/proyects/Dash-Engine"
 BUILD_DIR="$PROJECT_DIR/build"
 PKG_DIR="$PROJECT_DIR/packaging"
 APP_NAME="DashEngine"

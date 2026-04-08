@@ -11,9 +11,10 @@ Este directorio separa las tareas por semana para ejecutar el escalado del edito
 | 1 - Editor Foundations | ✅ Completada | D01-D06 completados |
 | 2 - Asset Pipeline | ✅ Completada | D07-D12 completados |
 | 3 - Runtime Systems | ✅ Completada | D13-D17 completados |
-| 4 - Produccion/QA | 🔧 En progreso | D18 proximo, D19-D20 pendientes |
+| 4 - Produccion/QA | ✅ Completada | D18-D20 completados |
+| Sprint 2 - Features Avanzadas | 🔧 Pendiente | D21-D30 pendientes |
 
-**Proximo paso:** D18 - Play Mode con rollback
+**Proximo paso:** D21 - Sistema de eventos desacoplado
 
 ## Funcionalidades ya implementadas (fuera del plan)
 
@@ -36,10 +37,19 @@ El proyecto ya cuenta con una base funcional significativa:
 
 ## Archivos de trabajo
 
+### Sprint 1 (D01-D20)
 - 01_WEEK1_EDITOR_FOUNDATIONS.md
 - 02_WEEK2_ASSET_PIPELINE.md
 - 03_WEEK3_RUNTIME_SYSTEMS.md
 - 04_WEEK4_PRODUCTION_QA.md
+- 05_SPRINT_OPERATIVO_20_DIAS.md
+
+### Sprint 2 (D21-D30)
+- 06_SPRINT_2_FEATURES_AVANZADAS.md (tablero + registro diario)
+- 07_WEEK5_COMPONENT_ARCHITECTURE.md (D21-D25: eventos, comandos, componentes, registry, inspector)
+- 08_WEEK6_PRODUCTION_TOOLS.md (D26-D30: prefabs, hot-reload, validacion, packaging, cierre)
+
+### General
 - 99_ACCEPTANCE_CHECKLIST.md
 
 ## Convenciones para ejecutar tareas

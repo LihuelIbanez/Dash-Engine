@@ -49,6 +49,7 @@ FetchContent_MakeAvailable(json)
 file(GLOB CORE_SOURCES
     "src/core/*.cpp"
     "src/core/profiling/*.cpp"
+    "src/core/components/*.cpp"
     "src/entities/*.cpp"
     "src/world/*.cpp"
     "src/game/nav/*.cpp"
@@ -57,6 +58,8 @@ add_library(game_core STATIC ${CORE_SOURCES})
 target_include_directories(game_core PUBLIC
     src
     src/core
+    src/core/events
+    src/core/components
     src/core/profiling
     src/entities
     src/world
@@ -65,7 +68,7 @@ target_include_directories(game_core PUBLIC
     src/game/nav
     ${SDL2_INCLUDE_DIRS}
 )
-target_link_libraries(game_core PUBLIC ${SDL2_LIBRARIES})
+target_link_libraries(game_core PUBLIC ${SDL2_LIBRARIES} nlohmann_json::nlohmann_json)
 
 # ── Game executable ──────────────────────────────────────────────────────────
 file(GLOB RUNTIME_SOURCES "src/game/runtime/*.cpp")
@@ -102,7 +105,7 @@ add_executable(DashEngine
     ${RUNTIME_SOURCES} ${SYSTEM_SOURCES} ${DATA_SOURCES} ${SAVE_SOURCES}
 )
 target_include_directories(DashEngine PRIVATE
-    src src/core src/entities src/world src/rendering src/editor
+    src src/core src/core/components src/entities src/world src/rendering src/editor
     src/editor/commands src/editor/panels src/editor/playmode
     src/assets src/assets/importers
     src/game src/game/runtime src/game/systems src/game/data src/game/save

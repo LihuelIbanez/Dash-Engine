@@ -10,6 +10,7 @@
 #include "SystemScheduler.h"
 #include "GameplayDatabase.h"
 #include "SaveGame.h"
+#include "EventDispatcher.h"
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Game – owns the SDL window/renderer and the game loop
@@ -58,6 +59,7 @@ private:
     RuntimeContext   ctx_;
     SystemScheduler  scheduler_;
     GameplayDatabase gameDb_;
+    EventDispatcher  dispatcher_;
     void initSystems();
     void spawnEnemiesFromData();
     bool loadSceneFile();           // apply scene JSON if sceneFile_ is set

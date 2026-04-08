@@ -26,6 +26,15 @@
       "importPath": "gameplay/enemies.json",
       "lastImportTime": 1775598836,
       "sourcePath": "gameplay/enemies.json"
+    },
+    {
+      "assetType": "Texture",
+      "dependencies": [],
+      "guid": "442ec68d-057c-423f-a197-20716531f1a4",
+      "hash": "20b0f55d97b4f9dc",
+      "importPath": "",
+      "lastImportTime": 1775649895,
+      "sourcePath": "icons/dashengine.png"
     }
   ]
 }
