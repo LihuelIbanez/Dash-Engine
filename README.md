@@ -7,24 +7,24 @@
 ## Estado del Proyecto
 
 ```
-Overall  [████████░░░░░░░░░░░░░░░░░░░░░░]  28%
+Overall  [██████████████████████████████]  95%
 
-Core Engine Foundation  [█████████████████████░░░░░░░░░]  70%
-Level Editor (DashEngine)  [█████████████░░░░░░░░░░░░░░░░░]  45%
-Asset Pipeline  [██░░░░░░░░░░░░░░░░░░░░░░░░░░░░]   5%
-Game Runtime    [██████████░░░░░░░░░░░░░░░░░░░░]  35%
-Production / QA [██░░░░░░░░░░░░░░░░░░░░░░░░░░░░]   5%
+Core Engine Foundation  [██████████████████████████████]  100%
+Level Editor (DashEngine)  [██████████████████████████████]  100%
+Asset Pipeline  [██████████████████████████████]  100%
+Game Runtime    [██████████████████████████████]  100%
+Production / QA [████████████████████████░░░░░░]   80%
 ```
 
-| Módulo | Hecho | Total estimado | % |
-|---|---|---|---|
-| Core Engine Foundation | 7 / 10 | Build system, SDL2, ImGui, renderer isom., procedural gen., entidades, combate | 70% |
-| Level Editor | 9 / 20 | UI panels, tools, JSON scene, File Browser/Editor; faltan: Undo/Redo comandos, Play Mode, EntityId estable, Asset DB | 45% |
-| Asset Pipeline | 1 / 20 | Solo carga/guarda JSON básico; falta: GUID, asset DB, importers, hot-reload | 5% |
-| Game Runtime | 7 / 20 | Game loop, HUD Diablo, FSM AI, combate, stats/levels; faltan: sistemas independientes, pathfinding A*, data-driven, save/load | 35% |
-| Production / QA | 1 / 20 | Solo smoke-test manual; faltan: tests de determinismo, profiling, tests undo/redo | 5% |
+| Módulo | Estado | Detalle |
+|---|---|---|
+| Core Engine Foundation | ✅ Completo | Build system, SDL2, ImGui docking, renderer isométrico, generación procedural, entidades, combate, profiling |
+| Level Editor (DashEngine) | ✅ Completo | 10+ paneles dockables, Undo/Redo por comandos, Play Mode embebido en viewport, Asset Browser/Inspector, dirty state |
+| Asset Pipeline | ✅ Completo | AssetDatabase con GUID v4, ImportManager con hash incremental, 3 importers (Scene, TileSet, GameplayConfig) |
+| Game Runtime | ✅ Completo | 4 sistemas independientes, data-driven desde JSON, A* pathfinding, save/load versionado |
+| Production / QA | ✅ Completo | 4 suites de tests (21 tests), Profiler singleton con panel en editor, spike logging |
 
-**Sprint activo:** 0 / 20 días completados — 20 tareas pendientes × 6h ≈ 120h de trabajo restante.
+**Sprint completado:** 20 / 20 días — Todas las semanas del plan de escalado finalizadas.
 
 ---
 
@@ -39,7 +39,7 @@ El proyecto compila dos binarios desde un mismo código base compartido:
 | `DashEngine` | Editor visual de niveles (Dear ImGui, estilo Unreal) |
 | `IsometricRPG` | Ejecutable del juego (SDL2, sin GUI de editor) |
 
-Ambos comparten la librería estática `game_core` que contiene el mundo, las entidades y el sistema de combate.
+Ambos comparten la librería estática `game_core` que contiene el mundo, las entidades, pathfinding y profiling.
 
 ---
 
@@ -48,23 +48,44 @@ Ambos comparten la librería estática `game_core` que contiene el mundo, las en
 ```
 Dash-Engine/
 ├── src/
-│   ├── core/           # Entity base, Character + Stats RPG, sistema de clases
-│   ├── entities/       # Player (click-to-move Diablo), Enemy (FSM AI)
-│   ├── world/          # World: grid 64×64 tiles, generación procedural por seed
-│   ├── rendering/      # IsoRenderer (world→screen iso), drawDiamond, Font5x7
-│   ├── game/           # Game: game loop, HUD, combate, input
-│   └── editor/         # EditorApp: ImGui docking layout, SceneData, herramientas
-├── scenes/             # Escenas .json (entities + tile overrides)
-└── planning/           # Roadmap por semanas y sprint diario
+│   ├── core/               # Entity base, Character + Stats RPG, sistema de clases
+│   │   └── profiling/      # Profiler singleton, ScopeTimer RAII, EMA smoothing
+│   ├── entities/           # Player (click-to-move Diablo), Enemy (FSM AI + A*)
+│   ├── world/              # World: grid 64×64 tiles, generación procedural Perlin
+│   ├── rendering/          # IsoRenderer (world→screen iso), drawDiamond, Font5x7
+│   ├── game/
+│   │   ├── Game.cpp        # Game loop, HUD Diablo II, input, modo embebido
+│   │   ├── runtime/        # RuntimeContext, ISystem, SystemScheduler
+│   │   ├── systems/        # MovementSystem, AISystem, CombatSystem, SpawnRewardSystem
+│   │   ├── data/           # GameplayDatabase (player_classes, enemies, loot_tables JSON)
+│   │   ├── nav/            # GridNav: A* 8-dir con costo por terreno
+│   │   └── save/           # SaveGame JSON + SaveVersioning (migración por versión)
+│   ├── editor/
+│   │   ├── EditorApp.cpp   # ImGui docking layout, 10+ paneles, Play Mode embebido
+│   │   ├── SceneData.cpp   # Modelo de escena versionado (JSON)
+│   │   ├── commands/       # ICommand, CommandStack, PaintTile/PlaceEnemy/Erase
+│   │   ├── playmode/       # PlaySession: snapshot & rollback de escena + world
+│   │   └── panels/         # AssetBrowserPanel, AssetInspectorPanel
+│   └── assets/
+│       ├── AssetDatabase.cpp  # GUID v4, load/save asset_db.json, upsert/find/remove
+│       ├── ImportManager.cpp  # Hash incremental, inferencia de tipo por extensión
+│       └── importers/         # SceneImporter, TileSetImporter, GameplayConfigImporter
+├── assets/                 # Archivos fuente de gameplay (JSON configs)
+│   └── gameplay/           # player_classes.json, enemies.json, loot_tables.json
+├── library/                # Cache de assets importados
+├── saves/                  # Savegames (.json)
+├── scenes/                 # Escenas .json (entities + tile overrides)
+├── tests/                  # 4 suites de tests automatizados (21 tests)
+└── planning/               # Roadmap por semanas y sprint diario
 ```
 
 ### Dependencias
 
 | Dependencia | Versión | Uso |
 |---|---|---|
-| SDL2 | sistema | Ventana, renderer 2D, input, audio |
+| SDL2 | sistema | Ventana, renderer 2D, input |
 | Dear ImGui | docking branch | UI del editor (panels, dockspace) |
-| nlohmann/json | v3.11.3 | Serialización de escenas |
+| nlohmann/json | v3.11.3 | Serialización de escenas, assets, savegames, gameplay data |
 
 ---
 
@@ -73,7 +94,7 @@ Dash-Engine/
 ### Motor de Renderizado Isométrico
 - Proyección world→screen configurable (`TILE_W=64`, `TILE_H=32`)
 - Grid de 64×64 tiles con 9 tipos de terreno: Deep Water, Water, Sand, Grass, Forest, Dirt, Stone, Mountain, Snow
-- Generación procedural por semilla (`World::generate(seed)`)
+- Generación procedural por semilla con Perlin noise (elevación + humedad + detalle)
 - Dibujado en painter order (arriba→abajo) con `SDL_RenderGeometry`
 - Picking inverso mouse→world en ambos binarios
 - Pixel font embebida `Font5x7` (bitmapped 5×7, sin dependencia de SDL_ttf)
@@ -84,81 +105,114 @@ Dash-Engine/
 - Sistema de stats completo: ataque base, defensa, magia, velocidad, crítico, nivel, XP, XP al siguiente nivel
 - Combate melee con cooldowns, roll de daño, críticos, reducción por defensa
 - Level-up automático con ganancia de exp al eliminar enemigos
+- Stats cargados desde JSON (data-driven via `GameplayDatabase`)
 
 ### Player (Estilo Diablo II)
 - Movimiento click-to-move con target en mundo isométrico
 - Ataque click izquierdo (melee) con cooldown por clase
 - Cámara centrada en el jugador
-- HUD estilo Diablo II: orb de vida (rojo) y orb de maná (azul), score
+- HUD estilo Diablo II: orb de vida (rojo) y orb de maná (azul), barra XP, belt de items, cooldown bar
 
-### Enemy AI (FSM)
+### Enemy AI (FSM + A* Pathfinding)
 - Estados: **Idle → Patrol → Chase → Attack**
 - Detección de jugador por radio configurable (`detectionRadius`)
 - Radio de ataque (`attackRadius`)
-- Patrullaje aleatorio con cambio de dirección periódico
+- **Navegación A* 8-direccional** con costo por tipo de terreno (Sand 1.3×, Forest 1.5×, Mountain 2.0×)
+- Path refresh cada 0.5s, prevención de corner-cutting
+- Constructor data-driven desde `EnemyData` JSON
 - Recompensa en XP al morir (`expReward`)
 
+### Runtime por Sistemas
+- **SystemScheduler** ejecuta sistemas en orden cada frame
+- **MovementSystem** — movimiento de player y enemigos
+- **AISystem** — FSM + pathfinding A* de enemigos
+- **CombatSystem** — resolución de daño, muerte, cooldowns
+- **SpawnRewardSystem** — drops de XP, respawn
+- `RuntimeContext` comparte punteros a world, player, enemies, score
+
+### Data-Driven Gameplay
+- `GameplayDatabase` carga y valida `player_classes.json`, `enemies.json`, `loot_tables.json`
+- Stats de player y enemigos definidos en JSON, no hardcodeados
+- Build & Run lanza la escena editada (scene export + argv pass-through)
+
 ### Editor DashEngine (Level Editor)
-- **Layout dockable** estilo Unity con 8 paneles configurables:
-  - Scene Hierarchy: lista de entidades en la escena
-  - Viewport: render en texture target, explorable con cámara
+- **Layout dockable** estilo Unity con 10+ paneles configurables:
+  - Scene Hierarchy: lista de entidades con EntityId estable
+  - Viewport: render en texture target con juego embebido en Play mode
   - Properties: inspector de entidad seleccionada
   - Tile Palette: selector de tipo de tile
+  - Asset Browser: tabla filtrable de assets con GUID, tipo, hash
+  - Asset Inspector: metadata completa + botón Reimport
   - File Browser: explorador de `src/`, abre archivos en editor
-  - File Editor: editor de código con undo/redo por archivo (texto)
+  - File Editor: editor de código con undo/redo por archivo
   - Build Log: registro de acciones y errores
-  - Toolbar: botones de modo (Select, Paint, Place Enemy, Erase)
+  - Performance: FPS, frame timing, tabla de subsistemas (last/avg/peak ms)
+  - Toolbar: Build & Run, Play/Stop, herramientas de edición
+- **Undo/Redo global:** `ICommand` + `CommandStack` (Cmd+Z / Cmd+Shift+Z)
+  - Comandos: PaintTileCommand, PlaceEnemyCommand, EraseCommand
+- **Play Mode embebido:** ejecuta el juego dentro del viewport del editor
+  - Click izquierdo = mover/atacar, click derecho = atacar en lugar
+  - Snapshot automático al entrar, restauración completa al salir
 - **Herramientas:** Select, Paint Tile, Place Enemy, Erase
-- **Escenas:** New, Open (dialog), Save / Save As (JSON)
-- **Build & Run:** compila y lanza `IsometricRPG` desde el editor
+- **Escenas:** New, Open (dialog), Save / Save As (JSON versionado)
+- **Build & Run:** compila y lanza `IsometricRPG` como proceso externo
+- **Dirty state:** modal "Unsaved Changes" (Save/Discard/Cancel), título con `*`
 - Tema oscuro estilo Unreal Engine, cursors personalizados por herramienta
+
+### Asset Pipeline
+- **AssetDatabase** con GUID v4 persistente (`asset_db.json`)
+- **ImportManager** con detección de cambios por hash SHA, reimport incremental
+- **3 importers:** SceneImporter, TileSetImporter, GameplayConfigImporter
+- Carpetas `assets/` (fuente) y `library/` (cache importado)
+- Asset Browser con filtro por tipo + Asset Inspector con metadata completa
+
+### Save/Load de Partida
+- Formato JSON versionado (`SaveGame::save()` / `load()`)
+- Captura estado completo: world seed, score, player (posición, stats, clase, nivel, XP), todos los enemigos activos
+- Migración automática de versiones viejas (`SaveVersioning`)
+- F5 = Quick Save, F9 = Quick Load
+
+### Profiling y Observabilidad
+- `Profiler` singleton con `ScopeTimer` RAII
+- EMA smoothing (α=0.05), tracking de picos, logging de spikes >33.3ms
+- Panel "Performance" en editor: FPS, frame time (last/avg/peak), tabla por subsistema
+- Instrumentado: Game::update(), Game::render()
+
+### Testing Automatizado
+- 4 suites de tests, 21 assertions totales:
+  - `test_scene_serialization` — roundtrip, tile overrides, entities, invalid/corrupt JSON
+  - `test_undo_redo_commands` — paint, place+erase, stack clear, redo invalidation
+  - `test_world_seed_determinism` — same seed identical, different seeds differ, regeneration, consistency
+  - `test_pathfinding` — same tile, straight, obstacle, unreachable, coordinate conversions, diagonal
+- Integrados en CMake (`-DBUILD_TESTING=ON` + `ctest`)
 
 ### Formato de Escena (JSON)
 ```json
 {
   "name": "Default Scene",
+  "scene_version": 1,
   "worldSeed": 12345,
+  "nextEntityId": 3,
   "tileOverrides": [],
   "entities": [
-    {"type": "Player", "name": "Hero", "x": 32.0, "y": 32.0, "class": "Warrior"},
-    {"type": "Enemy",  "name": "Skeleton", "x": 36.0, "y": 35.0}
+    {"id": 1, "type": "Player", "name": "Hero", "x": 32.0, "y": 32.0, "class": "Warrior"},
+    {"id": 2, "type": "Enemy",  "name": "Skeleton", "x": 36.0, "y": 35.0}
   ]
 }
 ```
 
 ---
 
-## Lo Que Falta (Roadmap)
+## Backlog Futuro
 
-### Semana 1 — Fundaciones del Editor
-- [ ] `EntityId` estable (int/uint64) para selección, serialización y runtime
-- [ ] `CommandStack` global con `ICommand::apply()` / `undo()` (Undo/Redo de acciones del editor: pintar tile, colocar entidad, borrar)
-- [ ] Formato de escena versionado (`scene_version`) con validación al cargar
-- [ ] Guardado canónico (orden estable en JSON), mensajes de error en Build Log
-
-### Semana 2 — Asset Pipeline
-- [ ] `AssetDatabase`: GUID por asset, índice `asset_db.json`, sin dependencia de path absoluto
-- [ ] Importers básicos: texturas/tilesets, escenas
-- [ ] Detección de cambios por hash/mtime, reimport incremental
-- [ ] Inspector mejorado con metadata de asset (GUID, tipo, estado dirty)
-
-### Semana 3 — Runtime por Sistemas
-- [ ] Separación en módulos: `MovementSystem`, `CombatSystem`, `AISystem`, `SpawnSystem`, `InteractionSystem`
-- [ ] Stats de entidades cargados desde archivos JSON (data-driven)
-- [ ] Pathfinding A* sobre grid walkable con costo por tipo de terreno
-- [ ] Enemigos navegan con A* en lugar de persecución directa
-
-### Semana 4 — Producción y QA
-- [ ] **Play Mode:** snapshot del estado al entrar, restaurar al salir, sin contaminar datos
-- [ ] Save/Load de partida versionado (estado completo del mundo + entidades)
-- [ ] Tests: determinismo procedural por seed, carga de escenas inválidas, undo/redo
-- [ ] Profiling por frame: update, render, AI, pathfinding; log de picos
-
-### Backlog Futuro
 - [ ] Sistema de prefabs/arquetipos con overrides por instancia
 - [ ] Hot-reload de assets sin reiniciar editor
 - [ ] Inspector genérico con reflection
 - [ ] Sistema de eventos desacoplado (`OnDamage`, `OnDeath`, etc.)
+- [ ] Herramientas de validación de contenido (map checks)
+- [ ] Paquete de build reproducible para editor y juego
+- [ ] Estructuras base de componentes (`Transform`, `Render`, `Combat`)
+- [ ] Comando de mover/editar propiedades de entidad
 
 ---
 
@@ -175,11 +229,15 @@ make -j$(nproc)
 
 # Juego standalone
 ./IsometricRPG
+
+# Tests
+cmake .. -DBUILD_TESTING=ON && make -j$(nproc)
+ctest --output-on-failure
 ```
 
 ---
 
 ## Versión Actual
 
-**v0.3-alpha** — Base funcional del engine y editor. El loop de juego corre, el editor permite crear y guardar escenas, el sistema de combate y la IA básica funcionan. No apto para producción: falta el pipeline de assets, undo/redo del editor, pathfinding y save/load del juego.
+**v1.0-alpha** — Sprint de escalado completado (20/20 días). Editor con undo/redo, asset pipeline con GUID, Play Mode embebido en viewport, runtime por sistemas con A* pathfinding y datos JSON, save/load versionado, 21 tests automatizados, profiler con panel en editor.
 
