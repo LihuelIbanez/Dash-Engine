@@ -3,7 +3,7 @@
 Este plan prioriza primero el Editor (como Unity/Unreal/Godot) y luego el Runtime del juego.
 Marca cada item con [x] cuando este completado.
 
-**Ultima actualizacion: 2026-04-07**
+**Ultima actualizacion: 2026-04-08**
 
 ## Objetivos de Escalado
 
@@ -122,21 +122,21 @@ Marca cada item con [x] cuando este completado.
 - [x] Edicion de componentes via EditPropertyCommand.
 
 ### 18) Prefabs (D26)
-- [ ] Sistema de prefabs/arquetipos con overrides por instancia.
-- [ ] PrefabImporter para asset pipeline.
+- [x] Sistema de prefabs/arquetipos con overrides por instancia.
+- [x] PrefabImporter para asset pipeline.
 
 ### 19) Hot-reload (D27)
-- [ ] Hot-reload de assets sin reiniciar editor.
-- [ ] FileWatcher + reimport automatico.
+- [x] Hot-reload de assets sin reiniciar editor.
+- [x] FileWatcher + reimport automatico.
 
 ### 20) Validacion y Packaging (D28-D29)
-- [ ] Herramientas de validacion de contenido (map checks).
-- [ ] Paquete de build reproducible para editor y juego.
+- [x] Herramientas de validacion de contenido (map checks).
+- [x] Paquete de build reproducible para editor y juego.
 
 ### 21) Cierre Sprint 2 (D30)
-- [ ] Tests de regresion completos.
-- [ ] Build release 0 warnings.
-- [ ] Tag v2.0-alpha.
+- [x] Tests de regresion completos.
+- [x] Build release 0 warnings.
+- [x] Tag v2.0-alpha.
 
 ## Definition of Done (Escalado inicial)
 
@@ -157,7 +157,7 @@ Marca como completado cuando se cumpla todo:
 | 2 - Asset Pipeline | ✅ Completada | 100% |
 | 3 - Runtime Systems | ✅ Completada | 100% |
 | 4 - Produccion/QA | ✅ Completada | 100% |
-| Sprint 2 - Features Avanzadas | 🔧 Pendiente | 0% |
+| Sprint 2 - Features Avanzadas | ✅ Completada | 100% |
 
 ## Notas
 

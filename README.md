@@ -7,24 +7,24 @@
 ## Estado del Proyecto
 
 ```
-Overall  [██████████████████████████████]  95%
+Overall  [██████████████████████████████]  100%  v2.0-alpha
 
 Core Engine Foundation  [██████████████████████████████]  100%
 Level Editor (DashEngine)  [██████████████████████████████]  100%
 Asset Pipeline  [██████████████████████████████]  100%
 Game Runtime    [██████████████████████████████]  100%
-Production / QA [████████████████████████░░░░░░]   80%
+Production / QA [██████████████████████████████]  100%
 ```
 
 | Módulo | Estado | Detalle |
 |---|---|---|
-| Core Engine Foundation | ✅ Completo | Build system, SDL2, ImGui docking, renderer isométrico, generación procedural, entidades, combate, profiling |
-| Level Editor (DashEngine) | ✅ Completo | 10+ paneles dockables, Undo/Redo por comandos, Play Mode embebido en viewport, Asset Browser/Inspector, dirty state |
-| Asset Pipeline | ✅ Completo | AssetDatabase con GUID v4, ImportManager con hash incremental, 3 importers (Scene, TileSet, GameplayConfig) |
-| Game Runtime | ✅ Completo | 4 sistemas independientes, data-driven desde JSON, A* pathfinding, save/load versionado |
-| Production / QA | ✅ Completo | 4 suites de tests (21 tests), Profiler singleton con panel en editor, spike logging |
+| Core Engine Foundation | ✅ Completo | Build system, SDL2, ImGui docking, renderer isométrico, generación procedural, entidades, combate, profiling, EventDispatcher |
+| Level Editor (DashEngine) | ✅ Completo | 10+ paneles dockables, Undo/Redo por comandos, Play Mode embebido en viewport, Asset Browser/Inspector, dirty state, ValidationPanel, About modal |
+| Asset Pipeline | ✅ Completo | AssetDatabase con GUID v4, ImportManager con hash incremental, 5 importers (Scene, TileSet, GameplayConfig, Prefab, PrefabImporter), FileWatcher hot-reload |
+| Game Runtime | ✅ Completo | 4 sistemas independientes, data-driven desde JSON, A* pathfinding, save/load versionado, EventDispatcher integrado |
+| Production / QA | ✅ Completo | 11 suites de tests (50+ assertions), ContentValidator, Packaging cmake, VersionInfo embebida, tag v2.0-alpha |
 
-**Sprint completado:** 20 / 20 días — Todas las semanas del plan de escalado finalizadas.
+**Sprint 2 completado:** 30 / 30 días — Prefabs, Hot-Reload, Validación, Packaging, Tests de regresión.
 
 ---
 
@@ -179,11 +179,18 @@ Dash-Engine/
 - Instrumentado: Game::update(), Game::render()
 
 ### Testing Automatizado
-- 4 suites de tests, 21 assertions totales:
+- 11 suites de tests, 50+ assertions totales:
   - `test_scene_serialization` — roundtrip, tile overrides, entities, invalid/corrupt JSON
   - `test_undo_redo_commands` — paint, place+erase, stack clear, redo invalidation
+  - `test_component_serialization` — roundtrip de 7 componentes POD
+  - `test_entity_registry` — EntityRegistry, SceneData v2, migracion v1→v2
+  - `test_move_edit_commands` — MoveEntityCommand, EditPropertyCommand, drag undo/redo
   - `test_world_seed_determinism` — same seed identical, different seeds differ, regeneration, consistency
-  - `test_pathfinding` — same tile, straight, obstacle, unreachable, coordinate conversions, diagonal
+  - `test_pathfinding` — same tile, straight, obstacle, unreachable, diagonal
+  - `test_prefab_system` — loadPrefab, instantiate, computeOverrides, applyOverrides
+  - `test_content_validation` — 8 validation checks (bounds, player, prefab GUID, health, duplicates)
+  - `test_event_system` — subscribe/emit/flush, multi-subscriber, flush clears, type isolation, clear()
+  - `test_hot_reload` — FileWatcher Added/Modified/Deleted/no-change/reset baseline
 - Integrados en CMake (`-DBUILD_TESTING=ON` + `ctest`)
 
 ### Formato de Escena (JSON)
@@ -238,6 +245,8 @@ ctest --output-on-failure
 ---
 
 ## Versión Actual
+
+**v2.0-alpha** — Sprint 2 completado (30/30 días). Sistema de componentes (Transform, Health, Stats, AI, Combat, Render, Inventory), EventDispatcher tipado, sistema de prefabs con overrides por instancia, hot-reload de assets con FileWatcher, panel de validación de contenido (10+ checks), packaging reproducible con VersionInfo embebida (versión, commit, fecha), About modal en editor, 11 suites de tests automatizados.
 
 **v1.0-alpha** — Sprint de escalado completado (20/20 días). Editor con undo/redo, asset pipeline con GUID, Play Mode embebido en viewport, runtime por sistemas con A* pathfinding y datos JSON, save/load versionado, 21 tests automatizados, profiler con panel en editor.
 

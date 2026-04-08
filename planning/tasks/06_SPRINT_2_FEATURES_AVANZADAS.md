@@ -8,11 +8,7 @@ Prerequisito: Sprint 1 (D01-D20) completado.
 
 ### To Do
 
-- [ ] D26 - Sistema de prefabs/arquetipos (6h)
-- [ ] D27 - Hot-reload de assets (6h)
-- [ ] D28 - Herramientas de validacion de contenido (6h)
-- [ ] D29 - Paquete de build reproducible (6h)
-- [ ] D30 - Tests de regresion + cierre de sprint (6h)
+(vacio)
 
 ### Doing
 
@@ -25,6 +21,11 @@ Prerequisito: Sprint 1 (D01-D20) completado.
 - [x] D23 - Estructuras base de componentes (6h)
 - [x] D24 - EntityRegistry + migracion de datos (6h)
 - [x] D25 - Inspector generico con reflection (6h)
+- [x] D26 - Sistema de prefabs/arquetipos (6h)
+- [x] D27 - Hot-reload de assets (6h)
+- [x] D28 - Herramientas de validacion de contenido (6h)
+- [x] D29 - Paquete de build reproducible (6h)
+- [x] D30 - Tests de regresion + cierre de sprint (6h)
 
 ## Registro Diario de Ejecucion
 
@@ -33,11 +34,11 @@ Prerequisito: Sprint 1 (D01-D20) completado.
 - [x] Dia 23 | ID: D23 | Plan: 6h | Real: 6h | Bloqueos: — | Resultado: 7 componentes POD + ComponentSerialization JSON roundtrip, test_component_serialization 9/9 passing
 - [x] Dia 24 | ID: D24 | Plan: 6h | Real: 6h | Bloqueos: — | Resultado: EntityRegistry, SceneData v2 con components, migracion v1→v2, test_entity_registry 9/9 passing
 - [x] Dia 25 | ID: D25 | Plan: 6h | Real: 6h | Bloqueos: — | Resultado: Reflection.h/cpp con 7 metas, inspector genérico con DragFloat/DragInt/InputText/Checkbox/Combo, Add/Remove/EditComponentFieldCommand con undo/redo, 7/7 tests passing
-- [ ] Dia 26 | ID: D26 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __
-- [ ] Dia 27 | ID: D27 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __
-- [ ] Dia 28 | ID: D28 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __
-- [ ] Dia 29 | ID: D29 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __
-- [ ] Dia 30 | ID: D30 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __
+- [x] Dia 26 | ID: D26 | Plan: 6h | Real: 6h | Bloqueos: — | Resultado: PrefabAsset load/save/instantiate/overrides, PrefabImporter, goblin_warrior.json ejemplo, test_prefab_system 4/4 passing
+- [x] Dia 27 | ID: D27 | Plan: 6h | Real: 6h | Bloqueos: — | Resultado: FileWatcher scan/reset/hash incremental, reimportChanged, hot-reload loop en editor, menu Auto-Reload + Scan for Changes
+- [x] Dia 28 | ID: D28 | Plan: 6h | Real: 6h | Bloqueos: — | Resultado: ContentValidator 10+ checks, ValidationPanel con tabla y click-to-navigate, toolbar Validate button, test_content_validation 8/8 passing
+- [x] Dia 29 | ID: D29 | Plan: 6h | Real: 6h | Bloqueos: — | Resultado: cmake/Packaging.cmake, VersionInfo.h.in, CPack DragNDrop, About modal en editor (v2.0.0-alpha, commit, fecha), install_app.sh con recursos
+- [x] Dia 30 | ID: D30 | Plan: 6h | Real: 6h | Bloqueos: — | Resultado: test_event_system 6/6, test_hot_reload 6/6, build Release 0 warnings, 11/11 suites passing, tag v2.0-alpha creado
 
 ## Reglas de ejecucion
 
