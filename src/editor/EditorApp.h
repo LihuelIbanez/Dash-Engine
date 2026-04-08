@@ -15,6 +15,7 @@
 #include "EntityRegistry.h"
 #include "ContentValidator.h"
 #include "ValidationPanel.h"
+#include "SpriteEditorPanel.h"
 #include <string>
 #include <vector>
 #include <map>
@@ -72,6 +73,9 @@ private:
     std::vector<ValidationIssue> validationIssues_;
     bool                         showValidationPanel_ = false;
     bool                         showAboutModal_      = false;
+
+    // ── Sprite Editor ─────────────────────────────────────────────────────
+    SpriteEditorPanel spriteEditor_;
     // ── Camera ───────────────────────────────────────────────────────────────
     float camX_ = 12.f;
     float camY_ = 12.f;

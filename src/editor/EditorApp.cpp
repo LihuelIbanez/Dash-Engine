@@ -155,6 +155,8 @@ bool EditorApp::init()
     fileWatcher_ = FileWatcher(assetsRoot_, 1.0f);
     fileWatcher_.reset(); // establish baseline (no spurious Added events)
 
+    spriteEditor_.init(renderer_);
+    spriteEditor_.selectedEntityId = &selectedEntityId_;
     newScene();
     running_ = true;
     addLog("Editor ready.");
@@ -392,6 +394,8 @@ void EditorApp::run()
                     validationIssues_ = contentValidator_.validate(scene_, world_, assetDb_);
                     addLog("Validation: " + std::to_string(validationIssues_.size()) + " issue(s) found.");
                 });
+        if (spriteEditor_.isOpen)
+            spriteEditor_.draw();
         // ── About modal ────────────────────────────────────────────────────
         if (showAboutModal_) {
             ImGui::OpenPopup("About DashEngine");
@@ -458,6 +462,8 @@ void EditorApp::drawMenuBar()
         ImGui::EndMenu();
     }
     if (ImGui::BeginMenu("Assets")) {
+        if (ImGui::MenuItem(ICON_FA_PAINTBRUSH " Sprite Editor")) spriteEditor_.isOpen = true;
+        ImGui::Separator();
         if (ImGui::MenuItem(ICON_FA_ARROWS_ROTATE " Scan for Changes")) {
             // Force immediate scan regardless of poll interval
             fileWatcher_ = FileWatcher(assetsRoot_, 0.0f);

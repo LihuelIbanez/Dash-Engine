@@ -6,7 +6,7 @@
       "guid": "1ed7206e-58fa-4d26-beae-779e3bf6b035",
       "hash": "471871c763c1aa69",
       "importPath": "gameplay/enemies.json",
-      "lastImportTime": 1775658363,
+      "lastImportTime": 1775663757,
       "sourcePath": "gameplay/enemies.json"
     },
     {
@@ -15,7 +15,7 @@
       "guid": "442ec68d-057c-423f-a197-20716531f1a4",
       "hash": "20b0f55d97b4f9dc",
       "importPath": "",
-      "lastImportTime": 1775658363,
+      "lastImportTime": 1775663757,
       "sourcePath": "icons/dashengine.png"
     },
     {
@@ -24,7 +24,7 @@
       "guid": "d6ef548b-3324-49db-a20f-39b5b60e2aa2",
       "hash": "92cbc2729d96affa",
       "importPath": "prefabs/goblin_warrior.json",
-      "lastImportTime": 1775658363,
+      "lastImportTime": 1775663757,
       "sourcePath": "prefabs/goblin_warrior.json"
     },
     {
@@ -33,7 +33,7 @@
       "guid": "7998dca2-e145-45b5-b0de-17d6454d24bb",
       "hash": "6dccbb178b035de3",
       "importPath": "gameplay/player_classes.json",
-      "lastImportTime": 1775658363,
+      "lastImportTime": 1775663757,
       "sourcePath": "gameplay/player_classes.json"
     },
     {
@@ -42,8 +42,17 @@
       "guid": "db279756-b173-48fe-9483-9c070f513105",
       "hash": "6f9774cc21f9bc7c",
       "importPath": "gameplay/loot_tables.json",
-      "lastImportTime": 1775658363,
+      "lastImportTime": 1775663757,
       "sourcePath": "gameplay/loot_tables.json"
+    },
+    {
+      "assetType": "Unknown",
+      "dependencies": [],
+      "guid": "22f807f4-1c7d-4a04-9f70-f08a0445cf77",
+      "hash": "9ae16a3b2f90404f",
+      "importPath": "",
+      "lastImportTime": 1775664478,
+      "sourcePath": "sprites/.gitkeep"
     },
     {
       "assetType": "Unknown",
@@ -51,7 +60,7 @@
       "guid": "5229689c-8179-49a7-ae98-7fe803a1bdf0",
       "hash": "5e9c87c0d22a1a0d",
       "importPath": "",
-      "lastImportTime": 1775661817,
+      "lastImportTime": 1775663757,
       "sourcePath": "fonts/fa-solid-900.ttf"
     }
   ]
