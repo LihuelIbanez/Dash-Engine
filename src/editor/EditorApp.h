@@ -71,6 +71,7 @@ private:
     ValidationPanel              validationPanel_;
     std::vector<ValidationIssue> validationIssues_;
     bool                         showValidationPanel_ = false;
+    bool                         showAboutModal_      = false;
     // ── Camera ───────────────────────────────────────────────────────────────
     float camX_ = 12.f;
     float camY_ = 12.f;

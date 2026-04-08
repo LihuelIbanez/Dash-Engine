@@ -37,6 +37,18 @@ if [ -f "$PKG_DIR/DashEngine.icns" ]; then
     /bin/cp "$PKG_DIR/DashEngine.icns" "$APP_BUNDLE/Contents/Resources/AppIcon.icns"
 fi
 
+# Copy runtime resources into Contents/Resources/
+echo "=== Copying assets, library, scenes ==="
+if [ -d "$PROJECT_DIR/assets" ]; then
+    /bin/cp -R "$PROJECT_DIR/assets"  "$APP_BUNDLE/Contents/Resources/assets"
+fi
+if [ -d "$PROJECT_DIR/library" ]; then
+    /bin/cp -R "$PROJECT_DIR/library" "$APP_BUNDLE/Contents/Resources/library"
+fi
+if [ -d "$PROJECT_DIR/scenes" ]; then
+    /bin/cp -R "$PROJECT_DIR/scenes"  "$APP_BUNDLE/Contents/Resources/scenes"
+fi
+
 # PkgInfo
 /bin/echo -n "APPL????" > "$APP_BUNDLE/Contents/PkgInfo"
 

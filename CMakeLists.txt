@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(IsometricRPG CXX)
+project(IsometricRPG VERSION 2.0.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -112,6 +112,7 @@ target_include_directories(DashEngine PRIVATE
     src/editor/commands src/editor/panels src/editor/playmode src/editor/validation
     src/assets src/assets/importers
     src/game src/game/runtime src/game/systems src/game/data src/game/save src/game/nav
+    "${CMAKE_BINARY_DIR}/generated"
     ${SDL2_INCLUDE_DIRS}
 )
 target_link_libraries(DashEngine PRIVATE
@@ -122,6 +123,7 @@ target_link_libraries(DashEngine PRIVATE
 target_compile_definitions(DashEngine PRIVATE
     PROJECT_DIR="${CMAKE_SOURCE_DIR}"
     BUILD_DIR="${CMAKE_BINARY_DIR}"
+    DASH_VERSION="${PROJECT_VERSION}"
 )
 
 # ── macOS: Cocoa framework ───────────────────────────────────────────────────
@@ -141,3 +143,6 @@ if(BUILD_TESTING)
     enable_testing()
     add_subdirectory(tests)
 endif()
+
+# ── Packaging (install rules, CPack, VersionInfo) ─────────────────────────────
+include(cmake/Packaging.cmake)

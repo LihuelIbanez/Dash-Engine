@@ -5,6 +5,7 @@
 #include "imgui_impl_sdlrenderer2.h"
 #include "imgui_internal.h"
 #include "IsoRenderer.h"
+#include "VersionInfo.h"
 #include "PaintTileCommand.h"
 #include "PlaceEnemyCommand.h"
 #include "EraseCommand.h"
@@ -377,6 +378,20 @@ void EditorApp::run()
                     validationIssues_ = contentValidator_.validate(scene_, world_, assetDb_);
                     addLog("Validation: " + std::to_string(validationIssues_.size()) + " issue(s) found.");
                 });
+        // ── About modal ────────────────────────────────────────────────────
+        if (showAboutModal_) {
+            ImGui::OpenPopup("About DashEngine");
+            showAboutModal_ = false;
+        }
+        if (ImGui::BeginPopupModal("About DashEngine", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+            ImGui::Text("DashEngine v%s", DASH_VERSION_STRING);
+            ImGui::Text("Commit: %s", DASH_GIT_COMMIT);
+            ImGui::Text("Built:  %s", DASH_BUILD_DATE);
+            ImGui::Separator();
+            if (ImGui::Button("OK", {120, 0}))
+                ImGui::CloseCurrentPopup();
+            ImGui::EndPopup();
+        }
         if (showOpenDialog_) drawOpenDialog();
         if (showSaveDialog_) drawSaveDialog();
         if (showConfirmDialog_) drawConfirmDialog();
@@ -475,6 +490,11 @@ void EditorApp::drawMenuBar()
             showValidationPanel_ = true;
             addLog("Validation: " + std::to_string(validationIssues_.size()) + " issue(s) found.");
         }
+        ImGui::EndMenu();
+    }
+    if (ImGui::BeginMenu("Help")) {
+        if (ImGui::MenuItem("About DashEngine"))
+            showAboutModal_ = true;
         ImGui::EndMenu();
     }
     ImGui::EndMenuBar();
