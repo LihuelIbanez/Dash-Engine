@@ -1113,7 +1113,7 @@ void EditorApp::redoFile(OpenFile& f)
 // File Browser panel — recursive directory tree
 // ═════════════════════════════════════════════════════════════════════════════
 static void drawDirectoryTree(const fs::path& dir, EditorApp* /*unused*/,
-                              std::string& clickedFile)
+                            std::string& clickedFile)
 {
     // Collect entries and sort (dirs first, then files)
     std::vector<fs::directory_entry> entries;
@@ -1131,7 +1131,7 @@ static void drawDirectoryTree(const fs::path& dir, EditorApp* /*unused*/,
 
         if (entry.is_directory()) {
             ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow
-                                     | ImGuiTreeNodeFlags_SpanAvailWidth;
+                                    | ImGuiTreeNodeFlags_SpanAvailWidth;
             bool open = ImGui::TreeNodeEx(name.c_str(), flags);
             if (open) {
                 drawDirectoryTree(entry.path(), nullptr, clickedFile);
@@ -1139,8 +1139,8 @@ static void drawDirectoryTree(const fs::path& dir, EditorApp* /*unused*/,
             }
         } else {
             ImGuiTreeNodeFlags leafFlags = ImGuiTreeNodeFlags_Leaf
-                                         | ImGuiTreeNodeFlags_NoTreePushOnOpen
-                                         | ImGuiTreeNodeFlags_SpanAvailWidth;
+                                        | ImGuiTreeNodeFlags_NoTreePushOnOpen
+                                        | ImGuiTreeNodeFlags_SpanAvailWidth;
             ImGui::TreeNodeEx(name.c_str(), leafFlags);
             if (ImGui::IsItemClicked()) {
                 clickedFile = entry.path().string();

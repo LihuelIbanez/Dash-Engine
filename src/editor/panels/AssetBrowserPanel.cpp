@@ -64,7 +64,7 @@ void AssetBrowserPanel::draw(AssetDatabase& db,
 
             bool isSelected = (selectedGuid_ == guid);
             ImGuiSelectableFlags flags = ImGuiSelectableFlags_SpanAllColumns
-                                       | ImGuiSelectableFlags_AllowOverlap;
+                                    | ImGuiSelectableFlags_AllowOverlap;
             if (ImGui::Selectable(rec.sourcePath.c_str(), isSelected, flags)) {
                 selectedGuid_ = guid;
             }
