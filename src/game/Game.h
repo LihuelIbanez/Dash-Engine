@@ -9,6 +9,7 @@
 #include "RuntimeContext.h"
 #include "SystemScheduler.h"
 #include "GameplayDatabase.h"
+#include "SaveGame.h"
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Game – owns the SDL window/renderer and the game loop
@@ -25,9 +26,18 @@ public:
     bool init();
     void run();
 
+    // ── Embedded mode (run inside editor viewport) ───────────────────────────
+    bool initEmbedded(SDL_Renderer* renderer);
+    void tickUpdate(float dt);
+    void tickRender();                       // renders without SDL_RenderPresent
+    void injectClick(int screenX, int screenY, bool leftButton);
+    void injectAttack();
+    bool isRunning() const { return running_; }
+
 private:
     SDL_Window*   window_   = nullptr;
     SDL_Renderer* renderer_ = nullptr;
+    bool          embedded_ = false;         // true when hosted by editor
 
     bool          running_  = false;
     World         world_;
@@ -35,6 +45,14 @@ private:
     std::vector<std::unique_ptr<Enemy>> enemies_;
 
     int           score_    = 0;
+    unsigned int  worldSeed_ = 12345;
+
+    // ── Save / Load ──────────────────────────────────────────────────────────
+    std::string   savesDir_;       // resolved at init
+    void saveGame(const std::string& path);
+    void loadGame(const std::string& path);
+    SaveData captureState() const;
+    void     applyState(const SaveData& data);
 
     // ── Runtime systems ──────────────────────────────────────────────────────
     RuntimeContext   ctx_;

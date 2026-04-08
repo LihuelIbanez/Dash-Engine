@@ -7,6 +7,7 @@
 #include "PaintTileCommand.h"
 #include "PlaceEnemyCommand.h"
 #include "EraseCommand.h"
+#include "Profiler.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -234,6 +235,7 @@ void EditorApp::buildDefaultLayout(ImGuiID dockspaceId)
     ImGui::DockBuilderDockWindow("Asset Browser",     dockBottom);
     ImGui::DockBuilderDockWindow("Asset Inspector",   dockProperties);
     ImGui::DockBuilderDockWindow("Build Log",        dockBottom);
+    ImGui::DockBuilderDockWindow("Performance",      dockBottom);
 
     ImGui::DockBuilderFinish(dockspaceId);
 }
@@ -244,6 +246,7 @@ void EditorApp::buildDefaultLayout(ImGuiID dockspaceId)
 void EditorApp::run()
 {
     while (running_) {
+        Profiler::instance().beginFrame();
         SDL_Event ev;
         while (SDL_PollEvent(&ev)) {
             ImGui_ImplSDL2_ProcessEvent(&ev);
@@ -302,6 +305,7 @@ void EditorApp::run()
         drawTilePalette();
         drawViewport();
         drawBuildLog();
+        drawPerformancePanel();
         drawFileBrowser();
         drawFileEditor();
         assetBrowserPanel_.draw(assetDb_, importManager_, assetsRoot_,
@@ -315,10 +319,11 @@ void EditorApp::run()
         if (showSaveDialog_) drawSaveDialog();
         if (showConfirmDialog_) drawConfirmDialog();
 
-        // Update window title with dirty indicator
+        // Update window title with dirty indicator and mode
         {
             std::string title = "Isometric RPG Editor - " + scene_.sceneName;
             if (scene_.modified) title += " *";
+            if (editorMode_ == EditorMode::Play) title += "  [PLAYING]";
             SDL_SetWindowTitle(window_, title.c_str());
         }
 
@@ -328,6 +333,7 @@ void EditorApp::run()
         SDL_RenderClear(renderer_);
         ImGui_ImplSDLRenderer2_RenderDrawData(ImGui::GetDrawData(), renderer_);
         SDL_RenderPresent(renderer_);
+        Profiler::instance().endFrame();
     }
 }
 
@@ -393,11 +399,34 @@ void EditorApp::drawToolbar()
     ImGui::TextDisabled("|");
     ImGui::SameLine();
 
+    // ▶ Play / ■ Stop (in-editor play mode)
+    if (editorMode_ == EditorMode::Edit) {
+        ImGui::PushStyleColor(ImGuiCol_Button,       {0.10f, 0.35f, 0.60f, 1.f});
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, {0.15f, 0.50f, 0.80f, 1.f});
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive,  {0.10f, 0.60f, 0.90f, 1.f});
+        if (ImGui::Button("  Play  ", {100, 34})) enterPlayMode();
+        ImGui::PopStyleColor(3);
+    } else {
+        ImGui::PushStyleColor(ImGuiCol_Button,       {0.60f, 0.15f, 0.10f, 1.f});
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, {0.80f, 0.25f, 0.15f, 1.f});
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive,  {0.90f, 0.30f, 0.15f, 1.f});
+        if (ImGui::Button("  Stop  ", {100, 34})) exitPlayMode();
+        ImGui::PopStyleColor(3);
+    }
+
+    ImGui::SameLine();
+    ImGui::TextDisabled("|");
+    ImGui::SameLine();
+
+    // Tool buttons (disabled in Play mode)
+    bool inEdit = (editorMode_ == EditorMode::Edit);
     auto toolBtn = [&](const char* label, Tool t) {
         bool sel = (currentTool_ == t);
+        if (!inEdit) ImGui::BeginDisabled();
         if (sel) ImGui::PushStyleColor(ImGuiCol_Button, {0.25f, 0.45f, 0.75f, 1.f});
         if (ImGui::Button(label, {110, 34})) currentTool_ = t;
         if (sel) ImGui::PopStyleColor();
+        if (!inEdit) ImGui::EndDisabled();
         ImGui::SameLine();
     };
 
@@ -431,6 +460,7 @@ void EditorApp::drawSceneHierarchy()
     }
 
     ImGui::Separator();
+    if (editorMode_ == EditorMode::Play) ImGui::BeginDisabled();
     if (ImGui::Button("+ Add Enemy", {-1, 0})) {
         uint64_t newId = scene_.allocateEntityId();
         auto cmd = std::make_unique<PlaceEnemyCommand>(camX_, camY_, newId, "NewEnemy");
@@ -447,6 +477,7 @@ void EditorApp::drawSceneHierarchy()
             selectedEntityId_ = 0;
         }
     }
+    if (editorMode_ == EditorMode::Play) ImGui::EndDisabled();
 
     ImGui::End();
 }
@@ -592,8 +623,28 @@ void EditorApp::drawViewport()
     bool vpFocused = ImGui::IsWindowFocused();
     bool vpHovered = ImGui::IsItemHovered();
 
-    // WASD camera navigation (when viewport is focused)
-    if (vpFocused) {
+    // ── Play-mode input: forward clicks to the embedded game ─────────────────
+    if (editorMode_ == EditorMode::Play && playGame_ && vpHovered) {
+        ImGuiIO& io = ImGui::GetIO();
+        float mx = io.MousePos.x - cursorPos.x;
+        float my = io.MousePos.y - cursorPos.y;
+
+        // Map viewport-relative coords to game screen coords
+        int sx = static_cast<int>(mx * SCREEN_W / vpDisplayW_);
+        int sy = static_cast<int>(my * SCREEN_H / vpDisplayH_);
+
+        SDL_SetCursor(cursorHand_);
+
+        if (ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+            playGame_->injectClick(sx, sy, true);
+        if (ImGui::IsMouseClicked(ImGuiMouseButton_Right))
+            playGame_->injectAttack();
+    }
+
+    // ── Edit-mode interaction ────────────────────────────────────────────────
+
+    // WASD camera navigation (when viewport is focused, Edit mode only)
+    if (vpFocused && editorMode_ == EditorMode::Edit) {
         ImGuiIO& io = ImGui::GetIO();
         float speed = 12.f * io.DeltaTime;  // world-units per second
 
@@ -635,16 +686,18 @@ void EditorApp::drawViewport()
         float mx = io.MousePos.x - cursorPos.x;
         float my = io.MousePos.y - cursorPos.y;
 
-        // Left-click → use current tool
-        if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+        // Left-click → use current tool (only in Edit mode)
+        if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) &&
+            editorMode_ == EditorMode::Edit) {
             float wx, wy;
             if (viewportScreenToWorld(mx, my, wx, wy)) {
                 handleToolClick(wx, wy);
             }
         }
 
-        // Continuous painting while dragging
-        if (currentTool_ == Tool::PaintTile &&
+        // Continuous painting while dragging (Edit mode only)
+        if (editorMode_ == EditorMode::Edit &&
+            currentTool_ == Tool::PaintTile &&
             ImGui::IsMouseDown(ImGuiMouseButton_Left))
         {
             float wx, wy;
@@ -654,6 +707,16 @@ void EditorApp::drawViewport()
     } else {
         // Restore default arrow cursor outside viewport
         SDL_SetCursor(cursorArrow_);
+    }
+
+    // Play-mode overlay indicator
+    if (editorMode_ == EditorMode::Play) {
+        ImVec2 wp = ImGui::GetWindowPos();
+        ImGui::GetWindowDrawList()->AddRectFilled(
+            {wp.x + 8, wp.y + 30}, {wp.x + 120, wp.y + 56},
+            IM_COL32(200, 40, 40, 200), 4.f);
+        ImGui::GetWindowDrawList()->AddText(
+            {wp.x + 16, wp.y + 34}, IM_COL32(255, 255, 255, 255), "PLAYING");
     }
 
     ImGui::End();
@@ -725,6 +788,17 @@ void EditorApp::paintTileAt(float wx, float wy)
 void EditorApp::renderWorldToTexture()
 {
     SDL_SetRenderTarget(renderer_, viewportTex_);
+
+    // ── Play mode: let the Game render into the viewport texture ─────────────
+    if (editorMode_ == EditorMode::Play && playGame_) {
+        ImGuiIO& io = ImGui::GetIO();
+        playGame_->tickUpdate(io.DeltaTime);
+        playGame_->tickRender();
+        SDL_SetRenderTarget(renderer_, nullptr);
+        return;
+    }
+
+    // ── Edit mode: normal editor rendering ───────────────────────────────────
     SDL_SetRenderDrawColor(renderer_, 15, 12, 10, 255);
     SDL_RenderClear(renderer_);
 
@@ -806,6 +880,44 @@ void EditorApp::drawBuildLog()
         ImGui::TextWrapped("%s", msg.c_str());
     if (ImGui::GetScrollY() >= ImGui::GetScrollMaxY())
         ImGui::SetScrollHereY(1.f);
+    ImGui::End();
+}
+
+void EditorApp::drawPerformancePanel()
+{
+    ImGui::Begin("Performance");
+
+    auto& prof = Profiler::instance();
+    ImGui::Text("FPS: %.1f", prof.fps());
+    ImGui::Text("Frame: %.2f ms  (avg %.2f ms, peak %.2f ms)",
+                prof.frameDtMs(), prof.frameAvgMs(), prof.framePeakMs());
+
+    ImGui::Separator();
+    ImGui::Text("Subsystems:");
+
+    if (ImGui::BeginTable("##PerfTable", 4,
+            ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
+            ImGuiTableFlags_SizingStretchProp)) {
+        ImGui::TableSetupColumn("Section");
+        ImGui::TableSetupColumn("Last (ms)");
+        ImGui::TableSetupColumn("Avg (ms)");
+        ImGui::TableSetupColumn("Peak (ms)");
+        ImGui::TableHeadersRow();
+
+        for (auto& s : prof.sections()) {
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            ImGui::TextUnformatted(s.name.c_str());
+            ImGui::TableSetColumnIndex(1);
+            ImGui::Text("%.3f", s.lastMs);
+            ImGui::TableSetColumnIndex(2);
+            ImGui::Text("%.3f", s.avgMs);
+            ImGui::TableSetColumnIndex(3);
+            ImGui::Text("%.3f", s.peakMs);
+        }
+        ImGui::EndTable();
+    }
+
     ImGui::End();
 }
 
@@ -1008,6 +1120,48 @@ void EditorApp::drawConfirmDialog()
         }
         ImGui::EndPopup();
     }
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Play Mode – snapshot & rollback
+// ═════════════════════════════════════════════════════════════════════════════
+void EditorApp::enterPlayMode()
+{
+    if (editorMode_ == EditorMode::Play) return;
+
+    playSession_.capture(scene_, world_);
+
+    // Export current scene to temp file for the game to load
+    std::string tempScene = std::string(BUILD_DIR) + "/_play_scene.json";
+    std::string prevPath = scene_.filePath;
+    bool prevMod = scene_.modified;
+    scene_.saveToFile(tempScene);
+    scene_.filePath = prevPath;
+    scene_.modified = prevMod;
+
+    // Create embedded game instance
+    playGame_ = std::make_unique<Game>();
+    playGame_->setSceneFile(tempScene);
+    if (!playGame_->initEmbedded(renderer_)) {
+        addLog("ERROR: Could not start embedded game.");
+        playGame_.reset();
+        playSession_.restore(scene_, world_);
+        return;
+    }
+
+    editorMode_ = EditorMode::Play;
+    addLog("Entered Play mode (game running in viewport).");
+}
+
+void EditorApp::exitPlayMode()
+{
+    if (editorMode_ != EditorMode::Play) return;
+
+    playGame_.reset();
+    playSession_.restore(scene_, world_);
+    selectedEntityId_ = 0;
+    editorMode_ = EditorMode::Edit;
+    addLog("Exited Play mode (scene restored).");
 }
 
 void EditorApp::buildAndRun()

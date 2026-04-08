@@ -8,9 +8,12 @@
 #include "ImportManager.h"
 #include "AssetBrowserPanel.h"
 #include "AssetInspectorPanel.h"
+#include "PlaySession.h"
+#include "Game.h"
 #include <string>
 #include <vector>
 #include <map>
+#include <memory>
 
 // ─────────────────────────────────────────────────────────────────────────────
 // EditorApp – Unreal-style level editor for the Isometric RPG
@@ -26,6 +29,14 @@ private:
     SDL_Renderer* renderer_    = nullptr;
     SDL_Texture*  viewportTex_ = nullptr;
     bool          running_     = false;
+
+    // ── Editor mode ──────────────────────────────────────────────────────────
+    enum class EditorMode { Edit, Play };
+    EditorMode  editorMode_ = EditorMode::Edit;
+    PlaySession playSession_;
+    std::unique_ptr<Game> playGame_;     // live game instance during Play
+    void enterPlayMode();
+    void exitPlayMode();
 
     // ── Scene ────────────────────────────────────────────────────────────────
     SceneData    scene_;
@@ -115,6 +126,7 @@ private:
     void drawTilePalette();
     void drawViewport();
     void drawBuildLog();
+    void drawPerformancePanel();
     void drawFileBrowser();
     void drawFileEditor();
     void drawOpenDialog();

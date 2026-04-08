@@ -10,7 +10,7 @@ Marca cada item con [x] cuando este completado.
 - [x] Reducir acoplamiento entre editor, datos y runtime.
 - [x] Soportar crecimiento de contenido (assets, escenas, entidades).
 - [x] Mejorar mantenibilidad y velocidad de iteracion.
-- [ ] Preparar base para trabajo en equipo y features de produccion.
+- [x] Preparar base para trabajo en equipo y features de produccion.
 
 ## Semana 1 - Fundaciones del Editor (Arquitectura) ✅ COMPLETADA
 
@@ -85,21 +85,21 @@ Marca cada item con [x] cuando este completado.
 ## Semana 4 - Produccion, QA y rendimiento
 
 ### 11) Play Mode estable (Editor)
-- [ ] Snapshot del estado de escena al entrar en Play.
-- [ ] Restaurar estado al salir de Play (sin contaminar datos).
-- [ ] Separar claramente modo Edit vs Play en UI.
+- [x] Snapshot del estado de escena al entrar en Play.
+- [x] Restaurar estado al salir de Play (sin contaminar datos).
+- [x] Separar claramente modo Edit vs Play en UI.
 
 ### 12) Guardado/carga de partida
-- [ ] Definir formato de savegame versionado.
-- [ ] Cargar/guardar estado completo del mundo + entidades.
-- [ ] Estrategia de migracion de versiones de save.
+- [x] Definir formato de savegame versionado.
+- [x] Cargar/guardar estado completo del mundo + entidades.
+- [x] Estrategia de migracion de versiones de save.
 
 ### 13) Testing y profiling minimo
-- [ ] Test de determinismo procedural por seed.
-- [ ] Test de carga de escenas invalidas/validas.
-- [ ] Test basico de comandos undo/redo del editor.
-- [ ] Medir tiempos por frame: update, render, AI, pathfinding.
-- [ ] Registrar picos de frame time en log.
+- [x] Test de determinismo procedural por seed.
+- [x] Test de carga de escenas invalidas/validas.
+- [x] Test basico de comandos undo/redo del editor.
+- [x] Medir tiempos por frame: update, render, AI, pathfinding.
+- [x] Registrar picos de frame time en log.
 
 ## Backlog de Alto Impacto (siguiente mes)
 
@@ -117,9 +117,9 @@ Marca como completado cuando se cumpla todo:
 - [x] Editor con undo/redo global para operaciones de escena.
 - [x] Asset DB con GUID + import/cache incremental.
 - [x] Runtime separado por sistemas principales.
-- [ ] Save/load versionado funcionando.
-- [ ] Suite minima de tests automatizados.
-- [ ] Metricas de rendimiento visibles en editor.
+- [x] Save/load versionado funcionando.
+- [x] Suite minima de tests automatizados.
+- [x] Metricas de rendimiento visibles en editor.
 
 ## Resumen de Progreso
 
@@ -128,7 +128,7 @@ Marca como completado cuando se cumpla todo:
 | 1 - Editor Foundations | ✅ Completada | 100% |
 | 2 - Asset Pipeline | ✅ Completada | 100% |
 | 3 - Runtime Systems | ✅ Completada | 100% |
-| 4 - Produccion/QA | ⬜ No iniciada | 0% |
+| 4 - Produccion/QA | ✅ Completada | 100% |
 
 ## Notas
 

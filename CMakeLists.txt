@@ -48,6 +48,7 @@ FetchContent_MakeAvailable(json)
 # ── Core game library (shared between game & editor) ─────────────────────────
 file(GLOB CORE_SOURCES
     "src/core/*.cpp"
+    "src/core/profiling/*.cpp"
     "src/entities/*.cpp"
     "src/world/*.cpp"
     "src/game/nav/*.cpp"
@@ -56,6 +57,7 @@ add_library(game_core STATIC ${CORE_SOURCES})
 target_include_directories(game_core PUBLIC
     src
     src/core
+    src/core/profiling
     src/entities
     src/world
     src/rendering
@@ -69,16 +71,19 @@ target_link_libraries(game_core PUBLIC ${SDL2_LIBRARIES})
 file(GLOB RUNTIME_SOURCES "src/game/runtime/*.cpp")
 file(GLOB SYSTEM_SOURCES  "src/game/systems/*.cpp")
 file(GLOB DATA_SOURCES    "src/game/data/*.cpp")
+file(GLOB SAVE_SOURCES    "src/game/save/*.cpp")
 add_executable(${PROJECT_NAME}
     src/main.cpp
     src/game/Game.cpp
     ${RUNTIME_SOURCES}
     ${SYSTEM_SOURCES}
     ${DATA_SOURCES}
+    ${SAVE_SOURCES}
 )
 target_include_directories(${PROJECT_NAME} PRIVATE
     src src/core src/entities src/world src/rendering src/game
     src/game/runtime src/game/systems src/game/data src/game/nav
+    src/game/save
     ${SDL2_INCLUDE_DIRS}
 )
 target_link_libraries(${PROJECT_NAME} PRIVATE game_core nlohmann_json::nlohmann_json ${SDL2_LIBRARIES})
@@ -86,13 +91,21 @@ target_link_libraries(${PROJECT_NAME} PRIVATE game_core nlohmann_json::nlohmann_
 # ── Editor executable (DashEngine) ───────────────────────────────────────────
 file(GLOB EDITOR_SOURCES "src/editor/*.cpp")
 file(GLOB EDITOR_CMD_SOURCES "src/editor/commands/*.cpp")
+file(GLOB EDITOR_PLAYMODE_SOURCES "src/editor/playmode/*.cpp")
 file(GLOB ASSET_SOURCES "src/assets/*.cpp")
 file(GLOB IMPORTER_SOURCES "src/assets/importers/*.cpp")
 file(GLOB PANEL_SOURCES "src/editor/panels/*.cpp")
-add_executable(DashEngine ${EDITOR_SOURCES} ${EDITOR_CMD_SOURCES} ${ASSET_SOURCES} ${IMPORTER_SOURCES} ${PANEL_SOURCES})
+add_executable(DashEngine
+    ${EDITOR_SOURCES} ${EDITOR_CMD_SOURCES} ${EDITOR_PLAYMODE_SOURCES}
+    ${ASSET_SOURCES} ${IMPORTER_SOURCES} ${PANEL_SOURCES}
+    src/game/Game.cpp
+    ${RUNTIME_SOURCES} ${SYSTEM_SOURCES} ${DATA_SOURCES} ${SAVE_SOURCES}
+)
 target_include_directories(DashEngine PRIVATE
     src src/core src/entities src/world src/rendering src/editor
-    src/editor/commands src/editor/panels src/assets src/assets/importers
+    src/editor/commands src/editor/panels src/editor/playmode
+    src/assets src/assets/importers
+    src/game src/game/runtime src/game/systems src/game/data src/game/save
     ${SDL2_INCLUDE_DIRS}
 )
 target_link_libraries(DashEngine PRIVATE
@@ -115,3 +128,10 @@ endif()
 target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -O2)
 target_compile_options(DashEngine PRIVATE -Wall -Wextra -O2)
 target_compile_options(game_core PRIVATE -Wall -Wextra -O2)
+
+# ── Tests (opt-in via -DBUILD_TESTING=ON) ─────────────────────────────────────
+option(BUILD_TESTING "Build unit tests" OFF)
+if(BUILD_TESTING)
+    enable_testing()
+    add_subdirectory(tests)
+endif()

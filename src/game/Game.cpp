@@ -4,8 +4,11 @@
 #include "CombatSystem.h"
 #include "SpawnRewardSystem.h"
 #include "GameplayDatabase.h"
+#include "SaveGame.h"
+#include "Profiler.h"
 #include <nlohmann/json.hpp>
 #include <fstream>
+#include <filesystem>
 #include <cstdlib>
 #include <cmath>
 #include <algorithm>
@@ -110,6 +113,7 @@ bool Game::loadSceneFile()
 
     // ── World seed + regenerate ──────────────────────────────────────────────
     unsigned int seed = j.value("worldSeed", 12345u);
+    worldSeed_ = seed;
     std::srand(seed);
     world_.generate(seed);
 
@@ -199,11 +203,131 @@ void Game::spawnEnemiesFromData()
     }
 }
 
+// ═════════════════════════════════════════════════════════════════════════════
+// Save / Load
+// ═════════════════════════════════════════════════════════════════════════════
+SaveData Game::captureState() const
+{
+    SaveData d;
+    d.worldSeed = worldSeed_;
+    d.score     = score_;
+
+    // Player
+    auto& p      = d.player;
+    p.x            = player_.x;
+    p.y            = player_.y;
+    p.health       = player_.health;
+    p.maxHealth    = player_.maxHealth;
+    p.mana         = player_.mana;
+    p.maxMana      = player_.maxMana;
+    p.attack       = player_.stats.attack;
+    p.defense      = player_.stats.defense;
+    p.magicAttack  = player_.stats.magicAttack;
+    p.speed        = player_.stats.speed;
+    p.critChance   = player_.stats.critChance;
+    p.level        = player_.stats.level;
+    p.experience   = player_.stats.experience;
+    p.expToNext    = player_.stats.expToNextLevel;
+    p.atkCooldownMax = player_.attackCooldownMax;
+    p.charClass    = classNameStr(player_.charClass);
+
+    // Enemies (only alive ones)
+    for (auto& ep : enemies_) {
+        if (!ep->isAlive()) continue;
+        SaveEnemyData se;
+        se.x               = ep->x;
+        se.y               = ep->y;
+        se.health          = ep->health;
+        se.maxHealth       = ep->maxHealth;
+        se.alive           = ep->alive;
+        se.name            = ep->name;
+        se.attack          = ep->stats.attack;
+        se.defense         = ep->stats.defense;
+        se.magicAttack     = ep->stats.magicAttack;
+        se.speed           = ep->stats.speed;
+        se.critChance      = ep->stats.critChance;
+        se.detectionRadius = ep->detectionRadius;
+        se.attackRadius    = ep->attackRadius;
+        se.expReward       = ep->expReward;
+        se.atkCooldownMax  = ep->attackCooldownMax;
+        d.enemies.push_back(se);
+    }
+
+    return d;
+}
+
+void Game::applyState(const SaveData& data)
+{
+    worldSeed_ = data.worldSeed;
+    score_     = data.score;
+    world_.generate(worldSeed_);
+
+    // Player
+    auto& p = data.player;
+    player_.x            = p.x;
+    player_.y            = p.y;
+    player_.health       = p.health;
+    player_.maxHealth    = p.maxHealth;
+    player_.mana         = p.mana;
+    player_.maxMana      = p.maxMana;
+    player_.stats.attack      = p.attack;
+    player_.stats.defense     = p.defense;
+    player_.stats.magicAttack = p.magicAttack;
+    player_.stats.speed       = p.speed;
+    player_.stats.critChance  = p.critChance;
+    player_.stats.level       = p.level;
+    player_.stats.experience  = p.experience;
+    player_.stats.expToNextLevel = p.expToNext;
+    player_.attackCooldownMax = p.atkCooldownMax;
+    player_.hasTarget = false;
+
+    // Enemies — recreate from save data
+    enemies_.clear();
+    for (auto& se : data.enemies) {
+        auto enemy = std::make_unique<Enemy>(se.x, se.y, se.name);
+        enemy->health       = se.health;
+        enemy->maxHealth    = se.maxHealth;
+        enemy->alive        = se.alive;
+        enemy->stats.attack      = se.attack;
+        enemy->stats.defense     = se.defense;
+        enemy->stats.magicAttack = se.magicAttack;
+        enemy->stats.speed       = se.speed;
+        enemy->stats.critChance  = se.critChance;
+        enemy->detectionRadius   = se.detectionRadius;
+        enemy->attackRadius      = se.attackRadius;
+        enemy->expReward         = se.expReward;
+        enemy->attackCooldownMax = se.atkCooldownMax;
+        enemies_.push_back(std::move(enemy));
+    }
+}
+
+void Game::saveGame(const std::string& path)
+{
+    SaveData data = captureState();
+    if (SaveGame::save(data, path))
+        std::printf("[Game] Saved to %s\n", path.c_str());
+    else
+        std::printf("[Game] ERROR: Could not save to %s\n", path.c_str());
+}
+
+void Game::loadGame(const std::string& path)
+{
+    SaveData data;
+    if (SaveGame::load(path, data)) {
+        applyState(data);
+        std::printf("[Game] Loaded from %s (v%d)\n", path.c_str(), data.saveVersion);
+    } else {
+        std::printf("[Game] ERROR: Could not load %s\n", path.c_str());
+    }
+}
+
 Game::~Game()
 {
-    if (renderer_) SDL_DestroyRenderer(renderer_);
-    if (window_)   SDL_DestroyWindow(window_);
-    SDL_Quit();
+    if (!embedded_) {
+        if (renderer_) SDL_DestroyRenderer(renderer_);
+        if (window_)   SDL_DestroyWindow(window_);
+        SDL_Quit();
+    }
 }
 
 bool Game::init()
@@ -228,9 +352,14 @@ bool Game::init()
     SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
     running_ = true;
 
+    // ── Saves directory ──────────────────────────────────────────────────────
+    savesDir_ = "saves";
+    std::filesystem::create_directories(savesDir_);
+
     // ── Load world and scene data ────────────────────────────────────────────
-    std::srand(12345);
-    world_.generate(12345);
+    worldSeed_ = 12345;
+    std::srand(worldSeed_);
+    world_.generate(worldSeed_);
     gameDb_.load("assets");
 
     if (!sceneFile_.empty() && loadSceneFile()) {
@@ -269,10 +398,100 @@ void Game::run()
         prev = now;
         if (dt > 0.05f) dt = 0.05f;
 
+        Profiler::instance().beginFrame();
         processEvents();
         update(dt);
         render();
+        Profiler::instance().endFrame();
     }
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Embedded mode — run game inside editor viewport
+// ═════════════════════════════════════════════════════════════════════════════
+bool Game::initEmbedded(SDL_Renderer* renderer)
+{
+    renderer_ = renderer;
+    embedded_ = true;
+    running_  = true;
+
+    savesDir_ = "saves";
+    std::filesystem::create_directories(savesDir_);
+
+    worldSeed_ = 12345;
+    std::srand(worldSeed_);
+    world_.generate(worldSeed_);
+    gameDb_.load("assets");
+
+    if (!sceneFile_.empty() && loadSceneFile()) {
+        std::printf("[Game] Embedded: loaded scene %s\n", sceneFile_.c_str());
+    } else {
+        if (auto* cls = gameDb_.findPlayerClass("warrior")) {
+            player_.stats.attack      = cls->attack;
+            player_.stats.defense     = cls->defense;
+            player_.stats.magicAttack = cls->magicAttack;
+            player_.stats.speed       = cls->speed;
+            player_.stats.critChance  = cls->critChance;
+            player_.maxHealth         = cls->maxHp;
+            player_.health            = cls->maxHp;
+            player_.maxMana           = cls->maxMana;
+            player_.mana              = cls->maxMana;
+            player_.attackCooldownMax = cls->attackCooldown;
+        }
+        spawnEnemiesFromData();
+    }
+
+    initSystems();
+    return true;
+}
+
+void Game::tickUpdate(float dt)
+{
+    if (dt > 0.05f) dt = 0.05f;
+    update(dt);
+}
+
+void Game::tickRender()
+{
+    SDL_SetRenderDrawColor(renderer_, 8, 6, 4, 255);
+    SDL_RenderClear(renderer_);
+
+    float camX = player_.x;
+    float camY = player_.y;
+
+    world_.draw(renderer_, camX, camY);
+
+    for (auto& e : enemies_)
+        if (e->isAlive()) e->draw(renderer_, camX, camY);
+
+    player_.draw(renderer_, camX, camY);
+
+    renderHUD();
+    // No SDL_RenderPresent — caller (editor) handles presentation
+}
+
+void Game::injectClick(int screenX, int screenY, bool leftButton)
+{
+    float wx, wy;
+    if (!screenToWorld(screenX, screenY, wx, wy)) return;
+
+    if (leftButton) {
+        // Check if an enemy is near the click
+        for (auto& e : enemies_) {
+            if (!e->isAlive()) continue;
+            float dx = e->x - wx, dy = e->y - wy;
+            if (std::sqrt(dx * dx + dy * dy) < 1.0f) {
+                player_.setMoveTarget(e->x, e->y);
+                return;
+            }
+        }
+        player_.setMoveTarget(wx, wy);
+    }
+}
+
+void Game::injectAttack()
+{
+    player_.triggerAttack();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -285,6 +504,14 @@ void Game::processEvents()
         if (ev.type == SDL_QUIT) { running_ = false; return; }
         if (ev.type == SDL_KEYDOWN && ev.key.keysym.sym == SDLK_ESCAPE) {
             running_ = false; return;
+        }
+
+        // F5 = Quick save, F9 = Quick load
+        if (ev.type == SDL_KEYDOWN && ev.key.keysym.sym == SDLK_F5) {
+            saveGame(savesDir_ + "/quicksave.json");
+        }
+        if (ev.type == SDL_KEYDOWN && ev.key.keysym.sym == SDLK_F9) {
+            loadGame(savesDir_ + "/quicksave.json");
         }
 
         // Left-click: move to location OR attack enemy
@@ -321,6 +548,7 @@ void Game::processEvents()
 // ─────────────────────────────────────────────────────────────────────────────
 void Game::update(float dt)
 {
+    auto s = Profiler::instance().scope("Update");
     ctx_.dt      = dt;
     ctx_.running = running_;
 
@@ -334,6 +562,7 @@ void Game::update(float dt)
 // ─────────────────────────────────────────────────────────────────────────────
 void Game::render()
 {
+    auto s = Profiler::instance().scope("Render");
     // Very dark background — Diablo's near-black
     SDL_SetRenderDrawColor(renderer_, 8, 6, 4, 255);
     SDL_RenderClear(renderer_);
