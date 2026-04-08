@@ -8,12 +8,11 @@ Usa este tablero para mover el estado diario del sprint. Solo debe haber 1 item 
 
 ### To Do
 
-- [ ] D19 - Save/Load versionado (6h)
 - [ ] D20 - Tests + profiling + cierre (6h)
 
 ### Doing
 
-- [ ] D19 - Save/Load versionado (proximo paso)
+(vacio)
 
 ### Done
 
@@ -35,6 +34,7 @@ Usa este tablero para mover el estado diario del sprint. Solo debe haber 1 item 
 - [x] D16 - Gameplay data-driven (6h) — Completado: GameplayDatabase.h/.cpp, player_classes.json, enemies.json, loot_tables.json, Enemy constructor data-driven, Game.cpp usa GameplayDatabase
 - [x] D17 - Pathfinding A* (6h) — Completado: GridNav.h/.cpp con A* 8-dir, terrainCost por tipo de tile, Enemy Chase usa waypoints A*, path refresh 0.5s, corner-cutting prevention
 - [x] D18 - Play Mode con rollback (6h) — Completado: PlaySession.h/.cpp con capture/restore, EditorMode Edit/Play, boton Play/Stop en toolbar, snapshot de SceneData + World grid, overlay "PLAYING" en viewport, herramientas de edicion deshabilitadas en modo Play
+- [x] D19 - Save/Load versionado (6h) — Completado: SaveGame.h/.cpp con save/load JSON, SaveVersioning.h/.cpp con migracion por version, captureState/applyState en Game, F5 quicksave / F9 quickload, carpeta saves/
 
 ## Registro Diario de Ejecucion
 

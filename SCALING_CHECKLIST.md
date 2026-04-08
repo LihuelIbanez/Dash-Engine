@@ -90,9 +90,9 @@ Marca cada item con [x] cuando este completado.
 - [x] Separar claramente modo Edit vs Play en UI.
 
 ### 12) Guardado/carga de partida
-- [ ] Definir formato de savegame versionado.
-- [ ] Cargar/guardar estado completo del mundo + entidades.
-- [ ] Estrategia de migracion de versiones de save.
+- [x] Definir formato de savegame versionado.
+- [x] Cargar/guardar estado completo del mundo + entidades.
+- [x] Estrategia de migracion de versiones de save.
 
 ### 13) Testing y profiling minimo
 - [ ] Test de determinismo procedural por seed.
@@ -117,7 +117,7 @@ Marca como completado cuando se cumpla todo:
 - [x] Editor con undo/redo global para operaciones de escena.
 - [x] Asset DB con GUID + import/cache incremental.
 - [x] Runtime separado por sistemas principales.
-- [ ] Save/load versionado funcionando.
+- [x] Save/load versionado funcionando.
 - [ ] Suite minima de tests automatizados.
 - [ ] Metricas de rendimiento visibles en editor.
 
