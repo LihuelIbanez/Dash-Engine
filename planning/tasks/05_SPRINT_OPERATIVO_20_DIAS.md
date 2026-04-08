@@ -13,7 +13,7 @@ Usa este tablero para mover el estado diario del sprint. Solo debe haber 1 item 
 
 ### Doing
 
-- [ ] D18 - Play Mode con rollback (proximo paso)
+- [ ] D19 - Save/Load versionado (proximo paso)
 
 ### Done
 
@@ -34,6 +34,7 @@ Usa este tablero para mover el estado diario del sprint. Solo debe haber 1 item 
 - [x] D15 - AISystem + SpawnRewardSystem (6h) — Completado: Extraidos a src/game/systems/AISystem.h/.cpp y SpawnRewardSystem.h/.cpp
 - [x] D16 - Gameplay data-driven (6h) — Completado: GameplayDatabase.h/.cpp, player_classes.json, enemies.json, loot_tables.json, Enemy constructor data-driven, Game.cpp usa GameplayDatabase
 - [x] D17 - Pathfinding A* (6h) — Completado: GridNav.h/.cpp con A* 8-dir, terrainCost por tipo de tile, Enemy Chase usa waypoints A*, path refresh 0.5s, corner-cutting prevention
+- [x] D18 - Play Mode con rollback (6h) — Completado: PlaySession.h/.cpp con capture/restore, EditorMode Edit/Play, boton Play/Stop en toolbar, snapshot de SceneData + World grid, overlay "PLAYING" en viewport, herramientas de edicion deshabilitadas en modo Play
 
 ## Registro Diario de Ejecucion
 

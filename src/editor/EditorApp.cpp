@@ -315,10 +315,11 @@ void EditorApp::run()
         if (showSaveDialog_) drawSaveDialog();
         if (showConfirmDialog_) drawConfirmDialog();
 
-        // Update window title with dirty indicator
+        // Update window title with dirty indicator and mode
         {
             std::string title = "Isometric RPG Editor - " + scene_.sceneName;
             if (scene_.modified) title += " *";
+            if (editorMode_ == EditorMode::Play) title += "  [PLAYING]";
             SDL_SetWindowTitle(window_, title.c_str());
         }
 
@@ -393,11 +394,34 @@ void EditorApp::drawToolbar()
     ImGui::TextDisabled("|");
     ImGui::SameLine();
 
+    // ▶ Play / ■ Stop (in-editor play mode)
+    if (editorMode_ == EditorMode::Edit) {
+        ImGui::PushStyleColor(ImGuiCol_Button,       {0.10f, 0.35f, 0.60f, 1.f});
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, {0.15f, 0.50f, 0.80f, 1.f});
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive,  {0.10f, 0.60f, 0.90f, 1.f});
+        if (ImGui::Button("  Play  ", {100, 34})) enterPlayMode();
+        ImGui::PopStyleColor(3);
+    } else {
+        ImGui::PushStyleColor(ImGuiCol_Button,       {0.60f, 0.15f, 0.10f, 1.f});
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, {0.80f, 0.25f, 0.15f, 1.f});
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive,  {0.90f, 0.30f, 0.15f, 1.f});
+        if (ImGui::Button("  Stop  ", {100, 34})) exitPlayMode();
+        ImGui::PopStyleColor(3);
+    }
+
+    ImGui::SameLine();
+    ImGui::TextDisabled("|");
+    ImGui::SameLine();
+
+    // Tool buttons (disabled in Play mode)
+    bool inEdit = (editorMode_ == EditorMode::Edit);
     auto toolBtn = [&](const char* label, Tool t) {
         bool sel = (currentTool_ == t);
+        if (!inEdit) ImGui::BeginDisabled();
         if (sel) ImGui::PushStyleColor(ImGuiCol_Button, {0.25f, 0.45f, 0.75f, 1.f});
         if (ImGui::Button(label, {110, 34})) currentTool_ = t;
         if (sel) ImGui::PopStyleColor();
+        if (!inEdit) ImGui::EndDisabled();
         ImGui::SameLine();
     };
 
@@ -431,6 +455,7 @@ void EditorApp::drawSceneHierarchy()
     }
 
     ImGui::Separator();
+    if (editorMode_ == EditorMode::Play) ImGui::BeginDisabled();
     if (ImGui::Button("+ Add Enemy", {-1, 0})) {
         uint64_t newId = scene_.allocateEntityId();
         auto cmd = std::make_unique<PlaceEnemyCommand>(camX_, camY_, newId, "NewEnemy");
@@ -447,6 +472,7 @@ void EditorApp::drawSceneHierarchy()
             selectedEntityId_ = 0;
         }
     }
+    if (editorMode_ == EditorMode::Play) ImGui::EndDisabled();
 
     ImGui::End();
 }
@@ -635,16 +661,18 @@ void EditorApp::drawViewport()
         float mx = io.MousePos.x - cursorPos.x;
         float my = io.MousePos.y - cursorPos.y;
 
-        // Left-click → use current tool
-        if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+        // Left-click → use current tool (only in Edit mode)
+        if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) &&
+            editorMode_ == EditorMode::Edit) {
             float wx, wy;
             if (viewportScreenToWorld(mx, my, wx, wy)) {
                 handleToolClick(wx, wy);
             }
         }
 
-        // Continuous painting while dragging
-        if (currentTool_ == Tool::PaintTile &&
+        // Continuous painting while dragging (Edit mode only)
+        if (editorMode_ == EditorMode::Edit &&
+            currentTool_ == Tool::PaintTile &&
             ImGui::IsMouseDown(ImGuiMouseButton_Left))
         {
             float wx, wy;
@@ -654,6 +682,16 @@ void EditorApp::drawViewport()
     } else {
         // Restore default arrow cursor outside viewport
         SDL_SetCursor(cursorArrow_);
+    }
+
+    // Play-mode overlay indicator
+    if (editorMode_ == EditorMode::Play) {
+        ImVec2 wp = ImGui::GetWindowPos();
+        ImGui::GetWindowDrawList()->AddRectFilled(
+            {wp.x + 8, wp.y + 30}, {wp.x + 120, wp.y + 56},
+            IM_COL32(200, 40, 40, 200), 4.f);
+        ImGui::GetWindowDrawList()->AddText(
+            {wp.x + 16, wp.y + 34}, IM_COL32(255, 255, 255, 255), "PLAYING");
     }
 
     ImGui::End();
@@ -1008,6 +1046,29 @@ void EditorApp::drawConfirmDialog()
         }
         ImGui::EndPopup();
     }
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Play Mode – snapshot & rollback
+// ═════════════════════════════════════════════════════════════════════════════
+void EditorApp::enterPlayMode()
+{
+    if (editorMode_ == EditorMode::Play) return;
+
+    playSession_.capture(scene_, world_);
+    editorMode_ = EditorMode::Edit;   // stays Edit until capture done
+    editorMode_ = EditorMode::Play;
+    addLog("Entered Play mode (snapshot saved).");
+}
+
+void EditorApp::exitPlayMode()
+{
+    if (editorMode_ != EditorMode::Play) return;
+
+    playSession_.restore(scene_, world_);
+    selectedEntityId_ = 0;
+    editorMode_ = EditorMode::Edit;
+    addLog("Exited Play mode (scene restored).");
 }
 
 void EditorApp::buildAndRun()

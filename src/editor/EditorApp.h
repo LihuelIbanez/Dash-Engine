@@ -8,6 +8,7 @@
 #include "ImportManager.h"
 #include "AssetBrowserPanel.h"
 #include "AssetInspectorPanel.h"
+#include "PlaySession.h"
 #include <string>
 #include <vector>
 #include <map>
@@ -26,6 +27,13 @@ private:
     SDL_Renderer* renderer_    = nullptr;
     SDL_Texture*  viewportTex_ = nullptr;
     bool          running_     = false;
+
+    // ── Editor mode ──────────────────────────────────────────────────────────
+    enum class EditorMode { Edit, Play };
+    EditorMode  editorMode_ = EditorMode::Edit;
+    PlaySession playSession_;
+    void enterPlayMode();
+    void exitPlayMode();
 
     // ── Scene ────────────────────────────────────────────────────────────────
     SceneData    scene_;

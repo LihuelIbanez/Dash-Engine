@@ -86,13 +86,15 @@ target_link_libraries(${PROJECT_NAME} PRIVATE game_core nlohmann_json::nlohmann_
 # ── Editor executable (DashEngine) ───────────────────────────────────────────
 file(GLOB EDITOR_SOURCES "src/editor/*.cpp")
 file(GLOB EDITOR_CMD_SOURCES "src/editor/commands/*.cpp")
+file(GLOB EDITOR_PLAYMODE_SOURCES "src/editor/playmode/*.cpp")
 file(GLOB ASSET_SOURCES "src/assets/*.cpp")
 file(GLOB IMPORTER_SOURCES "src/assets/importers/*.cpp")
 file(GLOB PANEL_SOURCES "src/editor/panels/*.cpp")
-add_executable(DashEngine ${EDITOR_SOURCES} ${EDITOR_CMD_SOURCES} ${ASSET_SOURCES} ${IMPORTER_SOURCES} ${PANEL_SOURCES})
+add_executable(DashEngine ${EDITOR_SOURCES} ${EDITOR_CMD_SOURCES} ${EDITOR_PLAYMODE_SOURCES} ${ASSET_SOURCES} ${IMPORTER_SOURCES} ${PANEL_SOURCES})
 target_include_directories(DashEngine PRIVATE
     src src/core src/entities src/world src/rendering src/editor
-    src/editor/commands src/editor/panels src/assets src/assets/importers
+    src/editor/commands src/editor/panels src/editor/playmode
+    src/assets src/assets/importers
     ${SDL2_INCLUDE_DIRS}
 )
 target_link_libraries(DashEngine PRIVATE

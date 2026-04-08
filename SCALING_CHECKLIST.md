@@ -85,9 +85,9 @@ Marca cada item con [x] cuando este completado.
 ## Semana 4 - Produccion, QA y rendimiento
 
 ### 11) Play Mode estable (Editor)
-- [ ] Snapshot del estado de escena al entrar en Play.
-- [ ] Restaurar estado al salir de Play (sin contaminar datos).
-- [ ] Separar claramente modo Edit vs Play en UI.
+- [x] Snapshot del estado de escena al entrar en Play.
+- [x] Restaurar estado al salir de Play (sin contaminar datos).
+- [x] Separar claramente modo Edit vs Play en UI.
 
 ### 12) Guardado/carga de partida
 - [ ] Definir formato de savegame versionado.
