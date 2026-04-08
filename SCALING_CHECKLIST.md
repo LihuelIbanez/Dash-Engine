@@ -109,8 +109,8 @@ Marca cada item con [x] cuando este completado.
 - [x] Integrar en CombatSystem y SpawnRewardSystem.
 
 ### 15) Comandos Move/Edit Property (D22)
-- [ ] MoveEntityCommand (drag en viewport con undo/redo).
-- [ ] EditPropertyCommand generico (undo/redo).
+- [x] MoveEntityCommand (drag en viewport con undo/redo).
+- [x] EditPropertyCommand generico (undo/redo).
 
 ### 16) Componentes base (D23-D24)
 - [ ] Crear estructuras base de componentes (`Transform`, `Render`, `Combat`, etc.).

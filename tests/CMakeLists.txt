@@ -75,6 +75,28 @@ target_link_libraries(test_undo_redo_commands PRIVATE
 target_compile_options(test_undo_redo_commands PRIVATE -Wall -Wextra -O2)
 add_test(NAME test_undo_redo_commands COMMAND test_undo_redo_commands)
 
+# ── MoveEntity and EditProperty commands ─────────────────────────────────────
+add_executable(test_move_edit_commands
+    test_move_edit_commands.cpp
+    ${CMAKE_SOURCE_DIR}/src/editor/SceneData.cpp
+    ${TEST_CMD_SOURCES}
+)
+target_include_directories(test_move_edit_commands PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/src/core
+    ${CMAKE_SOURCE_DIR}/src/entities
+    ${CMAKE_SOURCE_DIR}/src/world
+    ${CMAKE_SOURCE_DIR}/src/rendering
+    ${CMAKE_SOURCE_DIR}/src/editor
+    ${CMAKE_SOURCE_DIR}/src/editor/commands
+    ${SDL2_INCLUDE_DIRS}
+)
+target_link_libraries(test_move_edit_commands PRIVATE
+    game_core nlohmann_json::nlohmann_json ${SDL2_LIBRARIES}
+)
+target_compile_options(test_move_edit_commands PRIVATE -Wall -Wextra -O2)
+add_test(NAME test_move_edit_commands COMMAND test_move_edit_commands)
+
 # ── World seed determinism ────────────────────────────────────────────────────
 dash_add_test(test_world_seed_determinism test_world_seed_determinism.cpp)
 

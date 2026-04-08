@@ -8,7 +8,6 @@ Prerequisito: Sprint 1 (D01-D20) completado.
 
 ### To Do
 
-- [ ] D22 - Comando MoveEntity + EditProperty (6h)
 - [ ] D23 - Componentes base (Transform, Render, Combat) (6h)
 - [ ] D24 - EntityRegistry + migracion de datos (6h)
 - [ ] D25 - Inspector generico con reflection (6h)
@@ -25,11 +24,12 @@ Prerequisito: Sprint 1 (D01-D20) completado.
 ### Done
 
 - [x] D21 - Sistema de eventos desacoplado (6h)
+- [x] D22 - Comando MoveEntity + EditProperty (6h)
 
 ## Registro Diario de Ejecucion
 
 - [ ] Dia 21 | ID: D21 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __
-- [ ] Dia 22 | ID: D22 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __
+- [x] Dia 22 | ID: D22 | Plan: 6h | Real: 6h | Bloqueos: — | Resultado: MoveEntityCommand + EditPropertyCommand implementados, drag-to-move en viewport, properties panel via comandos, test_move_edit_commands 5/5 passing
 - [ ] Dia 23 | ID: D23 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __
 - [ ] Dia 24 | ID: D24 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __
 - [ ] Dia 25 | ID: D25 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __

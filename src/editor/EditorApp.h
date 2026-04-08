@@ -114,6 +114,11 @@ private:
     void undoFile(OpenFile& f);
     void redoFile(OpenFile& f);
 
+    // ── Entity drag state (viewport drag-to-move) ────────────────────────────
+    bool     draggingEntity_  = false;
+    float    dragStartX_      = 0.f;   // world pos when drag began
+    float    dragStartY_      = 0.f;
+
     // ── Layout ───────────────────────────────────────────────────────────────
     bool layoutInitialized_ = false;
     void buildDefaultLayout(ImGuiID dockspaceId);

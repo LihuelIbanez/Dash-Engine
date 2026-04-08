@@ -7,6 +7,8 @@
 #include "PaintTileCommand.h"
 #include "PlaceEnemyCommand.h"
 #include "EraseCommand.h"
+#include "MoveEntityCommand.h"
+#include "EditPropertyCommand.h"
 #include "Profiler.h"
 
 #include <cstdio>
@@ -523,18 +525,63 @@ void EditorApp::drawPropertiesPanel()
         char name[128];
         std::strncpy(name, e.name.c_str(), sizeof(name));
         name[sizeof(name) - 1] = '\0';
-        if (ImGui::InputText("Name", name, sizeof(name))) {
-            e.name = name;
-            scene_.modified = true;
+
+        // Capture value before edit starts
+        static std::string nameSnapshot;
+        if (ImGui::IsItemActivated()) nameSnapshot = e.name;
+
+        ImGui::InputText("Name", name, sizeof(name));
+        if (ImGui::IsItemActivated())
+            nameSnapshot = e.name;
+        if (ImGui::IsItemDeactivatedAfterEdit()) {
+            std::string newName(name);
+            if (newName != nameSnapshot) {
+                auto cmd = std::make_unique<EditPropertyCommand>(
+                    e.id, PropertyTarget::Name,
+                    PropertyValue{nameSnapshot},
+                    PropertyValue{newName});
+                commandStack_.execute(std::move(cmd), scene_, world_);
+            }
         }
 
         ImGui::Text("Type: %s",
             e.type == EntityData::Type::Player ? "Player" : "Enemy");
 
-        if (ImGui::DragFloat("X", &e.x, 0.1f, 0.f, (float)WORLD_W))
-            scene_.modified = true;
-        if (ImGui::DragFloat("Y", &e.y, 0.1f, 0.f, (float)WORLD_H))
-            scene_.modified = true;
+        // X position
+        {
+            static float xSnapshot = 0.f;
+            if (ImGui::DragFloat("X", &e.x, 0.1f, 0.f, (float)WORLD_W)) {
+                scene_.modified = true;
+            }
+            if (ImGui::IsItemActivated())  xSnapshot = e.x;
+            if (ImGui::IsItemDeactivatedAfterEdit() && e.x != xSnapshot) {
+                float newX = e.x;
+                e.x = xSnapshot;   // restore so apply() sets newX
+                auto cmd = std::make_unique<EditPropertyCommand>(
+                    e.id, PropertyTarget::PosX,
+                    PropertyValue{xSnapshot},
+                    PropertyValue{newX});
+                commandStack_.execute(std::move(cmd), scene_, world_);
+            }
+        }
+
+        // Y position
+        {
+            static float ySnapshot = 0.f;
+            if (ImGui::DragFloat("Y", &e.y, 0.1f, 0.f, (float)WORLD_H)) {
+                scene_.modified = true;
+            }
+            if (ImGui::IsItemActivated())  ySnapshot = e.y;
+            if (ImGui::IsItemDeactivatedAfterEdit() && e.y != ySnapshot) {
+                float newY = e.y;
+                e.y = ySnapshot;
+                auto cmd = std::make_unique<EditPropertyCommand>(
+                    e.id, PropertyTarget::PosY,
+                    PropertyValue{ySnapshot},
+                    PropertyValue{newY});
+                commandStack_.execute(std::move(cmd), scene_, world_);
+            }
+        }
 
         if (e.type == EntityData::Type::Player) {
             const char* classes[] = {"Warrior", "Mage", "Rogue", "Archer"};
@@ -542,8 +589,14 @@ void EditorApp::drawPropertiesPanel()
             for (int i = 0; i < 4; ++i)
                 if (e.charClass == classes[i]) { cur = i; break; }
             if (ImGui::Combo("Class", &cur, classes, 4)) {
-                e.charClass = classes[cur];
-                scene_.modified = true;
+                std::string oldClass = e.charClass;
+                std::string newClass = classes[cur];
+                e.charClass = oldClass;   // restore so apply() sets new
+                auto cmd = std::make_unique<EditPropertyCommand>(
+                    e.id, PropertyTarget::CharClass,
+                    PropertyValue{oldClass},
+                    PropertyValue{newClass});
+                commandStack_.execute(std::move(cmd), scene_, world_);
             }
         }
     }
@@ -694,6 +747,66 @@ void EditorApp::drawViewport()
                 handleToolClick(wx, wy);
             }
         }
+
+        // Entity drag-to-move (Select tool, Edit mode) ──────────────────────
+        if (editorMode_ == EditorMode::Edit && currentTool_ == Tool::Select &&
+            selectedEntityId_ != 0)
+        {
+            // Begin drag when left mouse button first pressed over entity
+            if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+                float wx, wy;
+                if (viewportScreenToWorld(mx, my, wx, wy)) {
+                    EntityData* ep = findEntityById(selectedEntityId_);
+                    if (ep) {
+                        float dx = ep->x - wx;
+                        float dy = ep->y - wy;
+                        if (std::sqrt(dx*dx + dy*dy) < 1.5f) {
+                            draggingEntity_ = true;
+                            dragStartX_ = ep->x;
+                            dragStartY_ = ep->y;
+                        }
+                    }
+                }
+            }
+
+            // While dragging: update position live (no command yet)
+            if (draggingEntity_ && ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+                float wx, wy;
+                if (viewportScreenToWorld(mx, my, wx, wy)) {
+                    EntityData* ep = findEntityById(selectedEntityId_);
+                    if (ep) {
+                        ep->x = wx;
+                        ep->y = wy;
+                    }
+                }
+                SDL_SetCursor(cursorMove_);
+            }
+
+            // On release: commit as a command (supports undo/redo)
+            if (draggingEntity_ && ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
+                EntityData* ep = findEntityById(selectedEntityId_);
+                if (ep) {
+                    float newX = ep->x;
+                    float newY = ep->y;
+                    // Only create command if position actually changed
+                    if (newX != dragStartX_ || newY != dragStartY_) {
+                        // Restore original so command apply() sets the new pos
+                        ep->x = dragStartX_;
+                        ep->y = dragStartY_;
+                        auto cmd = std::make_unique<MoveEntityCommand>(
+                            selectedEntityId_,
+                            dragStartX_, dragStartY_,
+                            newX, newY);
+                        commandStack_.execute(std::move(cmd), scene_, world_);
+                    }
+                }
+                draggingEntity_ = false;
+            }
+        }
+
+        // Cancel drag if focus lost
+        if (!ImGui::IsMouseDown(ImGuiMouseButton_Left))
+            draggingEntity_ = false;
 
         // Continuous painting while dragging (Edit mode only)
         if (editorMode_ == EditorMode::Edit &&
