@@ -3,10 +3,18 @@
 #include "stb_image.h"
 #include "stb_image_write.h"
 #include "AppPaths.h"
+#include "SceneData.h"
+#include "CommandStack.h"
+#include "AddComponentCommand.h"
+#include "EditComponentFieldCommand.h"
+#include "Reflection.h"
+#include "World.h"
+#include "TextureCache.h"
+#include "IsoRenderer.h"
+#include "SpriteOps.h"
 #include <imgui.h>
 #include <SDL2/SDL.h>
 #include <cstring>
-#include <queue>
 #include <algorithm>
 #include <cmath>
 #include <filesystem>
@@ -18,6 +26,54 @@
 
 namespace fs = std::filesystem;
 using json = nlohmann::json;
+
+const char* SpriteEditorPanel::anchorToString(SpriteAnchor a)
+{
+    switch (a) {
+        case SpriteAnchor::TopLeft:      return "TopLeft";
+        case SpriteAnchor::TopCenter:    return "TopCenter";
+        case SpriteAnchor::TopRight:     return "TopRight";
+        case SpriteAnchor::MiddleLeft:   return "MiddleLeft";
+        case SpriteAnchor::Center:       return "Center";
+        case SpriteAnchor::MiddleRight:  return "MiddleRight";
+        case SpriteAnchor::BottomLeft:   return "BottomLeft";
+        case SpriteAnchor::BottomCenter: return "BottomCenter";
+        case SpriteAnchor::BottomRight:  return "BottomRight";
+        case SpriteAnchor::Custom:       return "Custom";
+    }
+    return "BottomCenter";
+}
+
+SpriteAnchor SpriteEditorPanel::anchorFromString(const std::string& s)
+{
+    if (s == "TopLeft")      return SpriteAnchor::TopLeft;
+    if (s == "TopCenter")    return SpriteAnchor::TopCenter;
+    if (s == "TopRight")     return SpriteAnchor::TopRight;
+    if (s == "MiddleLeft")   return SpriteAnchor::MiddleLeft;
+    if (s == "Center")       return SpriteAnchor::Center;
+    if (s == "MiddleRight")  return SpriteAnchor::MiddleRight;
+    if (s == "BottomLeft")   return SpriteAnchor::BottomLeft;
+    if (s == "BottomCenter") return SpriteAnchor::BottomCenter;
+    if (s == "BottomRight")  return SpriteAnchor::BottomRight;
+    if (s == "Custom")       return SpriteAnchor::Custom;
+    return SpriteAnchor::BottomCenter;
+}
+
+void SpriteEditorPanel::setPivotFromAnchor(SpriteAnchor a)
+{
+    switch (a) {
+        case SpriteAnchor::TopLeft:      pivotX_ = 0.f;  pivotY_ = 0.f;  break;
+        case SpriteAnchor::TopCenter:    pivotX_ = 0.5f; pivotY_ = 0.f;  break;
+        case SpriteAnchor::TopRight:     pivotX_ = 1.f;  pivotY_ = 0.f;  break;
+        case SpriteAnchor::MiddleLeft:   pivotX_ = 0.f;  pivotY_ = 0.5f; break;
+        case SpriteAnchor::Center:       pivotX_ = 0.5f; pivotY_ = 0.5f; break;
+        case SpriteAnchor::MiddleRight:  pivotX_ = 1.f;  pivotY_ = 0.5f; break;
+        case SpriteAnchor::BottomLeft:   pivotX_ = 0.f;  pivotY_ = 1.f;  break;
+        case SpriteAnchor::BottomCenter: pivotX_ = 0.5f; pivotY_ = 1.f;  break;
+        case SpriteAnchor::BottomRight:  pivotX_ = 1.f;  pivotY_ = 1.f;  break;
+        case SpriteAnchor::Custom: break;
+    }
+}
 
 // ─── Color helpers ────────────────────────────────────────────────────────────
 // SDL_PIXELFORMAT_ABGR8888 memory layout on little-endian:
@@ -171,10 +227,20 @@ void SpriteEditorPanel::newCanvas(int w, int h)
 {
     canvasW_ = w;
     canvasH_ = h;
-    pixels_.assign(static_cast<size_t>(w * h), 0u);  // fully transparent
+    composite_.assign(static_cast<size_t>(w * h), 0u);
+    layers_.clear();
+    SpriteLayer base;
+    base.name = "Layer 1";
+    base.pixels.assign(static_cast<size_t>(w * h), 0u);
+    layers_.push_back(std::move(base));
+    activeLayer_ = 0;
+    renamingLayer_ = -1;
     selX_ = selY_ = -1; selW_ = selH_ = 0;
     prevPixX_ = prevPixY_ = -1;
     dragging_ = false;
+    anchor_ = SpriteAnchor::BottomCenter;
+    pivotX_ = 0.5f;
+    pivotY_ = 1.0f;
     currentPath.clear();
     rebuildTexture();
 }
@@ -197,16 +263,107 @@ void SpriteEditorPanel::uploadToGPU()
     if (!canvasTex_) return;
     void* ptr; int pitch;
     if (SDL_LockTexture(canvasTex_, nullptr, &ptr, &pitch) == 0) {
-        // pitch is in bytes; canvasW_ * 4 bytes per row
         for (int y = 0; y < canvasH_; ++y) {
             auto* dst = reinterpret_cast<uint32_t*>(
                 static_cast<uint8_t*>(ptr) + y * pitch);
-            const auto* src = pixels_.data() + y * canvasW_;
+            const auto* src = composite_.data() + y * canvasW_;
             std::memcpy(dst, src, static_cast<size_t>(canvasW_) * 4);
         }
         SDL_UnlockTexture(canvasTex_);
     }
     dirty_ = false;
+}
+
+// ─── Layer composition (D41) ──────────────────────────────────────────────────
+// Porter-Duff src-over in ABGR8888, with per-layer opacity pre-multiplied into alpha.
+uint32_t SpriteEditorPanel::alphaOver(uint32_t dst, uint32_t src, float opacity)
+{
+    return SpriteOps::alphaOver(dst, src, opacity);
+}
+
+void SpriteEditorPanel::compositeLayers()
+{
+    std::fill(composite_.begin(), composite_.end(), 0u);
+    for (const auto& layer : layers_) {
+        if (!layer.visible) continue;
+        const int count = canvasW_ * canvasH_;
+        for (int i = 0; i < count; ++i)
+            composite_[static_cast<size_t>(i)] =
+                alphaOver(composite_[static_cast<size_t>(i)],
+                          layer.pixels[static_cast<size_t>(i)],
+                          layer.opacity);
+    }
+    dirty_ = true;
+}
+
+// ─── Layer management (D41) ───────────────────────────────────────────────────
+void SpriteEditorPanel::addLayer()
+{
+    if (static_cast<int>(layers_.size()) >= 8) return;
+    SpriteLayer nl;
+    nl.name = "Layer " + std::to_string(layers_.size() + 1);
+    nl.pixels.assign(static_cast<size_t>(canvasW_ * canvasH_), 0u);
+    // insert above active
+    int insertPos = activeLayer_ + 1;
+    layers_.insert(layers_.begin() + insertPos, std::move(nl));
+    activeLayer_ = insertPos;
+    compositeLayers();
+}
+
+void SpriteEditorPanel::deleteActiveLayer()
+{
+    if (layers_.size() <= 1) return;
+    layers_.erase(layers_.begin() + activeLayer_);
+    if (activeLayer_ >= static_cast<int>(layers_.size()))
+        activeLayer_ = static_cast<int>(layers_.size()) - 1;
+    compositeLayers();
+}
+
+void SpriteEditorPanel::moveLayerUp()
+{
+    if (activeLayer_ + 1 >= static_cast<int>(layers_.size())) return;
+    std::swap(layers_[static_cast<size_t>(activeLayer_)],
+              layers_[static_cast<size_t>(activeLayer_ + 1)]);
+    ++activeLayer_;
+    compositeLayers();
+}
+
+void SpriteEditorPanel::moveLayerDown()
+{
+    if (activeLayer_ <= 0) return;
+    std::swap(layers_[static_cast<size_t>(activeLayer_)],
+              layers_[static_cast<size_t>(activeLayer_ - 1)]);
+    --activeLayer_;
+    compositeLayers();
+}
+
+void SpriteEditorPanel::mergeLayerDown()
+{
+    if (activeLayer_ <= 0 || layers_.size() < 2) return;
+    auto& top = layers_[static_cast<size_t>(activeLayer_)];
+    auto& bot = layers_[static_cast<size_t>(activeLayer_ - 1)];
+    const int count = canvasW_ * canvasH_;
+    for (int i = 0; i < count; ++i)
+        bot.pixels[static_cast<size_t>(i)] =
+            alphaOver(bot.pixels[static_cast<size_t>(i)],
+                      top.pixels[static_cast<size_t>(i)],
+                      top.opacity);
+    bot.opacity = std::max(bot.opacity, top.opacity);
+    layers_.erase(layers_.begin() + activeLayer_);
+    --activeLayer_;
+    compositeLayers();
+}
+
+void SpriteEditorPanel::flattenAll()
+{
+    compositeLayers();
+    layers_.clear();
+    SpriteLayer flat;
+    flat.name   = "Layer 1";
+    flat.pixels = composite_;
+    layers_.push_back(std::move(flat));
+    activeLayer_ = 0;
+    compositeLayers();
 }
 
 void SpriteEditorPanel::buildCheckerboard()
@@ -229,18 +386,20 @@ void SpriteEditorPanel::buildCheckerboard()
     SDL_UpdateTexture(checkerTex_, nullptr, pixels, SZ * 2 * 4);
 }
 
-// ─── Pixel primitives ─────────────────────────────────────────────────────────
+// ─── Pixel primitives (operate on ACTIVE LAYER) ──────────────────────────────
 void SpriteEditorPanel::setPixel(int x, int y, uint32_t color)
 {
     if (!inBounds(x, y)) return;
-    pixels_[static_cast<size_t>(y * canvasW_ + x)] = color;
+    if (activeLayer_ < 0 || activeLayer_ >= static_cast<int>(layers_.size())) return;
+    layers_[static_cast<size_t>(activeLayer_)].pixels[static_cast<size_t>(y * canvasW_ + x)] = color;
     dirty_ = true;
 }
 
 uint32_t SpriteEditorPanel::getPixel(int x, int y) const
 {
     if (!inBounds(x, y)) return 0u;
-    return pixels_[static_cast<size_t>(y * canvasW_ + x)];
+    if (activeLayer_ < 0 || activeLayer_ >= static_cast<int>(layers_.size())) return 0u;
+    return layers_[static_cast<size_t>(activeLayer_)].pixels[static_cast<size_t>(y * canvasW_ + x)];
 }
 
 // ─── Tool implementations (pure pixel logic) ─────────────────────────────────
@@ -260,37 +419,21 @@ void SpriteEditorPanel::applyEraser(int x, int y)
 
 void SpriteEditorPanel::applyFill(int x, int y)
 {
-    if (!inBounds(x, y)) return;
-    uint32_t target = getPixel(x, y);
-    if (target == fgColor_) return;
-
-    std::queue<std::pair<int,int>> q;
-    q.push({x, y});
-    while (!q.empty()) {
-        auto [cx, cy] = q.front(); q.pop();
-        if (!inBounds(cx, cy) || getPixel(cx, cy) != target) continue;
-        setPixel(cx, cy, fgColor_);
-        q.push({cx+1, cy}); q.push({cx-1, cy});
-        q.push({cx, cy+1}); q.push({cx, cy-1});
-    }
+    if (activeLayer_ < 0 || activeLayer_ >= static_cast<int>(layers_.size())) return;
+    SpriteOps::floodFill(layers_[static_cast<size_t>(activeLayer_)].pixels,
+                         canvasW_, canvasH_, x, y, fgColor_);
+    dirty_ = true;
 }
 
 void SpriteEditorPanel::applyLine(int x0, int y0, int x1, int y1, uint32_t color)
 {
-    // Bresenham
-    int dx = std::abs(x1 - x0), dy = std::abs(y1 - y0);
-    int sx = (x0 < x1) ? 1 : -1;
-    int sy = (y0 < y1) ? 1 : -1;
-    int err = dx - dy;
-    while (true) {
-        for (int dy2 = 0; dy2 < brushSize_; ++dy2)
-            for (int dx2 = 0; dx2 < brushSize_; ++dx2)
-                setPixel(x0 + dx2, y0 + dy2, color);
-        if (x0 == x1 && y0 == y1) break;
-        int e2 = 2 * err;
-        if (e2 > -dy) { err -= dy; x0 += sx; }
-        if (e2 <  dx) { err += dx; y0 += sy; }
-    }
+    if (activeLayer_ < 0 || activeLayer_ >= static_cast<int>(layers_.size())) return;
+    auto& dst = layers_[static_cast<size_t>(activeLayer_)].pixels;
+    for (int dy = 0; dy < brushSize_; ++dy)
+        for (int dx = 0; dx < brushSize_; ++dx)
+            SpriteOps::drawLine(dst, canvasW_, canvasH_,
+                                x0 + dx, y0 + dy, x1 + dx, y1 + dy, color);
+    dirty_ = true;
 }
 
 void SpriteEditorPanel::applyRect(int x0, int y0, int x1, int y1, bool filled)
@@ -337,7 +480,7 @@ void SpriteEditorPanel::drawGrid(ImDrawList* dl, ImVec2 orig, float cell, int co
 // ─── Toolbar (tool buttons + brush size) ──────────────────────────────────────
 void SpriteEditorPanel::drawToolbar()
 {
-    auto toolBtn = [&](const char* label, SpriteTool t) {
+    auto toolBtn = [&](const char* label, SpriteTool t, const char* tip) {
         bool active = (currentTool_ == t);
         if (active) ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
         if (ImGui::Button(label, {36, 32})) {
@@ -345,17 +488,17 @@ void SpriteEditorPanel::drawToolbar()
             currentTool_ = t;
         }
         if (active) ImGui::PopStyleColor();
-        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", label);
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", tip);
         ImGui::SameLine();
     };
 
-    toolBtn(ICON_FA_PENCIL,       SpriteTool::Pencil);
-    toolBtn(ICON_FA_ERASER,       SpriteTool::Eraser);
-    toolBtn(ICON_FA_FILL_DRIP,    SpriteTool::Fill);
-    toolBtn(ICON_FA_EYE_DROPPER,  SpriteTool::Eyedropper);
-    toolBtn(ICON_FA_MINUS,        SpriteTool::Line);
-    toolBtn(ICON_FA_SQUARE,       SpriteTool::Rect);
-    toolBtn(ICON_FA_OBJECT_GROUP, SpriteTool::Select);
+    toolBtn(ICON_FA_PENCIL,       SpriteTool::Pencil,     "Pencil (P)");
+    toolBtn(ICON_FA_ERASER,       SpriteTool::Eraser,     "Eraser (E)");
+    toolBtn(ICON_FA_FILL_DRIP,    SpriteTool::Fill,       "Fill (G)");
+    toolBtn(ICON_FA_EYE_DROPPER,  SpriteTool::Eyedropper, "Eyedropper (I)");
+    toolBtn(ICON_FA_MINUS,        SpriteTool::Line,       "Line (L)");
+    toolBtn(ICON_FA_SQUARE,       SpriteTool::Rect,       "Rectangle (R)");
+    toolBtn(ICON_FA_OBJECT_GROUP, SpriteTool::Select,     "Select (S)");
 
     ImGui::SameLine(0, 12);
     ImGui::SetNextItemWidth(80);
@@ -496,6 +639,21 @@ void SpriteEditorPanel::drawCanvasArea()
     // Sprite image
     ImGui::Image(reinterpret_cast<ImTextureID>(canvasTex_), {cw, ch});
     bool hovered = ImGui::IsItemHovered();
+    if (hovered) {
+        switch (currentTool_) {
+            case SpriteTool::Pencil:
+            case SpriteTool::Eraser:
+            case SpriteTool::Fill:
+            case SpriteTool::Eyedropper:
+            case SpriteTool::Line:
+            case SpriteTool::Rect:
+                ImGui::SetMouseCursor(ImGuiMouseCursor_Arrow);
+                break;
+            case SpriteTool::Select:
+                ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+                break;
+        }
+    }
 
     ImVec2 mpos = ImGui::GetMousePos();
     int pixX = static_cast<int>((mpos.x - origin.x) / zoom_);
@@ -705,24 +863,513 @@ void SpriteEditorPanel::drawSaveModal()
         if (ImGui::Button("Save", {80,0})) {
             std::string outPath = AppPaths::getResourcesDir()
                 + "/assets/sprites/" + saveNameBuf_ + ".png";
-            // Convert ABGR→RGBA for stb
-            std::vector<uint8_t> rgba(static_cast<size_t>(canvasW_ * canvasH_ * 4));
-            for (int i = 0; i < canvasW_ * canvasH_; ++i) {
-                uint32_t px = pixels_[static_cast<size_t>(i)];
-                rgba[static_cast<size_t>(i*4+0)] = (px >>  0) & 0xFF; // R
-                rgba[static_cast<size_t>(i*4+1)] = (px >>  8) & 0xFF; // G
-                rgba[static_cast<size_t>(i*4+2)] = (px >> 16) & 0xFF; // B
-                rgba[static_cast<size_t>(i*4+3)] = (px >> 24) & 0xFF; // A
-            }
-            if (stbi_write_png(outPath.c_str(), canvasW_, canvasH_, 4,
-                                rgba.data(), canvasW_ * 4))
+            if (saveAsPNG(outPath)) {
                 currentPath = outPath;
+                TextureCache::instance().invalidate(renderer_, outPath);
+                if (pendingCloseAfterSave_) {
+                    pendingCloseAfterSave_ = false;
+                    dirty_ = false;
+                    isOpen = false;
+                }
+            }
             ImGui::CloseCurrentPopup();
         }
         ImGui::SameLine();
         if (ImGui::Button("Cancel", {80,0})) ImGui::CloseCurrentPopup();
         ImGui::EndPopup();
     }
+}
+
+void SpriteEditorPanel::drawCloseConfirmModal()
+{
+    if (showCloseConfirm_) {
+        ImGui::OpenPopup("Unsaved Sprite##closeConfirm");
+        showCloseConfirm_ = false;
+    }
+    if (ImGui::BeginPopupModal("Unsaved Sprite##closeConfirm", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::TextUnformatted("Save changes before closing Sprite Editor?");
+        ImGui::Spacing();
+
+        if (ImGui::Button("Save", {90, 0})) {
+            if (!currentPath.empty()) {
+                if (saveAsPNG(currentPath)) {
+                    TextureCache::instance().invalidate(renderer_, currentPath);
+                    dirty_ = false;
+                    isOpen = false;
+                    pendingCloseAfterSave_ = false;
+                }
+            } else {
+                showSaveModal_ = true;
+                pendingCloseAfterSave_ = true;
+            }
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Discard", {90, 0})) {
+            dirty_ = false;
+            pendingCloseAfterSave_ = false;
+            isOpen = false;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel", {90, 0})) {
+            pendingCloseAfterSave_ = false;
+            isOpen = true;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+}
+
+// ─── Save / Load helpers (D42) ───────────────────────────────────────────────
+bool SpriteEditorPanel::saveAsPNG(const std::string& path)
+{
+    compositeLayers();
+    std::vector<uint8_t> rgba(static_cast<size_t>(canvasW_ * canvasH_ * 4));
+    for (int i = 0; i < canvasW_ * canvasH_; ++i) {
+        uint32_t px = composite_[static_cast<size_t>(i)];
+        rgba[static_cast<size_t>(i*4+0)] = (px >>  0) & 0xFF;  // R
+        rgba[static_cast<size_t>(i*4+1)] = (px >>  8) & 0xFF;  // G
+        rgba[static_cast<size_t>(i*4+2)] = (px >> 16) & 0xFF;  // B
+        rgba[static_cast<size_t>(i*4+3)] = (px >> 24) & 0xFF;  // A
+    }
+    std::error_code ec;
+    fs::create_directories(fs::path(path).parent_path(), ec);
+    bool pngOk = stbi_write_png(path.c_str(), canvasW_, canvasH_, 4,
+                                rgba.data(), canvasW_ * 4) != 0;
+    if (!pngOk) return false;
+    return saveSpriteMeta(path);
+}
+
+bool SpriteEditorPanel::saveSpriteMeta(const std::string& pngPath) const
+{
+    fs::path metaPath = fs::path(pngPath).replace_extension(".sprite.json");
+    std::error_code ec;
+    fs::create_directories(metaPath.parent_path(), ec);
+
+    json j;
+    j["anchor"] = anchorToString(anchor_);
+    j["pivotX"] = pivotX_;
+    j["pivotY"] = pivotY_;
+
+    std::ofstream out(metaPath);
+    if (!out) return false;
+    out << j.dump(2);
+    return true;
+}
+
+void SpriteEditorPanel::loadSpriteMeta(const std::string& pngPath)
+{
+    anchor_ = SpriteAnchor::BottomCenter;
+    pivotX_ = 0.5f;
+    pivotY_ = 1.0f;
+
+    fs::path metaPath = fs::path(pngPath).replace_extension(".sprite.json");
+    std::ifstream in(metaPath);
+    if (!in) return;
+
+    try {
+        json j;
+        in >> j;
+        if (j.contains("anchor") && j["anchor"].is_string())
+            anchor_ = anchorFromString(j["anchor"].get<std::string>());
+        if (j.contains("pivotX") && j["pivotX"].is_number())
+            pivotX_ = j["pivotX"].get<float>();
+        if (j.contains("pivotY") && j["pivotY"].is_number())
+            pivotY_ = j["pivotY"].get<float>();
+    } catch (...) {
+        // Keep defaults if metadata is invalid.
+    }
+
+    pivotX_ = std::clamp(pivotX_, 0.f, 1.f);
+    pivotY_ = std::clamp(pivotY_, 0.f, 1.f);
+}
+
+bool SpriteEditorPanel::loadFromPNG(const std::string& path)
+{
+    int w = 0, h = 0, ch = 0;
+    unsigned char* data = stbi_load(path.c_str(), &w, &h, &ch, 4);  // force RGBA
+    if (!data) return false;
+
+    canvasW_ = w;
+    canvasH_ = h;
+    composite_.assign(static_cast<size_t>(w * h), 0u);
+
+    layers_.clear();
+    SpriteLayer base;
+    base.name = fs::path(path).stem().string();
+    base.pixels.resize(static_cast<size_t>(w * h));
+
+    // stb_image returns RGBA; SDL texture is ABGR8888 → repack
+    for (int i = 0; i < w * h; ++i) {
+        uint32_t r = data[i*4+0], g = data[i*4+1],
+                 b = data[i*4+2], a = data[i*4+3];
+        base.pixels[static_cast<size_t>(i)] =
+            (a << 24) | (b << 16) | (g << 8) | r;
+    }
+    stbi_image_free(data);
+    layers_.push_back(std::move(base));
+    activeLayer_ = 0;
+    renamingLayer_ = -1;
+    selX_ = selY_ = -1; selW_ = selH_ = 0;
+    prevPixX_ = prevPixY_ = -1;
+    dragging_ = false;
+    currentPath = path;
+    loadSpriteMeta(path);
+    rebuildTexture();
+    compositeLayers();
+    return true;
+}
+
+void SpriteEditorPanel::drawIsoPreviewPanel()
+{
+    if (!ImGui::CollapsingHeader("Iso Preview", ImGuiTreeNodeFlags_DefaultOpen)) return;
+
+    ImGui::TextDisabled("Anchor");
+    static const struct { SpriteAnchor a; const char* label; } kAnchors[] = {
+        {SpriteAnchor::TopLeft, "TL"}, {SpriteAnchor::TopCenter, "TC"}, {SpriteAnchor::TopRight, "TR"},
+        {SpriteAnchor::MiddleLeft, "ML"}, {SpriteAnchor::Center, "C"}, {SpriteAnchor::MiddleRight, "MR"},
+        {SpriteAnchor::BottomLeft, "BL"}, {SpriteAnchor::BottomCenter, "BC"}, {SpriteAnchor::BottomRight, "BR"},
+    };
+
+    for (int i = 0; i < 9; ++i) {
+        bool selected = (anchor_ == kAnchors[i].a);
+        if (selected) ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
+        if (ImGui::Button(kAnchors[i].label, {30, 24})) {
+            anchor_ = kAnchors[i].a;
+            setPivotFromAnchor(anchor_);
+        }
+        if (selected) ImGui::PopStyleColor();
+        if ((i % 3) != 2) ImGui::SameLine();
+    }
+
+    ImGui::SameLine(0, 12);
+    bool custom = (anchor_ == SpriteAnchor::Custom);
+    if (custom) ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
+    if (ImGui::Button("Custom", {72, 24})) anchor_ = SpriteAnchor::Custom;
+    if (custom) ImGui::PopStyleColor();
+
+    if (anchor_ == SpriteAnchor::Custom) {
+        ImGui::SetNextItemWidth(200);
+        if (ImGui::InputFloat2("Pivot", &pivotX_)) {
+            pivotX_ = std::clamp(pivotX_, 0.f, 1.f);
+            pivotY_ = std::clamp(pivotY_, 0.f, 1.f);
+        }
+    } else {
+        ImGui::TextDisabled("Pivot: (%.2f, %.2f)", pivotX_, pivotY_);
+    }
+
+    if (ImGui::Button("Snap to tile bottom")) {
+        anchor_ = SpriteAnchor::BottomCenter;
+        setPivotFromAnchor(anchor_);
+    }
+
+    const char* bgItems[] = {"Checker", "Black", "White"};
+    int bg = static_cast<int>(previewBg_);
+    ImGui::SetNextItemWidth(120);
+    if (ImGui::Combo("Background", &bg, bgItems, 3)) {
+        previewBg_ = static_cast<PreviewBg>(bg);
+    }
+
+    auto drawIsoPreview = [&](const char* id, float scale) {
+        ImGui::Text("%s", id);
+        ImVec2 size = {180.f, 140.f};
+        ImGui::BeginChild(id, size, true, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        ImVec2 p0 = ImGui::GetCursorScreenPos();
+        ImVec2 p1 = {p0.x + size.x - 8.f, p0.y + size.y - 8.f};
+
+        if (previewBg_ == PreviewBg::Checker && checkerTex_) {
+            dl->AddImage(reinterpret_cast<ImTextureID>(checkerTex_), p0, p1,
+                         {0, 0}, {(p1.x - p0.x) / 16.f, (p1.y - p0.y) / 16.f});
+        } else {
+            ImU32 bgCol = (previewBg_ == PreviewBg::Black)
+                        ? IM_COL32(20, 20, 20, 255)
+                        : IM_COL32(240, 240, 240, 255);
+            dl->AddRectFilled(p0, p1, bgCol);
+        }
+
+        const float cx = (p0.x + p1.x) * 0.5f;
+        const float cy = (p0.y + p1.y) * 0.62f;
+        const float hw = (TILE_W * 0.5f) * scale;
+        const float hh = (TILE_H * 0.5f) * scale;
+
+        ImVec2 poly[4] = {
+            {cx,      cy - hh},
+            {cx + hw, cy},
+            {cx,      cy + hh},
+            {cx - hw, cy},
+        };
+        dl->AddConvexPolyFilled(poly, 4, IM_COL32(88, 104, 84, 220));
+        dl->AddPolyline(poly, 4, IM_COL32(200, 220, 200, 220), ImDrawFlags_Closed, 1.5f);
+
+        if (canvasTex_) {
+            float sw = canvasW_ * scale;
+            float sh = canvasH_ * scale;
+            float x0 = cx - pivotX_ * sw;
+            float y0 = cy - pivotY_ * sh;
+            dl->AddImage(reinterpret_cast<ImTextureID>(canvasTex_),
+                        {x0, y0}, {x0 + sw, y0 + sh});
+            dl->AddCircleFilled({cx, cy}, 2.5f, IM_COL32(255, 80, 80, 255));
+        }
+
+        ImGui::EndChild();
+    };
+
+    drawIsoPreview("2x", 2.f);
+    ImGui::SameLine();
+    drawIsoPreview("4x", 4.f);
+}
+
+// ─── Open modal (D42) ────────────────────────────────────────────────────────
+void SpriteEditorPanel::drawOpenModal()
+{
+    if (showOpenModal_) {
+        ImGui::OpenPopup("Open Sprite##modal");
+        showOpenModal_ = false;
+        // Enumerate sprites/
+        spriteFiles_.clear();
+        selectedSpriteIdx_ = -1;
+        std::string spritesDir;
+        if (assetsRoot)
+            spritesDir = *assetsRoot + "/sprites";
+        else
+            spritesDir = AppPaths::getResourcesDir() + "/assets/sprites";
+
+        std::error_code ec;
+        for (auto& entry : fs::directory_iterator(spritesDir, ec)) {
+            if (entry.is_regular_file() && entry.path().extension() == ".png")
+                spriteFiles_.push_back(entry.path().string());
+        }
+        std::sort(spriteFiles_.begin(), spriteFiles_.end());
+    }
+
+    if (ImGui::BeginPopupModal("Open Sprite##modal", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::Text("Select a sprite from assets/sprites/:");
+        ImGui::SetNextItemWidth(320);
+
+        if (ImGui::BeginListBox("##spritelist", {320, 200})) {
+            for (int i = 0; i < static_cast<int>(spriteFiles_.size()); ++i) {
+                std::string label = fs::path(spriteFiles_[static_cast<size_t>(i)]).filename().string();
+                if (ImGui::Selectable(label.c_str(), selectedSpriteIdx_ == i))
+                    selectedSpriteIdx_ = i;
+                if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0)) {
+                    // Double-click = open directly
+                    loadFromPNG(spriteFiles_[static_cast<size_t>(i)]);
+                    ImGui::CloseCurrentPopup();
+                }
+            }
+            ImGui::EndListBox();
+        }
+
+        bool canOpen = selectedSpriteIdx_ >= 0
+                       && selectedSpriteIdx_ < static_cast<int>(spriteFiles_.size());
+        if (!canOpen) ImGui::BeginDisabled();
+        if (ImGui::Button("Open", {80, 0})) {
+            loadFromPNG(spriteFiles_[static_cast<size_t>(selectedSpriteIdx_)]);
+            ImGui::CloseCurrentPopup();
+        }
+        if (!canOpen) ImGui::EndDisabled();
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel", {80, 0})) ImGui::CloseCurrentPopup();
+        ImGui::EndPopup();
+    }
+}
+
+// ─── Assign to entity panel (D42) ────────────────────────────────────────────
+void SpriteEditorPanel::drawAssignPanel()
+{
+    if (!showAssignPanel_) return;
+
+    ImGui::SetNextWindowSize({320, 240}, ImGuiCond_FirstUseEver);
+    if (!ImGui::Begin(ICON_FA_LINK " Assign Sprite##assign", &showAssignPanel_)) {
+        ImGui::End(); return;
+    }
+
+    // Need a saved sprite and a selected entity
+    if (currentPath.empty()) {
+        ImGui::TextDisabled("Save the sprite first, then assign.");
+        ImGui::End(); return;
+    }
+    if (!selectedEntityId || *selectedEntityId == 0) {
+        ImGui::TextDisabled("Select an entity in the Hierarchy first.");
+        ImGui::End(); return;
+    }
+    if (!scene || !commandStack || !world) {
+        ImGui::TextDisabled("Editor context not connected.");
+        ImGui::End(); return;
+    }
+
+    std::string spriteName = fs::path(currentPath).stem().string();
+    ImGui::Text("Sprite:  %s", spriteName.c_str());
+    ImGui::Separator();
+
+    // Find selected entity
+    EntityData* ent = nullptr;
+    for (auto& e : scene->entities)
+        if (e.id == *selectedEntityId) { ent = &e; break; }
+
+    if (!ent) {
+        ImGui::TextDisabled("Entity #%llu not found in scene.",
+                            static_cast<unsigned long long>(*selectedEntityId));
+        ImGui::End(); return;
+    }
+
+    ImGui::Text("Entity:  %s  [id=%llu]",
+                ent->name.c_str(),
+                static_cast<unsigned long long>(ent->id));
+
+    // Check for existing RenderComponent
+    bool hasRender = false;
+    std::string currentSprite;
+    for (auto& comp : ent->components) {
+        if (getVariantType(comp) == ComponentType::Render) {
+            hasRender      = true;
+            currentSprite  = std::get<RenderComponent>(comp).sprite;
+            break;
+        }
+    }
+    if (hasRender)
+        ImGui::TextDisabled("Current sprite: \"%s\"", currentSprite.c_str());
+    else
+        ImGui::TextColored({1.f, 0.6f, 0.f, 1.f}, "No RenderComponent (will be added)");
+
+    ImGui::Spacing();
+    if (ImGui::Button("Assign##exec", {140, 0})) {
+        // 1. Add RenderComponent if missing
+        if (!hasRender) {
+            commandStack->execute(
+                std::make_unique<AddComponentCommand>(*selectedEntityId, RenderComponent{}),
+                *scene, *world);
+        }
+
+        // 2. Re-find entity (scene may have been modified by AddComponentCommand)
+        EntityData* ent2 = nullptr;
+        for (auto& e : scene->entities)
+            if (e.id == *selectedEntityId) { ent2 = &e; break; }
+
+        if (ent2) {
+            // 3. Get sprite field offset via reflection
+            const auto& meta = getComponentMeta(ComponentType::Render);
+            for (const auto& prop : meta.properties) {
+                if (prop.name != "sprite") continue;
+
+                // Read old value from entity (now guaranteed to have RenderComponent)
+                PropertyValue oldVal = std::string("default");
+                for (auto& comp : ent2->components) {
+                    if (getVariantType(comp) != ComponentType::Render) continue;
+                    void* ptr = std::visit([off = prop.offset](auto& c) -> void* {
+                        return reinterpret_cast<char*>(&c) + off;
+                    }, comp);
+                    oldVal = readFieldValue(ptr, PropertyType::String);
+                    break;
+                }
+
+                // 4. Push edit command
+                commandStack->execute(
+                    std::make_unique<EditComponentFieldCommand>(
+                        *selectedEntityId, ComponentType::Render,
+                        prop.offset, PropertyType::String,
+                        oldVal, std::string(spriteName), "sprite"),
+                    *scene, *world);
+                break;
+            }
+        }
+
+        // 5. Invalidate texture cache so viewport reloads the sprite
+        TextureCache::instance().invalidate(renderer_, currentPath);
+    }
+
+    ImGui::End();
+}
+
+// ─── Layers panel (D41) ───────────────────────────────────────────────────────
+void SpriteEditorPanel::drawLayersPanel()
+{
+    ImGui::SetNextWindowSize({240, 300}, ImGuiCond_FirstUseEver);
+    if (!ImGui::Begin(ICON_FA_LAYER_GROUP " Layers##layers", nullptr, ImGuiWindowFlags_None)) {
+        ImGui::End(); return;
+    }
+    // Action buttons
+    bool canAdd    = static_cast<int>(layers_.size()) < 8;
+    bool canDelete = layers_.size() > 1;
+    bool canUp     = activeLayer_ + 1 < static_cast<int>(layers_.size());
+    bool canDown   = activeLayer_ > 0;
+    bool canMerge  = activeLayer_ > 0;
+
+    if (!canAdd) ImGui::BeginDisabled();
+    if (ImGui::SmallButton("+##addlayer"))   addLayer();
+    if (!canAdd) ImGui::EndDisabled();
+    ImGui::SameLine();
+    if (!canDelete) ImGui::BeginDisabled();
+    if (ImGui::SmallButton("-##dellayer"))   deleteActiveLayer();
+    if (!canDelete) ImGui::EndDisabled();
+    ImGui::SameLine();
+    if (!canUp) ImGui::BeginDisabled();
+    if (ImGui::SmallButton("^##moveup"))     moveLayerUp();
+    if (!canUp) ImGui::EndDisabled();
+    ImGui::SameLine();
+    if (!canDown) ImGui::BeginDisabled();
+    if (ImGui::SmallButton("v##movedown"))   moveLayerDown();
+    if (!canDown) ImGui::EndDisabled();
+    ImGui::SameLine();
+    if (!canMerge) ImGui::BeginDisabled();
+    if (ImGui::SmallButton("M##merge"))      mergeLayerDown();
+    if (!canMerge) ImGui::EndDisabled();
+    ImGui::SameLine();
+    if (ImGui::SmallButton("F##flatten"))    flattenAll();
+
+    ImGui::Separator();
+
+    // Layer list (top of vector = top of stack — draw reversed so topmost is first)
+    for (int i = static_cast<int>(layers_.size()) - 1; i >= 0; --i) {
+        auto& layer = layers_[static_cast<size_t>(i)];
+        bool  isActive = (i == activeLayer_);
+
+        // Visibility toggle
+        ImGui::PushID(i);
+        bool vis = layer.visible;
+        if (ImGui::Checkbox("##vis", &vis)) {
+            layer.visible = vis;
+            compositeLayers();
+        }
+        ImGui::SameLine();
+
+        // Selectable row — click to set active layer
+        if (ImGui::Selectable(layer.name.c_str(), isActive,
+                              ImGuiSelectableFlags_AllowDoubleClick)) {
+            activeLayer_ = i;
+            if (ImGui::IsMouseDoubleClicked(0)) {
+                renamingLayer_ = i;
+                std::snprintf(renameLayerBuf_, sizeof(renameLayerBuf_),
+                              "%s", layer.name.c_str());
+            }
+        }
+
+        // Inline rename
+        if (renamingLayer_ == i) {
+            ImGui::SetNextItemWidth(-1);
+            if (ImGui::InputText("##rename", renameLayerBuf_, sizeof(renameLayerBuf_),
+                                 ImGuiInputTextFlags_EnterReturnsTrue
+                                 | ImGuiInputTextFlags_AutoSelectAll)) {
+                layer.name      = renameLayerBuf_;
+                renamingLayer_  = -1;
+            }
+            if (!ImGui::IsItemActive() && !ImGui::IsItemHovered())
+                renamingLayer_ = -1;
+        }
+
+        ImGui::SameLine();
+        // Opacity slider (shows float 0-1 as 0-100%)
+        float op = layer.opacity * 100.f;
+        ImGui::SetNextItemWidth(60);
+        if (ImGui::SliderFloat("##op", &op, 0.f, 100.f, "%.0f%%")) {
+            layer.opacity = op / 100.f;
+            compositeLayers();
+        }
+        ImGui::PopID();
+    }
+    ImGui::End();
 }
 
 // ─── Main draw ────────────────────────────────────────────────────────────────
@@ -739,27 +1386,34 @@ void SpriteEditorPanel::draw()
     ImGui::SetNextWindowSize({720, 500}, ImGuiCond_FirstUseEver);
     if (!ImGui::Begin(title.c_str(), &isOpen)) {
         ImGui::End();
+        if (!isOpen && dirty_) {
+            isOpen = true;
+            showCloseConfirm_ = true;
+        }
+        drawCloseConfirmModal();
         return;
+    }
+
+    if (!isOpen && dirty_) {
+        isOpen = true;
+        showCloseConfirm_ = true;
     }
 
     // ── Top bar ──────────────────────────────────────────────────────────────
     if (ImGui::Button(ICON_FA_FILE " New"))        showNewModal_ = true;
     ImGui::SameLine();
+    if (ImGui::Button(ICON_FA_FOLDER_OPEN " Open")) showOpenModal_ = true;
+    ImGui::SameLine();
     if (ImGui::Button(ICON_FA_FLOPPY_DISK " Save")) {
-        if (currentPath.empty()) showSaveModal_ = true;
-        else {
-            std::vector<uint8_t> rgba(static_cast<size_t>(canvasW_ * canvasH_ * 4));
-            for (int i = 0; i < canvasW_ * canvasH_; ++i) {
-                uint32_t px = pixels_[static_cast<size_t>(i)];
-                rgba[static_cast<size_t>(i*4+0)] = (px >>  0) & 0xFF;
-                rgba[static_cast<size_t>(i*4+1)] = (px >>  8) & 0xFF;
-                rgba[static_cast<size_t>(i*4+2)] = (px >> 16) & 0xFF;
-                rgba[static_cast<size_t>(i*4+3)] = (px >> 24) & 0xFF;
-            }
-            stbi_write_png(currentPath.c_str(), canvasW_, canvasH_, 4,
-                           rgba.data(), canvasW_ * 4);
+        if (currentPath.empty()) {
+            showSaveModal_ = true;
+        } else {
+            if (saveAsPNG(currentPath))
+                TextureCache::instance().invalidate(renderer_, currentPath);
         }
     }
+    ImGui::SameLine();
+    if (ImGui::Button(ICON_FA_LINK " Assign")) showAssignPanel_ = !showAssignPanel_;
     ImGui::SameLine();
     // Zoom combo
     ImGui::SetNextItemWidth(70);
@@ -774,6 +1428,10 @@ void SpriteEditorPanel::draw()
     }
     ImGui::SameLine(0, 16);
     ImGui::TextDisabled("%d × %d px", canvasW_, canvasH_);
+    if (canvasTex_) {
+        ImGui::SameLine(0, 16);
+        ImGui::Image(reinterpret_cast<ImTextureID>(canvasTex_), {64, 64});
+    }
 
     ImGui::Separator();
 
@@ -787,12 +1445,21 @@ void SpriteEditorPanel::draw()
     // ── Canvas area ──────────────────────────────────────────────────────────
     drawCanvasArea();
 
+    ImGui::Separator();
+    drawIsoPreviewPanel();
+
+    // ── Layers panel ─────────────────────────────────────────────────────────
+    drawLayersPanel();
+
     // ── Modals ───────────────────────────────────────────────────────────────
     drawNewModal();
     drawSaveModal();
+    drawOpenModal();       // D42
+    drawAssignPanel();     // D42
+    drawCloseConfirmModal(); // D45
 
-    // ── Upload dirty pixels ───────────────────────────────────────────────────
-    if (dirty_) uploadToGPU();
+    // ── Composite + upload ────────────────────────────────────────────────────
+    if (dirty_) { compositeLayers(); uploadToGPU(); }
 
     ImGui::End();
 }

@@ -6,6 +6,12 @@
 #include <array>
 #include <deque>
 
+// Forward declarations for D42 integration
+struct SceneData;
+class CommandStack;
+class ImportManager;
+class World;
+
 // ─────────────────────────────────────────────────────────────────────────────
 // SpriteEditorPanel — pixel-art sprite editor integrated in the editor UI.
 //
@@ -13,6 +19,7 @@
 // D38: Pencil, Eraser, Flood-fill, Eyedropper tools.
 // D39: Line, Rect, Select + copy/paste.
 // D40: FG/BG color, 32-color palette, color history.
+// D41: Layers with alpha-over composition.
 // ─────────────────────────────────────────────────────────────────────────────
 
 enum class SpriteTool {
@@ -25,6 +32,21 @@ enum class SpriteTool {
     Select,
 };
 
+enum class SpriteAnchor {
+    TopLeft, TopCenter, TopRight,
+    MiddleLeft, Center, MiddleRight,
+    BottomLeft, BottomCenter, BottomRight,
+    Custom,
+};
+
+// ── Layer ─────────────────────────────────────────────────────────────────────
+struct SpriteLayer {
+    std::string           name    = "Layer";
+    std::vector<uint32_t> pixels;   // canvasW * canvasH, ABGR8888
+    float                 opacity = 1.f;
+    bool                  visible = true;
+};
+
 class SpriteEditorPanel {
 public:
     SpriteEditorPanel() = default;
@@ -34,8 +56,15 @@ public:
     void draw();
 
     // External access (set by EditorApp so Assign button works)
-    uint64_t*   selectedEntityId = nullptr;   // pointer into EditorApp
-    std::string currentPath;                  // full path to the open PNG
+    uint64_t*     selectedEntityId = nullptr;   // pointer into EditorApp
+    SceneData*    scene            = nullptr;   // for Assign panel
+    CommandStack* commandStack     = nullptr;   // for undoable Assign
+    World*        world            = nullptr;   // for command execution
+    ImportManager* importManager   = nullptr;   // for post-save reimport
+    std::string*  assetsRoot       = nullptr;   // e.g. "/path/to/assets"
+    std::string*  libraryRoot      = nullptr;   // for reimport
+
+    std::string currentPath;                   // full path to the open PNG
 
     bool isOpen = false;
 
@@ -49,8 +78,12 @@ private:
     int   canvasH_ = 16;
     float zoom_    = 16.f;   // screen pixels per canvas pixel
 
-    // ── Pixel buffer (ABGR8888, SDL_PIXELFORMAT_ABGR8888) ────────────────────
-    std::vector<uint32_t> pixels_;   // size = canvasW_ * canvasH_
+    // ── Layers (D41) ──────────────────────────────────────────────────────────
+    std::vector<SpriteLayer> layers_;
+    int activeLayer_ = 0;
+
+    // ── Composite buffer — result of all visible layers blended (sent to GPU) ─
+    std::vector<uint32_t> composite_;   // size = canvasW_ * canvasH_
     bool dirty_ = false;
 
     // ── Tools ─────────────────────────────────────────────────────────────────
@@ -82,6 +115,27 @@ private:
     char saveNameBuf_[128] = "sprite";
     bool showSaveModal_  = false;
 
+    // ── Open-sprite modal (D42) ───────────────────────────────────────────────
+    bool showOpenModal_  = false;
+    std::vector<std::string> spriteFiles_;   // populated when modal opens
+    int  selectedSpriteIdx_ = -1;
+
+    // ── Assign-to-entity panel (D42) ─────────────────────────────────────────
+    bool showAssignPanel_ = false;
+    bool showCloseConfirm_ = false;
+    bool pendingCloseAfterSave_ = false;
+
+    // ── D44: Iso preview + anchor metadata ──────────────────────────────────
+    SpriteAnchor anchor_ = SpriteAnchor::BottomCenter;
+    float pivotX_ = 0.5f;   // normalized [0..1] inside sprite width
+    float pivotY_ = 1.0f;   // normalized [0..1] inside sprite height
+    enum class PreviewBg { Checker, Black, White };
+    PreviewBg previewBg_ = PreviewBg::Checker;
+
+    // ── Layer inline-edit state ───────────────────────────────────────────────
+    int  renamingLayer_  = -1;
+    char renameLayerBuf_[64] = {};
+
     // ── Checkerboard (alpha background) ──────────────────────────────────────
     SDL_Texture* checkerTex_ = nullptr;
 
@@ -91,13 +145,39 @@ private:
     void uploadToGPU();
     void buildCheckerboard();
 
+    // Composition (D41)
+    void compositeLayers();
+    static uint32_t alphaOver(uint32_t dst, uint32_t src, float opacity);
+
+    // Layer management (D41)
+    void addLayer();
+    void deleteActiveLayer();
+    void moveLayerUp();
+    void moveLayerDown();
+    void mergeLayerDown();
+    void flattenAll();
+
     // Drawing
     void drawToolbar();
     void drawColorSection();
     void drawCanvasArea();
+    void drawLayersPanel();
     void drawGrid(ImDrawList* dl, ImVec2 origin, float cell, int cols, int rows) const;
     void drawNewModal();
     void drawSaveModal();
+    void drawOpenModal();       // D42
+    void drawAssignPanel();     // D42
+    void drawCloseConfirmModal(); // D45
+    void drawIsoPreviewPanel(); // D44
+
+    // Save / Load helpers (D42)
+    bool saveAsPNG(const std::string& path);
+    bool loadFromPNG(const std::string& path);
+    bool saveSpriteMeta(const std::string& pngPath) const;
+    void loadSpriteMeta(const std::string& pngPath);
+    static const char* anchorToString(SpriteAnchor a);
+    static SpriteAnchor anchorFromString(const std::string& s);
+    void setPivotFromAnchor(SpriteAnchor a);
 
     // Tools
     void applyPencil(int x, int y);
@@ -107,7 +187,7 @@ private:
     void applyRect(int x0, int y0, int x1, int y1, bool filled);
     void bakeGeometryDrag(int x1, int y1);
 
-    // Pixel helpers
+    // Pixel helpers — operate on the ACTIVE LAYER
     void setPixel(int x, int y, uint32_t color);
     uint32_t getPixel(int x, int y) const;
     bool inBounds(int x, int y) const { return x >= 0 && x < canvasW_ && y >= 0 && y < canvasH_; }

@@ -10,15 +10,7 @@ Prerequisito: Sprint 3 (D31-D35) completado. Font Awesome 6 integrado.
 
 ### To Do
 
-- D37 — Canvas: buffer STREAMING + render + zoom
-- D38 — Herramientas 1: Lápiz, Borrador, Relleno (flood-fill), Cuentagotas
-- D39 — Herramientas 2: Línea, Rectángulo, Selección + copy/paste
-- D40 — Paleta de colores + historial de colores usados
-- D41 — Capas: add/delete/reorder/visibility/opacity
-- D42 — Exportación PNG + integración RenderComponent
-- D43 — SpriteImporter + AssetDatabase hook
-- D44 — Preview isométrico en viewport + alineación de tiles
-- D45 — Tests + pulido + cierre
+(vacío)
 
 ### Doing
 
@@ -27,6 +19,15 @@ Prerequisito: Sprint 3 (D31-D35) completado. Font Awesome 6 integrado.
 ### Done
 
 - D36 — Infraestructura: stb + TextureCache + SpriteAsset ✅
+- D37 — Canvas: buffer STREAMING + render + zoom ✅
+- D38 — Herramientas 1: Lápiz, Borrador, Relleno (flood-fill), Cuentagotas ✅
+- D39 — Herramientas 2: Línea, Rectángulo, Selección + copy/paste ✅
+- D40 — Paleta de colores + historial de colores usados ✅
+- D41 — Capas: add/delete/reorder/visibility/opacity ✅
+- D42 — Exportación PNG + integración RenderComponent ✅
+- D43 — SpriteImporter + AssetDatabase hook ✅
+- D44 — Preview isométrico en viewport + alineación de tiles ✅
+- D45 — Tests + pulido + cierre ✅
 
 ---
 
@@ -604,11 +605,11 @@ struct SpriteLayer {
 - [x] Dia 38 | ID: D38 | Plan: 6h | Real: ~2h | Bloqueos: — | Resultado: Lápiz/Borrador/Fill/Cuentagotas con interacción por píxel, arrastre continuo con Bresenham.
 - [x] Dia 39 | ID: D39 | Plan: 6h | Real: ~1h | Bloqueos: — | Resultado: Line/Rect/Select con preview, copy/paste interno, delete y shortcuts de herramientas.
 - [x] Dia 40 | ID: D40 | Plan: 4h | Real: ~2h | Bloqueos: — | Resultado: picker inline + alpha, paleta editable de 32, historial de 16, import/export `default_palette.json`.
-- [ ] Dia 41 | ID: D41 | Plan: 7h | Real: — | Bloqueos: — | Resultado: —
-- [ ] Dia 42 | ID: D42 | Plan: 5h | Real: — | Bloqueos: — | Resultado: —
-- [ ] Dia 43 | ID: D43 | Plan: 5h | Real: — | Bloqueos: — | Resultado: —
-- [ ] Dia 44 | ID: D44 | Plan: 5h | Real: — | Bloqueos: — | Resultado: —
-- [ ] Dia 45 | ID: D45 | Plan: 5h | Real: — | Bloqueos: — | Resultado: —
+- [x] Dia 41 | ID: D41 | Plan: 7h | Real: 7h | Bloqueos: — | Resultado: Sistema de capas completo; SpriteLayer struct, Porter-Duff alphaOver, compositeLayers, add/delete/reorder/merge/flatten, UI panel con visibility+opacity, build 0 warnings ✅
+- [x] Dia 42 | ID: D42 | Plan: 5h | Real: ~2h | Bloqueos: forward decl class/struct mismatch (resuelto) | Resultado: saveAsPNG, loadFromPNG, Open modal, Assign panel (AddComponent+EditField undoable), TextureCache invalidate post-save. Build 0 warnings ✅
+- [x] Dia 43 | ID: D43 | Plan: 5h | Real: ~2h | Bloqueos: linker por glob de CMake (resuelto con reconfigure) | Resultado: SpriteImporter registrado, inferAssetType detecta sprites/, render en viewport con TextureCache + fallback, clear en shutdown, preview 64x64. Build 0 warnings ✅
+- [x] Dia 44 | ID: D44 | Plan: 5h | Real: ~3h | Bloqueos: Build_CMakeTools no disponible en entorno (resuelto con cmake+make) | Resultado: Iso Preview 2x/4x con tile de referencia, grid de anchor 3x3 + Custom pivot + snap bottom + fondo selectable, guardado/carga de metadata .sprite.json, viewport usa pivot al renderizar sprites. Build 0 warnings ✅
+- [x] Dia 45 | ID: D45 | Plan: 5h | Real: ~3h | Bloqueos: warning linkage de stb en test nuevo (resuelto vinculando stb_impl.cpp) | Resultado: SpriteOps extraído (floodFill/drawLine/alphaOver), test_sprite_editor con 10 casos, pulido UI (tooltips+shortcuts, cursor por herramienta, confirmación al cerrar con cambios), ctest 14/14 passing, build limpio ✅
 
 **Total estimado: 54 horas (10 días a ~5-6h/día)**
 

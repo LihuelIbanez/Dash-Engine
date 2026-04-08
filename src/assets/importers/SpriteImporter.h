@@ -1,17 +1,15 @@
 #pragma once
-#include <string>
+#include "IImporter.h"
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SpriteAsset — describes a sprite file tracked by AssetDatabase.
-// The source PNG lives at assets/sprites/<name>.png.
-// Metadata (anchor, pivot) is stored alongside as <name>.sprite.json.
+// SpriteImporter — copies PNG sprite files to library/sprites/<guid>.png
+//                  and registers them in AssetDatabase as AssetType::Sprite.
 // ─────────────────────────────────────────────────────────────────────────────
-struct SpriteAsset {
-    std::string guid;
-    std::string sourcePath;   // relative: assets/sprites/<name>.png
-    int         width  = 16;
-    int         height = 16;
-    std::string anchor = "BottomCenter";
-    float       pivotX = 0.5f;
-    float       pivotY = 1.0f;
+class SpriteImporter : public IImporter {
+public:
+    ImportResult import(const std::string& sourcePath,
+                        const std::string& outputPath,
+                        AssetRecord& record) override;
+
+    AssetType assetType() const override { return AssetType::Sprite; }
 };

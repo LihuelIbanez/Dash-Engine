@@ -14,9 +14,9 @@ Este directorio separa las tareas por semana para ejecutar el escalado del edito
 | 4 - Produccion/QA | ✅ Completada | D18-D20 completados |
 | Sprint 2 - Features Avanzadas | ✅ Completada | D21-D30 completados, tag v2.0-alpha |
 | Sprint 3 - Polish & Ship | 🔧 En progreso | D31-D35 pendientes |
-| Sprint 4 - Sprite Editor | 🔧 En progreso | D36-D40 completados |
+| Sprint 4 - Sprite Editor | ✅ Completada | D36-D45 completados |
 
-**Proximo paso:** D41 - Capas (add/delete/reorder/visibilidad/opacidad)
+**Proximo paso:** Iniciar nuevo sprint/roadmap post-Sprite Editor (pendiente de definicion).
 
 ## Funcionalidades ya implementadas (fuera del plan)
 
@@ -34,7 +34,8 @@ El proyecto ya cuenta con una base funcional significativa:
 - ContentValidator con ValidationPanel
 - EventDispatcher tipado (DamageEvent/DeathEvent/LevelUpEvent/HealthChangeEvent)
 - Inspector generico con reflection y undo/redo de componentes
-- 11 suites de tests automatizados (ctest)
+- Sprite Editor completo con preview isometrico y metadatos de pivot (.sprite.json)
+- 14 suites de tests automatizados (ctest)
 
 ## Orden recomendado
 
