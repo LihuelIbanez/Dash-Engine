@@ -207,3 +207,58 @@ target_link_libraries(test_hot_reload PRIVATE
 )
 target_compile_options(test_hot_reload PRIVATE -Wall -Wextra -O2)
 add_test(NAME test_hot_reload COMMAND test_hot_reload)
+
+# ── SaveGame round-trip (D32) ─────────────────────────────────────────────────
+add_executable(test_save_game
+    test_save_game.cpp
+    ${CMAKE_SOURCE_DIR}/src/game/save/SaveGame.cpp
+    ${CMAKE_SOURCE_DIR}/src/game/save/SaveVersioning.cpp
+)
+target_include_directories(test_save_game PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/src/core
+    ${CMAKE_SOURCE_DIR}/src/entities
+    ${CMAKE_SOURCE_DIR}/src/world
+    ${CMAKE_SOURCE_DIR}/src/rendering
+    ${CMAKE_SOURCE_DIR}/src/game
+    ${CMAKE_SOURCE_DIR}/src/game/runtime
+    ${CMAKE_SOURCE_DIR}/src/game/systems
+    ${CMAKE_SOURCE_DIR}/src/game/data
+    ${CMAKE_SOURCE_DIR}/src/game/nav
+    ${CMAKE_SOURCE_DIR}/src/game/save
+    ${SDL2_INCLUDE_DIRS}
+)
+target_link_libraries(test_save_game PRIVATE
+    game_core nlohmann_json::nlohmann_json ${SDL2_LIBRARIES}
+)
+target_compile_options(test_save_game PRIVATE -Wall -Wextra -O2)
+add_test(NAME test_save_game COMMAND test_save_game)
+
+# ── GameplayDatabase loading (D32) ────────────────────────────────────────────
+add_executable(test_gameplay_database
+    test_gameplay_database.cpp
+    ${CMAKE_SOURCE_DIR}/src/game/data/GameplayDatabase.cpp
+)
+target_include_directories(test_gameplay_database PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/src/core
+    ${CMAKE_SOURCE_DIR}/src/entities
+    ${CMAKE_SOURCE_DIR}/src/world
+    ${CMAKE_SOURCE_DIR}/src/rendering
+    ${CMAKE_SOURCE_DIR}/src/game
+    ${CMAKE_SOURCE_DIR}/src/game/runtime
+    ${CMAKE_SOURCE_DIR}/src/game/systems
+    ${CMAKE_SOURCE_DIR}/src/game/data
+    ${CMAKE_SOURCE_DIR}/src/game/nav
+    ${CMAKE_SOURCE_DIR}/src/game/save
+    ${SDL2_INCLUDE_DIRS}
+)
+target_compile_definitions(test_gameplay_database PRIVATE
+    ASSETS_DIR="${CMAKE_SOURCE_DIR}/assets"
+)
+target_link_libraries(test_gameplay_database PRIVATE
+    game_core nlohmann_json::nlohmann_json ${SDL2_LIBRARIES}
+)
+target_compile_options(test_gameplay_database PRIVATE -Wall -Wextra -O2)
+add_test(NAME test_gameplay_database COMMAND test_gameplay_database)
+

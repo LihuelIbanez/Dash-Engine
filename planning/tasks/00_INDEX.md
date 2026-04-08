@@ -2,7 +2,7 @@
 
 Este directorio separa las tareas por semana para ejecutar el escalado del editor y del juego.
 
-**Ultima actualizacion: 2026-04-07**
+**Ultima actualizacion: 2026-04-08**
 
 ## Estado actual del sprint
 
@@ -12,9 +12,10 @@ Este directorio separa las tareas por semana para ejecutar el escalado del edito
 | 2 - Asset Pipeline | ✅ Completada | D07-D12 completados |
 | 3 - Runtime Systems | ✅ Completada | D13-D17 completados |
 | 4 - Produccion/QA | ✅ Completada | D18-D20 completados |
-| Sprint 2 - Features Avanzadas | 🔧 Pendiente | D21-D30 pendientes |
+| Sprint 2 - Features Avanzadas | ✅ Completada | D21-D30 completados, tag v2.0-alpha |
+| Sprint 3 - Polish & Ship | 🔧 En progreso | D31-D35 pendientes |
 
-**Proximo paso:** D21 - Sistema de eventos desacoplado
+**Proximo paso:** D31 - Rutas de bundle + infraestructura
 
 ## Funcionalidades ya implementadas (fuera del plan)
 
@@ -27,6 +28,12 @@ El proyecto ya cuenta con una base funcional significativa:
 - Scene serialization JSON (load/save con backward compat)
 - Juego standalone con: movimiento WASD + click-to-move, combate con cooldowns/criticos, sistema de clases RPG (4 arquetipos), enemigos con FSM (Idle/Patrol/Chase/Attack), HUD estilo Diablo 2, mundo procedural 64x64 con Perlin noise
 - Packaging macOS (.app bundle)
+- Sistema de prefabs con drag-drop desde AssetBrowser al viewport
+- Hot-reload de assets via FileWatcher
+- ContentValidator con ValidationPanel
+- EventDispatcher tipado (DamageEvent/DeathEvent/LevelUpEvent/HealthChangeEvent)
+- Inspector generico con reflection y undo/redo de componentes
+- 11 suites de tests automatizados (ctest)
 
 ## Orden recomendado
 
@@ -34,6 +41,8 @@ El proyecto ya cuenta con una base funcional significativa:
 2. Semana 2: Asset pipeline y base de importacion/caching.
 3. Semana 3: Runtime por sistemas y gameplay data-driven.
 4. Semana 4: Produccion, QA, testing y profiling.
+5. Sprint 2: Arquitectura de componentes, prefabs, hot-reload, validacion, packaging.
+6. Sprint 3: Bundle paths, Game Over, loot runtime, tests coverage, documentacion final.
 
 ## Archivos de trabajo
 
@@ -48,6 +57,9 @@ El proyecto ya cuenta con una base funcional significativa:
 - 06_SPRINT_2_FEATURES_AVANZADAS.md (tablero + registro diario)
 - 07_WEEK5_COMPONENT_ARCHITECTURE.md (D21-D25: eventos, comandos, componentes, registry, inspector)
 - 08_WEEK6_PRODUCTION_TOOLS.md (D26-D30: prefabs, hot-reload, validacion, packaging, cierre)
+
+### Sprint 3 (D31-D35)
+- 09_SPRINT3_POLISH_AND_SHIP.md (tablero + registro diario + specs por dia)
 
 ### General
 - 99_ACCEPTANCE_CHECKLIST.md

@@ -1,6 +1,7 @@
 #pragma once
 #include <cstdint>
 #include <string>
+#include <vector>
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Game events — plain data structs, no logic.
@@ -39,3 +40,16 @@ struct HealthChangeEvent {
     int      newHealth  = 0;
     int      maxHealth  = 0;
 };
+
+// Emitted when an enemy drops loot on death.
+struct LootDropEvent {
+    std::string enemyId;          // lowercase enemy id (e.g. "skeleton")
+    float       x = 0.f;
+    float       y = 0.f;
+    struct DroppedItem {
+        std::string item;
+        int         qty = 0;
+    };
+    std::vector<DroppedItem> items;
+};
+

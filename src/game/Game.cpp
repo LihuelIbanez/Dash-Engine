@@ -6,6 +6,7 @@
 #include "GameplayDatabase.h"
 #include "SaveGame.h"
 #include "Profiler.h"
+#include "AppPaths.h"
 #include <nlohmann/json.hpp>
 #include <fstream>
 #include <filesystem>
@@ -29,7 +30,7 @@ void Game::initSystems()
     scheduler_.addSystem(std::make_unique<MovementSystem>());
     scheduler_.addSystem(std::make_unique<AISystem>());
     scheduler_.addSystem(std::make_unique<CombatSystem>());
-    scheduler_.addSystem(std::make_unique<SpawnRewardSystem>());
+    scheduler_.addSystem(std::make_unique<SpawnRewardSystem>(&gameDb_));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -354,14 +355,14 @@ bool Game::init()
     running_ = true;
 
     // ── Saves directory ──────────────────────────────────────────────────────
-    savesDir_ = "saves";
+    savesDir_ = AppPaths::getSavesDir();
     std::filesystem::create_directories(savesDir_);
 
-    // ── Load world and scene data ────────────────────────────────────────────
+    // ── Load world and scene data ────────────────────────────────────────────────────
     worldSeed_ = 12345;
     std::srand(worldSeed_);
     world_.generate(worldSeed_);
-    gameDb_.load("assets");
+    gameDb_.load(AppPaths::getResourcesDir() + "/assets");
 
     if (!sceneFile_.empty() && loadSceneFile()) {
         std::printf("[Game] Loaded scene: %s\n", sceneFile_.c_str());
@@ -415,14 +416,15 @@ bool Game::initEmbedded(SDL_Renderer* renderer)
     renderer_ = renderer;
     embedded_ = true;
     running_  = true;
+    gameState_ = GameState::Playing; // skip title screen when hosted by editor
 
-    savesDir_ = "saves";
+    savesDir_ = AppPaths::getSavesDir();
     std::filesystem::create_directories(savesDir_);
 
     worldSeed_ = 12345;
     std::srand(worldSeed_);
     world_.generate(worldSeed_);
-    gameDb_.load("assets");
+    gameDb_.load(AppPaths::getResourcesDir() + "/assets");
 
     if (!sceneFile_.empty() && loadSceneFile()) {
         std::printf("[Game] Embedded: loaded scene %s\n", sceneFile_.c_str());
@@ -507,6 +509,33 @@ void Game::processEvents()
             running_ = false; return;
         }
 
+        // ── Title screen navigation ──────────────────────────────────────
+        if (gameState_ == GameState::Title) {
+            if (ev.type == SDL_KEYDOWN) {
+                if (ev.key.keysym.sym == SDLK_UP || ev.key.keysym.sym == SDLK_w)
+                    selectedClass_ = (selectedClass_ + 3) % 4;
+                if (ev.key.keysym.sym == SDLK_DOWN || ev.key.keysym.sym == SDLK_s)
+                    selectedClass_ = (selectedClass_ + 1) % 4;
+                if (ev.key.keysym.sym == SDLK_RETURN || ev.key.keysym.sym == SDLK_SPACE) {
+                    applySelectedClass();
+                    gameState_ = GameState::Playing;
+                }
+            }
+            continue;
+        }
+
+        // ── Game Over navigation ─────────────────────────────────────────
+        if (gameState_ == GameState::GameOver) {
+            if (ev.type == SDL_KEYDOWN &&
+                (ev.key.keysym.sym == SDLK_RETURN || ev.key.keysym.sym == SDLK_SPACE)) {
+                restartGame();
+                gameState_ = GameState::Playing;
+            }
+            continue;
+        }
+
+        // ── Playing: existing controls ───────────────────────────────────
+
         // F5 = Quick save, F9 = Quick load
         if (ev.type == SDL_KEYDOWN && ev.key.keysym.sym == SDLK_F5) {
             saveGame(savesDir_ + "/quicksave.json");
@@ -550,6 +579,9 @@ void Game::processEvents()
 void Game::update(float dt)
 {
     auto s = Profiler::instance().scope("Update");
+
+    if (gameState_ != GameState::Playing) return;
+
     ctx_.dt      = dt;
     ctx_.running = running_;
 
@@ -557,6 +589,10 @@ void Game::update(float dt)
     dispatcher_.flush();
 
     running_ = ctx_.running;
+
+    // Detect player death → Game Over
+    if (player_.health <= 0)
+        gameState_ = GameState::GameOver;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -565,6 +601,15 @@ void Game::update(float dt)
 void Game::render()
 {
     auto s = Profiler::instance().scope("Render");
+
+    if (gameState_ == GameState::Title) {
+        SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 255);
+        SDL_RenderClear(renderer_);
+        renderTitleScreen();
+        SDL_RenderPresent(renderer_);
+        return;
+    }
+
     // Very dark background — Diablo's near-black
     SDL_SetRenderDrawColor(renderer_, 8, 6, 4, 255);
     SDL_RenderClear(renderer_);
@@ -580,7 +625,118 @@ void Game::render()
     player_.draw(renderer_, camX, camY);
 
     renderHUD();
+
+    if (gameState_ == GameState::GameOver)
+        renderGameOverScreen();
+
     SDL_RenderPresent(renderer_);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Game state: Title / Playing / Game Over helpers
+// ─────────────────────────────────────────────────────────────────────────────
+static constexpr const char* kClassNames[4] = {
+    "Warrior", "Mage", "Rogue", "Archer"
+};
+static constexpr const char* kClassIds[4] = {
+    "warrior", "mage", "rogue", "archer"
+};
+
+void Game::applySelectedClass()
+{
+    if (auto* cls = gameDb_.findPlayerClass(kClassIds[selectedClass_])) {
+        player_.stats.attack      = cls->attack;
+        player_.stats.defense     = cls->defense;
+        player_.stats.magicAttack = cls->magicAttack;
+        player_.stats.speed       = cls->speed;
+        player_.stats.critChance  = cls->critChance;
+        player_.maxHealth         = cls->maxHp;
+        player_.health            = cls->maxHp;
+        player_.maxMana           = cls->maxMana;
+        player_.mana              = cls->maxMana;
+        player_.attackCooldownMax = cls->attackCooldown;
+    }
+}
+
+void Game::restartGame()
+{
+    score_ = 0;
+    player_.stats.level      = 1;
+    player_.stats.experience = 0;
+    player_.stats.expToNextLevel = 100;
+    player_.x = static_cast<float>(WORLD_W) / 2.f;
+    player_.y = static_cast<float>(WORLD_H) / 2.f;
+    player_.hasTarget = false;
+
+    worldSeed_ = 12345;
+    std::srand(worldSeed_);
+    world_.generate(worldSeed_);
+
+    enemies_.clear();
+    applySelectedClass();
+    spawnEnemiesFromData();
+}
+
+void Game::renderTitleScreen()
+{
+    constexpr int CX = SCREEN_W / 2;
+
+    // Title
+    SDL_Color gold  = {220, 180, 60, 255};
+    SDL_Color white = {220, 210, 180, 255};
+    SDL_Color grey  = {120, 110, 80, 200};
+
+    const char* title = "DASH ENGINE RPG";
+    int tlen = 0; for (const char* p = title; *p; ++p) ++tlen;
+    renderString(CX - tlen * 6, SCREEN_H / 4, title, gold, 2);
+
+    const char* sub = "Select your class";
+    int slen = 0; for (const char* p = sub; *p; ++p) ++slen;
+    renderString(CX - slen * 3, SCREEN_H / 4 + 36, sub, grey, 1);
+
+    for (int i = 0; i < 4; ++i) {
+        int cy = SCREEN_H / 2 - 24 + i * 22;
+        SDL_Color col = (i == selectedClass_) ? white : grey;
+        if (i == selectedClass_) {
+            renderString(CX - 60, cy, ">", gold, 1);
+        }
+        const char* cls = kClassNames[i];
+        int clen = 0; for (const char* p = cls; *p; ++p) ++clen;
+        renderString(CX - clen * 3, cy, cls, col, 1);
+    }
+
+    const char* hint = "UP/DOWN to select  ENTER to start";
+    int hlen = 0; for (const char* p = hint; *p; ++p) ++hlen;
+    renderString(CX - hlen * 3, SCREEN_H * 3 / 4, hint, grey, 1);
+}
+
+void Game::renderGameOverScreen()
+{
+    // Semi-transparent dark overlay
+    SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(renderer_, 80, 0, 0, 180);
+    SDL_Rect overlay { 0, 0, SCREEN_W, gameViewH() };
+    SDL_RenderFillRect(renderer_, &overlay);
+
+    constexpr int CX = SCREEN_W / 2;
+    constexpr int CY = SCREEN_H / 2;
+
+    SDL_Color red   = {220, 40, 40, 255};
+    SDL_Color white = {220, 210, 180, 255};
+    SDL_Color grey  = {140, 120, 80, 200};
+
+    const char* title = "GAME OVER";
+    int tlen = 0; for (const char* p = title; *p; ++p) ++tlen;
+    renderString(CX - tlen * 7, CY - 60, title, red, 2);
+
+    char scoreBuf[32];
+    std::snprintf(scoreBuf, sizeof(scoreBuf), "Score: %d", score_);
+    int slen = 0; for (const char* p = scoreBuf; *p; ++p) ++slen;
+    renderString(CX - slen * 3, CY - 10, scoreBuf, white, 1);
+
+    const char* hint = "ENTER to restart";
+    int hlen = 0; for (const char* p = hint; *p; ++p) ++hlen;
+    renderString(CX - hlen * 3, CY + 20, hint, grey, 1);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

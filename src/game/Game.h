@@ -66,6 +66,14 @@ private:
 
     std::string sceneFile_;         // optional: editor scene to play
 
+    // ── Game state machine ───────────────────────────────────────────────────
+    enum class GameState { Title, Playing, GameOver };
+    GameState gameState_    = GameState::Title;
+    int       selectedClass_ = 0;   // 0=Warrior,1=Mage,2=Rogue,3=Archer (title screen)
+
+    void applySelectedClass();      // apply selectedClass_ stats to player_
+    void restartGame();             // reset world + enemies + player
+
     // Diablo 2 HUD panel height (bottom strip)
     static constexpr int HUD_H       = 100;
     // Orb radius
@@ -82,8 +90,10 @@ private:
     void update(float dt);
     void render();
 
-    // --- HUD (Diablo 2 style) ------------------------------------------------
+    // --- HUD + game-state screens (Diablo 2 style) ---------------------------
     void renderHUD();
+    void renderTitleScreen();
+    void renderGameOverScreen();
     void renderOrb(int cx, int cy, int radius, float ratio,
                    SDL_Color fillCol, SDL_Color bgCol, const char* label);
     void renderString(int x, int y, const char* text, SDL_Color col, int scale = 2);

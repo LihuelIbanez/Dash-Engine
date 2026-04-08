@@ -2,48 +2,57 @@
 
 Usa este archivo para control de cierre por fase.
 
-**Ultima actualizacion: ver historial de Git/PR**
+**Ultima actualizacion: Sprint 2 completado — tag v2.0-alpha**
 
 ## Fase A - Editor Foundations
 
-- [x] Seleccion de entidad basada en EntityId estable. *(Implementado: EntityData.id uint64_t, nextEntityId, allocateEntityId(), selectedEntityId_ en EditorApp, findEntityById())*
-- [x] Undo/Redo global de escena (paint, place, erase, property edit). *(Implementado: ICommand + CommandStack + PaintTileCommand/PlaceEnemyCommand/EraseCommand. Cmd+Z/Shift+Z. Menu Edit. 200 niveles max.)*
-- [x] Escenas versionadas con validacion de carga. *(Implementado: sceneVersion field, kCurrentVersion=1, validacion JSON parse/bounds/types/player, loadErrors con mensajes detallados en Build Log)*
-- [x] Dirty state visible y protegido ante perdida de cambios. *(Implementado: modal Unsaved Changes con Save/Discard/Cancel, requestAction guard en New/Open/Exit/SDL_QUIT, titulo ventana con * en dirty)*
+- [x] Seleccion de entidad basada en EntityId estable. *(EntityData.id uint64_t, nextEntityId, allocateEntityId(), selectedEntityId_ en EditorApp, findEntityById())*
+- [x] Undo/Redo global de escena (paint, place, erase, property edit). *(ICommand + CommandStack + PaintTileCommand/PlaceEnemyCommand/EraseCommand. Cmd+Z/Shift+Z. Menu Edit. 200 niveles max.)*
+- [x] Escenas versionadas con validacion de carga. *(sceneVersion field, kCurrentVersion=1, validacion JSON, loadErrors en Build Log)*
+- [x] Dirty state visible y protegido ante perdida de cambios. *(modal Unsaved Changes con Save/Discard/Cancel, titulo ventana con * en dirty)*
 
 ## Fase B - Asset Pipeline
 
-- [ ] Asset Database persistente con GUID por recurso. *(No iniciado)*
-- [ ] Import incremental por hash/mtime. *(No iniciado)*
-- [ ] Asset browser con metadata y accion Reimport. *(No iniciado)*
-- [ ] Integracion estable de assets en editor sin crasheos. *(No iniciado)*
+- [x] Asset Database persistente con GUID por recurso. *(AssetDatabase.h/.cpp, asset_db.json con GUIDs, hash/mtime por asset — D08/D09)*
+- [x] Import incremental por hash/mtime. *(ImportManager, FileWatcher con hash incremental — D09/D27)*
+- [x] Asset browser con metadata y accion Reimport. *(AssetBrowserPanel con tabla tipo/guid/path, boton Reimport, hot-reload via menu — D09/D27)*
+- [x] Integracion estable de assets en editor sin crasheos. *(11/11 test suites passing en Release, 0 warnings — D30)*
 
 ## Fase C - Runtime Systems
 
-- [ ] Game update migrado a scheduler + sistemas. *(No iniciado — logica monolitica en Game.cpp)*
-- [ ] Gameplay configurable desde archivos de datos. *(No iniciado — stats hardcodeados en Character.cpp y Enemy.cpp)*
-- [ ] AI con pathfinding A* usando costos de terreno. *(No iniciado — enemigos usan persecucion directa)*
-- [ ] Paridad funcional mantenida respecto al comportamiento previo.
+- [x] Game update migrado a scheduler + sistemas. *(SystemScheduler, RuntimeContext, MovementSystem/AISystem/CombatSystem/SpawnRewardSystem — D15)*
+- [x] Gameplay configurable desde archivos de datos. *(GameplayDatabase carga player_classes.json, enemies.json, loot_tables.json; Enemy ctor data-driven — D16)*
+- [x] AI con pathfinding A* usando costos de terreno. *(GridNav A* con costos por TileType, AISystem usa pathfinding — D14)*
+- [x] Paridad funcional mantenida respecto al comportamiento previo. *(build standalone IsometricRPG funcional, sin regresiones — D30)*
 
 ## Fase D - Produccion y QA
 
-- [ ] Play mode con rollback exacto al estado de edicion. *(No iniciado)*
-- [ ] Save/load versionado con compatibilidad basica de versiones. *(No iniciado)*
-- [ ] Tests automatizados minimos corriendo desde CMake. *(No iniciado — no existe directorio tests/)*
-- [ ] Panel de rendimiento con metricas de frame y subsistemas. *(No iniciado)*
+- [x] Play mode con rollback exacto al estado de edicion. *(EditorApp guarda/restaura SceneSnapshot al entrar/salir de Play mode — D19)*
+- [x] Save/load versionado con compatibilidad basica de versiones. *(SaveGame.h/.cpp + SaveVersioning con migrate() v0→v1, F5/F9 quicksave — D18)*
+- [x] Tests automatizados minimos corriendo desde CMake. *(11 suites: scene_serialization, undo_redo, component_serialization, entity_registry, move_edit_commands, world_seed, pathfinding, prefab_system, content_validation, event_system, hot_reload — D20/D30)*
+- [x] Panel de rendimiento con metricas de frame y subsistemas. *(Profiler singleton con scope RAII, panel en editor (Profiler tab), metricas Update/Render/AI por frame — D20)*
 
 ## Cierre de ciclo
 
-- [ ] Documentacion tecnica actualizada tras cada fase.
-- [ ] Deuda tecnica registrada y priorizada para el siguiente sprint.
-- [ ] Version estable de DashEngine instalada y validada.
+- [x] Documentacion tecnica actualizada tras cada fase. *(README.md v2.0-alpha, SCALING_CHECKLIST.md Sprint 2 completado — D30)*
+- [x] Deuda tecnica registrada y priorizada para el siguiente sprint. *(09_SPRINT3_POLISH_AND_SHIP.md cubre bundle paths, Game Over, loot runtime, tests faltantes)*
+- [x] Version estable de DashEngine instalada y validada. *(packaging/install_app.sh ejecutado exitosamente, app en /Applications/DashEngine.app — D29)*
+
+## Sprint 3 — Polish & Ship
+
+- [ ] Bundle paths correctos en distribucion macOS (.app). *(AppPaths.h sin PROJECT_DIR — D31)*
+- [ ] Tests SaveGame y GameplayDatabase. *(13 suites total — D32)*
+- [ ] Game Over screen y pantalla de titulo con seleccion de clase. *(D33)*
+- [ ] Loot runtime: drops al matar enemigos via loot_tables.json. *(D34)*
 
 ## Resumen de avance
 
 | Fase | Completado | Total | % |
 |------|-----------|-------|---|
 | A - Editor Foundations | 4 | 4 | 100% |
-| B - Asset Pipeline | 0 | 4 | 0% |
-| C - Runtime Systems | 0 | 4 | 0% |
-| D - Produccion y QA | 0 | 4 | 0% |
-| **Total** | **4** | **16** | **25%** |
+| B - Asset Pipeline | 4 | 4 | 100% |
+| C - Runtime Systems | 4 | 4 | 100% |
+| D - Produccion y QA | 4 | 4 | 100% |
+| Sprint 3 - Polish | 0 | 4 | 0% |
+| **Total S1+S2** | **16** | **16** | **100%** |
+| **Total incluyendo S3** | **16** | **20** | **80%** |

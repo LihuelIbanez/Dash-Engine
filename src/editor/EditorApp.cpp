@@ -17,6 +17,7 @@
 #include "PlacePrefabCommand.h"
 #include "PrefabAsset.h"
 #include "Profiler.h"
+#include "AppPaths.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -106,14 +107,14 @@ bool EditorApp::init()
         SCREEN_W, SCREEN_H);
 
     // ── Scenes directory ─────────────────────────────────────────────────────
-    scenesDir_ = std::string(PROJECT_DIR) + "/scenes";
+    scenesDir_ = AppPaths::getResourcesDir() + "/scenes";
     fs::create_directories(scenesDir_);
 
     // ── File browser root ────────────────────────────────────────────────────
-    fileBrowserRoot_ = std::string(PROJECT_DIR) + "/src";
+    fileBrowserRoot_ = AppPaths::getResourcesDir() + "/src";
 
     // ── Asset Database ─────────────────────────────────────────────────────
-    assetDbPath_ = std::string(PROJECT_DIR) + "/assets/asset_db.json";
+    assetDbPath_ = AppPaths::getResourcesDir() + "/assets/asset_db.json";
     if (fs::exists(assetDbPath_)) {
         if (assetDb_.load(assetDbPath_))
             addLog("Asset DB loaded (" + std::to_string(assetDb_.records().size()) + " records).");
@@ -124,8 +125,8 @@ bool EditorApp::init()
     }
 
     // ── Initial asset import ─────────────────────────────────────────────────
-    assetsRoot_  = std::string(PROJECT_DIR) + "/assets";
-    libraryRoot_ = std::string(PROJECT_DIR) + "/library";
+    assetsRoot_  = AppPaths::getResourcesDir() + "/assets";
+    libraryRoot_ = AppPaths::getResourcesDir() + "/library";
     {
         std::vector<std::string> importErrors;
         int count = importManager_.importAll(assetsRoot_, libraryRoot_, assetDb_, importErrors);
