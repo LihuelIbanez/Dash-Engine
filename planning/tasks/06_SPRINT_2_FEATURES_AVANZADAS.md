@@ -8,7 +8,6 @@ Prerequisito: Sprint 1 (D01-D20) completado.
 
 ### To Do
 
-- [ ] D25 - Inspector generico con reflection (6h)
 - [ ] D26 - Sistema de prefabs/arquetipos (6h)
 - [ ] D27 - Hot-reload de assets (6h)
 - [ ] D28 - Herramientas de validacion de contenido (6h)
@@ -25,6 +24,7 @@ Prerequisito: Sprint 1 (D01-D20) completado.
 - [x] D22 - Comando MoveEntity + EditProperty (6h)
 - [x] D23 - Estructuras base de componentes (6h)
 - [x] D24 - EntityRegistry + migracion de datos (6h)
+- [x] D25 - Inspector generico con reflection (6h)
 
 ## Registro Diario de Ejecucion
 
@@ -32,7 +32,7 @@ Prerequisito: Sprint 1 (D01-D20) completado.
 - [x] Dia 22 | ID: D22 | Plan: 6h | Real: 6h | Bloqueos: — | Resultado: MoveEntityCommand + EditPropertyCommand implementados, drag-to-move en viewport, properties panel via comandos, test_move_edit_commands 5/5 passing
 - [x] Dia 23 | ID: D23 | Plan: 6h | Real: 6h | Bloqueos: — | Resultado: 7 componentes POD + ComponentSerialization JSON roundtrip, test_component_serialization 9/9 passing
 - [x] Dia 24 | ID: D24 | Plan: 6h | Real: 6h | Bloqueos: — | Resultado: EntityRegistry, SceneData v2 con components, migracion v1→v2, test_entity_registry 9/9 passing
-- [ ] Dia 25 | ID: D25 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __
+- [x] Dia 25 | ID: D25 | Plan: 6h | Real: 6h | Bloqueos: — | Resultado: Reflection.h/cpp con 7 metas, inspector genérico con DragFloat/DragInt/InputText/Checkbox/Combo, Add/Remove/EditComponentFieldCommand con undo/redo, 7/7 tests passing
 - [ ] Dia 26 | ID: D26 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __
 - [ ] Dia 27 | ID: D27 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __
 - [ ] Dia 28 | ID: D28 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __

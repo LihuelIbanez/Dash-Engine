@@ -9,6 +9,9 @@
 #include "EraseCommand.h"
 #include "MoveEntityCommand.h"
 #include "EditPropertyCommand.h"
+#include "EditComponentFieldCommand.h"
+#include "AddComponentCommand.h"
+#include "RemoveComponentCommand.h"
 #include "Profiler.h"
 
 #include <cstdio>
@@ -491,7 +494,7 @@ void EditorApp::drawPropertiesPanel()
 {
     ImGui::Begin("Properties");
 
-    // World settings (always visible)
+    // ── World settings (always visible) ──────────────────────────────────────
     if (ImGui::CollapsingHeader("World Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
         int seed = static_cast<int>(scene_.worldSeed);
         if (ImGui::InputInt("Seed", &seed)) {
@@ -521,67 +524,25 @@ void EditorApp::drawPropertiesPanel()
 
     auto& e = *ep;
 
+    // ── Entity header (EntityData-level fields) ───────────────────────────────
     if (ImGui::CollapsingHeader("Entity", ImGuiTreeNodeFlags_DefaultOpen)) {
-        char name[128];
-        std::strncpy(name, e.name.c_str(), sizeof(name));
-        name[sizeof(name) - 1] = '\0';
-
-        // Capture value before edit starts
-        static std::string nameSnapshot;
-        if (ImGui::IsItemActivated()) nameSnapshot = e.name;
-
-        ImGui::InputText("Name", name, sizeof(name));
-        if (ImGui::IsItemActivated())
-            nameSnapshot = e.name;
+        // Name
+        char nameBuf[128];
+        std::strncpy(nameBuf, e.name.c_str(), sizeof(nameBuf));
+        nameBuf[sizeof(nameBuf) - 1] = '\0';
+        static std::string nameSnap;
+        ImGui::InputText("Name", nameBuf, sizeof(nameBuf));
+        if (ImGui::IsItemActivated())            nameSnap = e.name;
         if (ImGui::IsItemDeactivatedAfterEdit()) {
-            std::string newName(name);
-            if (newName != nameSnapshot) {
-                auto cmd = std::make_unique<EditPropertyCommand>(
+            std::string nv(nameBuf);
+            if (nv != nameSnap)
+                commandStack_.execute(std::make_unique<EditPropertyCommand>(
                     e.id, PropertyTarget::Name,
-                    PropertyValue{nameSnapshot},
-                    PropertyValue{newName});
-                commandStack_.execute(std::move(cmd), scene_, world_);
-            }
+                    PropertyValue{nameSnap}, PropertyValue{nv}), scene_, world_);
         }
 
         ImGui::Text("Type: %s",
             e.type == EntityData::Type::Player ? "Player" : "Enemy");
-
-        // X position
-        {
-            static float xSnapshot = 0.f;
-            if (ImGui::DragFloat("X", &e.x, 0.1f, 0.f, (float)WORLD_W)) {
-                scene_.modified = true;
-            }
-            if (ImGui::IsItemActivated())  xSnapshot = e.x;
-            if (ImGui::IsItemDeactivatedAfterEdit() && e.x != xSnapshot) {
-                float newX = e.x;
-                e.x = xSnapshot;   // restore so apply() sets newX
-                auto cmd = std::make_unique<EditPropertyCommand>(
-                    e.id, PropertyTarget::PosX,
-                    PropertyValue{xSnapshot},
-                    PropertyValue{newX});
-                commandStack_.execute(std::move(cmd), scene_, world_);
-            }
-        }
-
-        // Y position
-        {
-            static float ySnapshot = 0.f;
-            if (ImGui::DragFloat("Y", &e.y, 0.1f, 0.f, (float)WORLD_H)) {
-                scene_.modified = true;
-            }
-            if (ImGui::IsItemActivated())  ySnapshot = e.y;
-            if (ImGui::IsItemDeactivatedAfterEdit() && e.y != ySnapshot) {
-                float newY = e.y;
-                e.y = ySnapshot;
-                auto cmd = std::make_unique<EditPropertyCommand>(
-                    e.id, PropertyTarget::PosY,
-                    PropertyValue{ySnapshot},
-                    PropertyValue{newY});
-                commandStack_.execute(std::move(cmd), scene_, world_);
-            }
-        }
 
         if (e.type == EntityData::Type::Player) {
             const char* classes[] = {"Warrior", "Mage", "Rogue", "Archer"};
@@ -591,14 +552,202 @@ void EditorApp::drawPropertiesPanel()
             if (ImGui::Combo("Class", &cur, classes, 4)) {
                 std::string oldClass = e.charClass;
                 std::string newClass = classes[cur];
-                e.charClass = oldClass;   // restore so apply() sets new
-                auto cmd = std::make_unique<EditPropertyCommand>(
+                e.charClass = oldClass;
+                commandStack_.execute(std::make_unique<EditPropertyCommand>(
                     e.id, PropertyTarget::CharClass,
-                    PropertyValue{oldClass},
-                    PropertyValue{newClass});
-                commandStack_.execute(std::move(cmd), scene_, world_);
+                    PropertyValue{oldClass}, PropertyValue{newClass}), scene_, world_);
             }
         }
+    }
+
+    // ── Generic component inspector ───────────────────────────────────────────
+    // Snapshot statics (only one field can be active at a time in ImGui)
+    static PropertyValue fieldSnap;
+    static bool          hasFieldSnap  = false;
+    static char          strBuf[256]   = {};
+    static std::string   strSnap;
+
+    // Track which component type to remove (deferred to avoid iterator invalidation)
+    ComponentType pendingRemove    = ComponentType::Transform;
+    bool          hasPendingRemove = false;
+
+    for (std::size_t ci = 0; ci < e.components.size(); ++ci) {
+        auto& comp = e.components[ci];
+        ComponentType ct = getVariantType(comp);
+        const ComponentMeta& meta = getComponentMeta(ct);
+
+        ImGui::PushID(static_cast<int>(ci));
+
+        // Header with small remove button at the right edge
+        bool sectionOpen = ImGui::CollapsingHeader(
+            meta.name.c_str(),
+            ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_AllowOverlap);
+        float btnW = ImGui::GetFrameHeight();
+        ImGui::SameLine(ImGui::GetContentRegionMax().x - btnW);
+        if (ImGui::SmallButton("x")) {
+            pendingRemove    = ct;
+            hasPendingRemove = true;
+        }
+
+        if (sectionOpen) {
+            for (const auto& prop : meta.properties) {
+                void* ptr = fieldPtr(comp, prop);
+                ImGui::PushID(prop.name.c_str());
+
+                switch (prop.type) {
+                case PropertyType::Float: {
+                    float* fptr = static_cast<float*>(ptr);
+                    ImGui::DragFloat(prop.name.c_str(), fptr, 0.05f);
+                    if (ImGui::IsItemActivated()) {
+                        fieldSnap    = *fptr;
+                        hasFieldSnap = true;
+                    }
+                    if (ImGui::IsItemDeactivatedAfterEdit() && hasFieldSnap) {
+                        float nv = *fptr;
+                        if (nv != std::get<float>(fieldSnap)) {
+                            *fptr = std::get<float>(fieldSnap);
+                            commandStack_.execute(
+                                std::make_unique<EditComponentFieldCommand>(
+                                    e.id, ct, prop.offset, prop.type,
+                                    fieldSnap, PropertyValue{nv}, prop.name),
+                                scene_, world_);
+                        }
+                        hasFieldSnap = false;
+                    }
+                    break;
+                }
+                case PropertyType::Int: {
+                    int* iptr = static_cast<int*>(ptr);
+                    ImGui::DragInt(prop.name.c_str(), iptr);
+                    if (ImGui::IsItemActivated()) {
+                        fieldSnap    = *iptr;
+                        hasFieldSnap = true;
+                    }
+                    if (ImGui::IsItemDeactivatedAfterEdit() && hasFieldSnap) {
+                        int nv = *iptr;
+                        if (nv != std::get<int>(fieldSnap)) {
+                            *iptr = std::get<int>(fieldSnap);
+                            commandStack_.execute(
+                                std::make_unique<EditComponentFieldCommand>(
+                                    e.id, ct, prop.offset, prop.type,
+                                    fieldSnap, PropertyValue{nv}, prop.name),
+                                scene_, world_);
+                        }
+                        hasFieldSnap = false;
+                    }
+                    break;
+                }
+                case PropertyType::String: {
+                    std::string* sptr = static_cast<std::string*>(ptr);
+                    std::strncpy(strBuf, sptr->c_str(), 255);
+                    strBuf[255] = '\0';
+                    ImGui::InputText(prop.name.c_str(), strBuf, sizeof(strBuf));
+                    if (ImGui::IsItemActivated())
+                        strSnap = *sptr;
+                    if (ImGui::IsItemDeactivatedAfterEdit()) {
+                        std::string nv(strBuf);
+                        if (nv != strSnap)
+                            commandStack_.execute(
+                                std::make_unique<EditComponentFieldCommand>(
+                                    e.id, ct, prop.offset, prop.type,
+                                    PropertyValue{strSnap}, PropertyValue{nv}, prop.name),
+                                scene_, world_);
+                    }
+                    break;
+                }
+                case PropertyType::Bool: {
+                    bool* bptr  = static_cast<bool*>(ptr);
+                    bool  prev  = *bptr;
+                    if (ImGui::Checkbox(prop.name.c_str(), bptr) && *bptr != prev) {
+                        bool nv = *bptr;
+                        *bptr   = prev;
+                        commandStack_.execute(
+                            std::make_unique<EditComponentFieldCommand>(
+                                e.id, ct, prop.offset, prop.type,
+                                PropertyValue{prev}, PropertyValue{nv}, prop.name),
+                            scene_, world_);
+                    }
+                    break;
+                }
+                case PropertyType::Enum: {
+                    int* iptr = static_cast<int*>(ptr);
+                    int  prev = *iptr;
+                    std::vector<const char*> items;
+                    for (const auto& s : prop.enumValues) items.push_back(s.c_str());
+                    if (ImGui::Combo(prop.name.c_str(), iptr,
+                                     items.data(), static_cast<int>(items.size()))) {
+                        int nv = *iptr;
+                        *iptr  = prev;
+                        commandStack_.execute(
+                            std::make_unique<EditComponentFieldCommand>(
+                                e.id, ct, prop.offset, prop.type,
+                                PropertyValue{prev}, PropertyValue{nv}, prop.name),
+                            scene_, world_);
+                    }
+                    break;
+                }
+                } // switch
+
+                ImGui::PopID();
+            } // for props
+        } // if sectionOpen
+
+        ImGui::PopID();
+
+        if (hasPendingRemove) break; // stop iterating; will remove after loop
+    }
+
+    // Apply deferred component removal
+    if (hasPendingRemove) {
+        for (auto& comp : e.components) {
+            if (getVariantType(comp) == pendingRemove) {
+                commandStack_.execute(
+                    std::make_unique<RemoveComponentCommand>(e.id, comp),
+                    scene_, world_);
+                break;
+            }
+        }
+    }
+
+    // ── Add Component button ──────────────────────────────────────────────────
+    ImGui::Separator();
+
+    // Collect component types not yet present on this entity
+    static int addSel = 0;
+    std::vector<ComponentType> missing;
+    for (int i = 0; i <= static_cast<int>(ComponentType::AI); ++i) {
+        ComponentType ct = static_cast<ComponentType>(i);
+        bool found = false;
+        for (const auto& comp : e.components)
+            if (getVariantType(comp) == ct) { found = true; break; }
+        if (!found) missing.push_back(ct);
+    }
+
+    if (!missing.empty()) {
+        if (addSel >= static_cast<int>(missing.size())) addSel = 0;
+        std::vector<const char*> names;
+        for (auto ct : missing) names.push_back(getComponentMeta(ct).name.c_str());
+        ImGui::SetNextItemWidth(180.f);
+        ImGui::Combo("##addcomp", &addSel, names.data(), static_cast<int>(names.size()));
+        ImGui::SameLine();
+        if (ImGui::Button("+ Add")) {
+            ComponentType toAdd = missing[addSel];
+            ComponentVariant newComp;
+            switch (toAdd) {
+            case ComponentType::Transform: newComp = TransformComponent{}; break;
+            case ComponentType::Render:    newComp = RenderComponent{};    break;
+            case ComponentType::Health:    newComp = HealthComponent{};    break;
+            case ComponentType::Mana:      newComp = ManaComponent{};      break;
+            case ComponentType::Stats:     newComp = StatsComponent{};     break;
+            case ComponentType::Combat:    newComp = CombatComponent{};    break;
+            case ComponentType::AI:        newComp = AIComponent{};        break;
+            }
+            commandStack_.execute(
+                std::make_unique<AddComponentCommand>(e.id, newComp),
+                scene_, world_);
+        }
+    } else {
+        ImGui::TextDisabled("All components present.");
     }
 
     ImGui::End();

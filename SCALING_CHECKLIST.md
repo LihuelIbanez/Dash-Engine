@@ -118,8 +118,8 @@ Marca cada item con [x] cuando este completado.
 - [x] Migracion de EntityData a representacion por componentes.
 
 ### 17) Inspector generico con reflection (D25)
-- [ ] Inspector generico con metadata/reflection.
-- [ ] Edicion de componentes via EditPropertyCommand.
+- [x] Inspector generico con metadata/reflection.
+- [x] Edicion de componentes via EditPropertyCommand.
 
 ### 18) Prefabs (D26)
 - [ ] Sistema de prefabs/arquetipos con overrides por instancia.

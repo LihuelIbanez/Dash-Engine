@@ -10,6 +10,8 @@
 #include "AssetInspectorPanel.h"
 #include "PlaySession.h"
 #include "Game.h"
+#include "Reflection.h"
+#include "EntityRegistry.h"
 #include <string>
 #include <vector>
 #include <map>
