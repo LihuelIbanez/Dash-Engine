@@ -1034,9 +1034,32 @@ void EditorApp::buildAndRun()
 
     if (ret == 0) {
         addLog("Build OK. Launching...");
+
+        // Save the current scene to a temp file so the game can load it
+        std::string tempScene = std::string(BUILD_DIR) + "/_play_scene.json";
+        // Preserve scene state — saveToFile modifies filePath and modified flag
+        std::string prevPath = scene_.filePath;
+        bool prevMod = scene_.modified;
+        if (scene_.saveToFile(tempScene)) {
+            scene_.filePath = prevPath;
+            scene_.modified = prevMod;
+            addLog("Scene exported to " + tempScene);
+        } else {
+            addLog("WARNING: Could not export scene, launching with defaults.");
+            tempScene.clear();
+        }
+
         std::string runCmd = "\"" + std::string(BUILD_DIR)
-                           + "/IsometricRPG\" &";
+                           + "/IsometricRPG\"";
+        if (!tempScene.empty())
+            runCmd += " \"" + tempScene + "\"";
+        runCmd += " &";
         std::system(runCmd.c_str());
+        // Bring the game window to front on macOS
+        std::system("osascript -e 'delay 0.3' "
+                    "-e 'tell application \"System Events\"' "
+                    "-e '  set frontmost of (first process whose name is \"IsometricRPG\") to true' "
+                    "-e 'end tell' &");
         addLog("Game launched.");
     } else {
         addLog("Build FAILED (exit " + std::to_string(ret) + ").");

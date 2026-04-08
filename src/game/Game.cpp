@@ -4,6 +4,8 @@
 #include "CombatSystem.h"
 #include "SpawnRewardSystem.h"
 #include "GameplayDatabase.h"
+#include <nlohmann/json.hpp>
+#include <fstream>
 #include <cstdlib>
 #include <cmath>
 #include <algorithm>
@@ -90,27 +92,84 @@ Game::Game()
               static_cast<float>(WORLD_H) / 2.f,
               CharacterClass::Warrior)
 {
-    std::srand(12345);
-    world_.generate(12345);
+}
 
-    // Load gameplay data from JSON
-    gameDb_.load("assets");
+void Game::setSceneFile(const std::string& path) { sceneFile_ = path; }
 
-    // Apply player class data if available
-    if (auto* cls = gameDb_.findPlayerClass("warrior")) {
-        player_.stats.attack      = cls->attack;
-        player_.stats.defense     = cls->defense;
-        player_.stats.magicAttack = cls->magicAttack;
-        player_.stats.speed       = cls->speed;
-        player_.stats.critChance  = cls->critChance;
-        player_.maxHealth         = cls->maxHp;
-        player_.health            = cls->maxHp;
-        player_.maxMana           = cls->maxMana;
-        player_.mana              = cls->maxMana;
-        player_.attackCooldownMax = cls->attackCooldown;
+// ─────────────────────────────────────────────────────────────────────────────
+// loadSceneFile — apply the editor scene JSON to the game world
+// ─────────────────────────────────────────────────────────────────────────────
+bool Game::loadSceneFile()
+{
+    std::ifstream f(sceneFile_);
+    if (!f.is_open()) return false;
+
+    nlohmann::json j;
+    try { f >> j; } catch (...) { return false; }
+    if (!j.is_object()) return false;
+
+    // ── World seed + regenerate ──────────────────────────────────────────────
+    unsigned int seed = j.value("worldSeed", 12345u);
+    std::srand(seed);
+    world_.generate(seed);
+
+    // ── Tile overrides ───────────────────────────────────────────────────────
+    if (j.contains("tileOverrides") && j["tileOverrides"].is_array()) {
+        for (auto& t : j["tileOverrides"]) {
+            int tx = t.value("x", -1);
+            int ty = t.value("y", -1);
+            if (tx < 0 || tx >= WORLD_W || ty < 0 || ty >= WORLD_H) continue;
+            world_.grid[ty][tx].type     = static_cast<TileType>(t.value("type", 0));
+            world_.grid[ty][tx].walkable = t.value("walkable", true);
+        }
     }
 
-    spawnEnemiesFromData();
+    // ── Entities ─────────────────────────────────────────────────────────────
+    if (j.contains("entities") && j["entities"].is_array()) {
+        for (auto& ej : j["entities"]) {
+            std::string type = ej.value("type", "Enemy");
+            std::string name = ej.value("name", "Unknown");
+            float ex = ej.value("x", 0.f);
+            float ey = ej.value("y", 0.f);
+
+            if (type == "Player") {
+                // Reposition player
+                player_.x = ex;
+                player_.y = ey;
+
+                // Apply class from scene
+                std::string cls = ej.value("class", "Warrior");
+                // Convert to lowercase for GameplayDatabase lookup
+                std::string clsLower = cls;
+                for (auto& c : clsLower) c = static_cast<char>(std::tolower(c));
+
+                if (auto* pcd = gameDb_.findPlayerClass(clsLower)) {
+                    player_.stats.attack      = pcd->attack;
+                    player_.stats.defense     = pcd->defense;
+                    player_.stats.magicAttack = pcd->magicAttack;
+                    player_.stats.speed       = pcd->speed;
+                    player_.stats.critChance  = pcd->critChance;
+                    player_.maxHealth         = pcd->maxHp;
+                    player_.health            = pcd->maxHp;
+                    player_.maxMana           = pcd->maxMana;
+                    player_.mana              = pcd->maxMana;
+                    player_.attackCooldownMax = pcd->attackCooldown;
+                }
+            } else {
+                // Enemy: look up in GameplayDatabase by lowercase name
+                std::string nameLower = name;
+                for (auto& c : nameLower) c = static_cast<char>(std::tolower(c));
+
+                if (auto* ed = gameDb_.findEnemy(nameLower)) {
+                    enemies_.push_back(std::make_unique<Enemy>(ex, ey, *ed));
+                } else {
+                    enemies_.push_back(std::make_unique<Enemy>(ex, ey, name));
+                }
+            }
+        }
+    }
+
+    return true;
 }
 
 void Game::spawnEnemiesFromData()
@@ -168,6 +227,29 @@ bool Game::init()
 
     SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
     running_ = true;
+
+    // ── Load world and scene data ────────────────────────────────────────────
+    std::srand(12345);
+    world_.generate(12345);
+    gameDb_.load("assets");
+
+    if (!sceneFile_.empty() && loadSceneFile()) {
+        std::printf("[Game] Loaded scene: %s\n", sceneFile_.c_str());
+    } else {
+        if (auto* cls = gameDb_.findPlayerClass("warrior")) {
+            player_.stats.attack      = cls->attack;
+            player_.stats.defense     = cls->defense;
+            player_.stats.magicAttack = cls->magicAttack;
+            player_.stats.speed       = cls->speed;
+            player_.stats.critChance  = cls->critChance;
+            player_.maxHealth         = cls->maxHp;
+            player_.health            = cls->maxHp;
+            player_.maxMana           = cls->maxMana;
+            player_.mana              = cls->maxMana;
+            player_.attackCooldownMax = cls->attackCooldown;
+        }
+        spawnEnemiesFromData();
+    }
 
     initSystems();
     return true;

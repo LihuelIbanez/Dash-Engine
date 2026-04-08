@@ -2,6 +2,7 @@
 #include <SDL2/SDL.h>
 #include <vector>
 #include <memory>
+#include <string>
 #include "World.h"
 #include "Player.h"
 #include "Enemy.h"
@@ -16,6 +17,10 @@ class Game {
 public:
     Game();
     ~Game();
+
+    // Set a scene file to load instead of the default hardcoded state.
+    // Must be called before init().
+    void setSceneFile(const std::string& path);
 
     bool init();
     void run();
@@ -37,6 +42,9 @@ private:
     GameplayDatabase gameDb_;
     void initSystems();
     void spawnEnemiesFromData();
+    bool loadSceneFile();           // apply scene JSON if sceneFile_ is set
+
+    std::string sceneFile_;         // optional: editor scene to play
 
     // Diablo 2 HUD panel height (bottom strip)
     static constexpr int HUD_H       = 100;
