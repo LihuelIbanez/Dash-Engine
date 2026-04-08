@@ -13,6 +13,8 @@
 #include "EditComponentFieldCommand.h"
 #include "AddComponentCommand.h"
 #include "RemoveComponentCommand.h"
+#include "PlacePrefabCommand.h"
+#include "PrefabAsset.h"
 #include "Profiler.h"
 
 #include <cstdio>
@@ -549,6 +551,23 @@ void EditorApp::drawPropertiesPanel()
 
     // ── Entity header (EntityData-level fields) ───────────────────────────────
     if (ImGui::CollapsingHeader("Entity", ImGuiTreeNodeFlags_DefaultOpen)) {
+        // Prefab badge
+        if (!e.prefabGuid.empty()) {
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.f, 0.75f, 0.2f, 1.f));
+            ImGui::Text("Prefab instance: %s", e.prefabGuid.c_str());
+            ImGui::PopStyleColor();
+            if (ImGui::Button("Reset All to Prefab Defaults")) {
+                std::string prefabsDir = assetsRoot_ + "/prefabs";
+                PrefabAsset prefab = findPrefabByGuid(prefabsDir, e.prefabGuid);
+                if (!prefab.guid.empty()) {
+                    e.components           = instantiate(prefab);
+                    e.componentOverrides   = nlohmann::json::object();
+                    scene_.modified        = true;
+                }
+            }
+            ImGui::Separator();
+        }
+
         // Name
         char nameBuf[128];
         std::strncpy(nameBuf, e.name.c_str(), sizeof(nameBuf));
@@ -732,6 +751,14 @@ void EditorApp::drawPropertiesPanel()
         }
     }
 
+    // Recompute overrides for prefab instances after any change
+    if (!e.prefabGuid.empty()) {
+        std::string prefabsDir = assetsRoot_ + "/prefabs";
+        PrefabAsset prefab = findPrefabByGuid(prefabsDir, e.prefabGuid);
+        if (!prefab.guid.empty())
+            e.componentOverrides = computeOverrides(prefab, e.components);
+    }
+
     // ── Add Component button ──────────────────────────────────────────────────
     ImGui::Separator();
 
@@ -843,6 +870,34 @@ void EditorApp::drawViewport()
 
     ImVec2 cursorPos = ImGui::GetCursorScreenPos();
     ImGui::Image((ImTextureID)viewportTex_, avail);
+
+    // ── Prefab drag-drop target ──────────────────────────────────────────────
+    if (editorMode_ == EditorMode::Edit && ImGui::BeginDragDropTarget()) {
+        if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("PREFAB_GUID")) {
+            std::string guid(static_cast<const char*>(payload->Data),
+                             static_cast<size_t>(payload->DataSize) - 1);
+            ImGuiIO& io = ImGui::GetIO();
+            float mx = io.MousePos.x - cursorPos.x;
+            float my = io.MousePos.y - cursorPos.y;
+            float wx = 0.f, wy = 0.f;
+            if (viewportScreenToWorld(mx, my, wx, wy)) {
+                std::string prefabsDir = assetsRoot_ + "/prefabs";
+                PrefabAsset prefab = findPrefabByGuid(prefabsDir, guid);
+                if (!prefab.guid.empty()) {
+                    uint64_t newId = scene_.allocateEntityId();
+                    auto comps = instantiate(prefab);
+                    auto cmd = std::make_unique<PlacePrefabCommand>(
+                        wx, wy, newId, prefab.name, guid, std::move(comps));
+                    commandStack_.execute(std::move(cmd), scene_, world_);
+                    selectedEntityId_ = newId;
+                    addLog("Placed prefab: " + prefab.name);
+                } else {
+                    addLog("ERROR: Prefab not found for GUID: " + guid);
+                }
+            }
+        }
+        ImGui::EndDragDropTarget();
+    }
 
     // ── Interaction ──────────────────────────────────────────────────────────
     bool vpFocused = ImGui::IsWindowFocused();
@@ -1309,7 +1364,7 @@ void EditorApp::saveScene(const std::string& path)
 
 void EditorApp::openScene(const std::string& path)
 {
-    if (scene_.loadFromFile(path)) {
+    if (scene_.loadFromFile(path, assetsRoot_)) {
         // Report any warnings collected during load
         for (auto& err : scene_.loadErrors)
             addLog("  [load] " + err);

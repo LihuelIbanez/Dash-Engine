@@ -126,3 +126,27 @@ dash_add_test(test_world_seed_determinism test_world_seed_determinism.cpp)
 
 # ── Pathfinding ───────────────────────────────────────────────────────────────
 dash_add_test(test_pathfinding test_pathfinding.cpp)
+
+# ── Prefab system (D26) ───────────────────────────────────────────────────────
+add_executable(test_prefab_system
+    test_prefab_system.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/components/PrefabAsset.cpp
+)
+target_include_directories(test_prefab_system PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/src/core
+    ${CMAKE_SOURCE_DIR}/src/core/components
+    ${CMAKE_SOURCE_DIR}/src/entities
+    ${CMAKE_SOURCE_DIR}/src/world
+    ${CMAKE_SOURCE_DIR}/src/rendering
+    ${CMAKE_SOURCE_DIR}/src/editor
+    ${SDL2_INCLUDE_DIRS}
+)
+target_compile_definitions(test_prefab_system PRIVATE
+    PROJECT_DIR="${CMAKE_SOURCE_DIR}"
+)
+target_link_libraries(test_prefab_system PRIVATE
+    game_core nlohmann_json::nlohmann_json ${SDL2_LIBRARIES}
+)
+target_compile_options(test_prefab_system PRIVATE -Wall -Wextra -O2)
+add_test(NAME test_prefab_system COMMAND test_prefab_system)

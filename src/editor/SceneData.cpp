@@ -1,5 +1,6 @@
 #include "SceneData.h"
 #include "ComponentSerialization.h"
+#include "PrefabAsset.h"
 #include <nlohmann/json.hpp>
 #include <fstream>
 
@@ -61,7 +62,13 @@ bool SceneData::saveToFile(const std::string& path)
         ej["y"]    = e.y;
         if (e.type == EntityData::Type::Player)
             ej["class"] = e.charClass;
-        if (!e.components.empty()) {
+        if (!e.prefabGuid.empty()) {
+            // Prefab instance: store only GUID + overrides.
+            ej["prefabGuid"] = e.prefabGuid;
+            ej["overrides"]  = e.componentOverrides.is_null()
+                               ? nlohmann::json::object()
+                               : e.componentOverrides;
+        } else if (!e.components.empty()) {
             json compsArr = json::array();
             for (auto& c : e.components)
                 compsArr.push_back(componentToJson(c));
@@ -80,7 +87,7 @@ bool SceneData::saveToFile(const std::string& path)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-bool SceneData::loadFromFile(const std::string& path)
+bool SceneData::loadFromFile(const std::string& path, const std::string& assetsRoot)
 {
     loadErrors.clear();
 
@@ -189,8 +196,28 @@ bool SceneData::loadFromFile(const std::string& path)
                 else
                     ed.id = allocateEntityId();
 
-                // ── Components: load from JSON or migrate from legacy fields ──
-                if (e.contains("components") && e["components"].is_array()) {
+                // ── Components: prefab instance, full list, or legacy migration ──
+                if (e.contains("prefabGuid") && e["prefabGuid"].is_string()) {
+                    // Prefab instance: load base + apply overrides.
+                    ed.prefabGuid = e["prefabGuid"].get<std::string>();
+                    if (e.contains("overrides"))
+                        ed.componentOverrides = e["overrides"];
+
+                    if (!assetsRoot.empty()) {
+                        std::string prefabsDir = assetsRoot + "/prefabs";
+                        PrefabAsset prefab = findPrefabByGuid(prefabsDir, ed.prefabGuid);
+                        if (prefab.guid.empty()) {
+                            loadErrors.push_back("entities[" + std::to_string(idx)
+                                + "] '" + ed.name + "': prefab '" + ed.prefabGuid
+                                + "' not found, using empty components");
+                        } else {
+                            applyOverrides(prefab, ed.components, ed.componentOverrides);
+                        }
+                    } else {
+                        loadErrors.push_back("entities[" + std::to_string(idx)
+                            + "] '" + ed.name + "': prefabGuid set but no assetsRoot provided");
+                    }
+                } else if (e.contains("components") && e["components"].is_array()) {
                     for (auto& cj : e["components"]) {
                         try {
                             ed.components.push_back(componentFromJson(cj));

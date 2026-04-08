@@ -2,6 +2,7 @@
 #include "importers/SceneImporter.h"
 #include "importers/TileSetImporter.h"
 #include "importers/GameplayConfigImporter.h"
+#include "importers/PrefabImporter.h"
 
 #include <filesystem>
 #include <fstream>
@@ -53,6 +54,8 @@ AssetType ImportManager::inferAssetType(const std::string& relativePath)
             return AssetType::Scene;
         if (parent == "tilesets" || stem.find("tileset") != std::string::npos)
             return AssetType::TileSet;
+        if (parent == "prefabs")
+            return AssetType::Prefab;
         if (parent == "config" || stem.find("config") != std::string::npos)
             return AssetType::GameplayConfig;
 
@@ -71,6 +74,7 @@ ImportManager::ImportManager()
     importers_[AssetType::Scene]          = std::make_unique<SceneImporter>();
     importers_[AssetType::TileSet]        = std::make_unique<TileSetImporter>();
     importers_[AssetType::GameplayConfig] = std::make_unique<GameplayConfigImporter>();
+    importers_[AssetType::Prefab]         = std::make_unique<PrefabImporter>();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

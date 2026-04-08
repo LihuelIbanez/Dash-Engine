@@ -69,6 +69,13 @@ void AssetBrowserPanel::draw(AssetDatabase& db,
                 selectedGuid_ = guid;
             }
 
+            // Drag-drop source: allow dragging Prefab assets onto the viewport.
+            if (rec.assetType == AssetType::Prefab && ImGui::BeginDragDropSource()) {
+                ImGui::SetDragDropPayload("PREFAB_GUID", guid.c_str(), guid.size() + 1);
+                ImGui::Text("Prefab: %s", rec.sourcePath.c_str());
+                ImGui::EndDragDropSource();
+            }
+
             ImGui::TableNextColumn();
             ImGui::TextUnformatted(assetTypeToStr(rec.assetType));
 

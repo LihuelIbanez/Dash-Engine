@@ -5,6 +5,7 @@
 #include "IsoRenderer.h"
 #include "World.h"
 #include "components/Components.h"
+#include <nlohmann/json.hpp>
 
 // ─────────────────────────────────────────────────────────────────────────────
 // EntityData – serialisable description of one entity in a scene
@@ -21,6 +22,10 @@ struct EntityData {
 
     // v2+: component data (empty = legacy/not migrated yet)
     std::vector<ComponentVariant> components;
+
+    // Prefab instance support: if non-empty, entity originates from a prefab.
+    std::string        prefabGuid;       // empty = not a prefab instance
+    nlohmann::json     componentOverrides; // diff vs prefab defaults
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -56,5 +61,6 @@ struct SceneData {
     uint64_t allocateEntityId();
     void createDefault();
     bool saveToFile(const std::string& path);
-    bool loadFromFile(const std::string& path);
+    bool loadFromFile(const std::string& path,
+                      const std::string& assetsRoot = "");
 };

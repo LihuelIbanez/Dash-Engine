@@ -1,0 +1,40 @@
+{
+  "guid": "prefab-goblin-warrior-001",
+  "name": "Goblin Warrior",
+  "components": [
+    {
+      "type": "Transform",
+      "x": 0.0,
+      "y": 0.0
+    },
+    {
+      "type": "Health",
+      "health": 60,
+      "maxHealth": 60
+    },
+    {
+      "type": "Stats",
+      "attack": 8,
+      "defense": 4,
+      "magicAttack": 0,
+      "speed": 4,
+      "critChance": 0.05,
+      "level": 1,
+      "experience": 0,
+      "expToNextLevel": 100
+    },
+    {
+      "type": "AI",
+      "behavior": "Chase",
+      "detectionRange": 5.0,
+      "patrolRadius": 3.0
+    },
+    {
+      "type": "Combat",
+      "attackRange": 1.5,
+      "attackCooldown": 0.8,
+      "cooldownTimer": 0.0,
+      "isAttacking": false
+    }
+  ]
+}
