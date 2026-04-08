@@ -113,9 +113,9 @@ Marca cada item con [x] cuando este completado.
 - [x] EditPropertyCommand generico (undo/redo).
 
 ### 16) Componentes base (D23-D24)
-- [ ] Crear estructuras base de componentes (`Transform`, `Render`, `Combat`, etc.).
-- [ ] EntityRegistry con almacenamiento por componentes.
-- [ ] Migracion de EntityData a representacion por componentes.
+- [x] Crear estructuras base de componentes (`Transform`, `Render`, `Combat`, etc.).
+- [x] EntityRegistry con almacenamiento por componentes.
+- [x] Migracion de EntityData a representacion por componentes.
 
 ### 17) Inspector generico con reflection (D25)
 - [ ] Inspector generico con metadata/reflection.

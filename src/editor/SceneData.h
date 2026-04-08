@@ -4,6 +4,7 @@
 #include <vector>
 #include "IsoRenderer.h"
 #include "World.h"
+#include "components/Components.h"
 
 // ─────────────────────────────────────────────────────────────────────────────
 // EntityData – serialisable description of one entity in a scene
@@ -17,6 +18,9 @@ struct EntityData {
     float       x         = 0.f;
     float       y         = 0.f;
     std::string charClass = "Warrior";   // only used when type == Player
+
+    // v2+: component data (empty = legacy/not migrated yet)
+    std::vector<ComponentVariant> components;
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -32,7 +36,7 @@ struct TileOverride {
 // SceneData – everything needed to describe one scenario / level
 // ─────────────────────────────────────────────────────────────────────────────
 struct SceneData {
-    static constexpr int kCurrentVersion = 1;
+    static constexpr int kCurrentVersion = 2;
 
     std::string  sceneName    = "Untitled";
     unsigned int worldSeed    = 12345;

@@ -8,8 +8,6 @@ Prerequisito: Sprint 1 (D01-D20) completado.
 
 ### To Do
 
-- [ ] D23 - Componentes base (Transform, Render, Combat) (6h)
-- [ ] D24 - EntityRegistry + migracion de datos (6h)
 - [ ] D25 - Inspector generico con reflection (6h)
 - [ ] D26 - Sistema de prefabs/arquetipos (6h)
 - [ ] D27 - Hot-reload de assets (6h)
@@ -25,13 +23,15 @@ Prerequisito: Sprint 1 (D01-D20) completado.
 
 - [x] D21 - Sistema de eventos desacoplado (6h)
 - [x] D22 - Comando MoveEntity + EditProperty (6h)
+- [x] D23 - Estructuras base de componentes (6h)
+- [x] D24 - EntityRegistry + migracion de datos (6h)
 
 ## Registro Diario de Ejecucion
 
 - [ ] Dia 21 | ID: D21 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __
 - [x] Dia 22 | ID: D22 | Plan: 6h | Real: 6h | Bloqueos: — | Resultado: MoveEntityCommand + EditPropertyCommand implementados, drag-to-move en viewport, properties panel via comandos, test_move_edit_commands 5/5 passing
-- [ ] Dia 23 | ID: D23 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __
-- [ ] Dia 24 | ID: D24 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __
+- [x] Dia 23 | ID: D23 | Plan: 6h | Real: 6h | Bloqueos: — | Resultado: 7 componentes POD + ComponentSerialization JSON roundtrip, test_component_serialization 9/9 passing
+- [x] Dia 24 | ID: D24 | Plan: 6h | Real: 6h | Bloqueos: — | Resultado: EntityRegistry, SceneData v2 con components, migracion v1→v2, test_entity_registry 9/9 passing
 - [ ] Dia 25 | ID: D25 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __
 - [ ] Dia 26 | ID: D26 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __
 - [ ] Dia 27 | ID: D27 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __
