@@ -10,6 +10,13 @@ PlaceEnemyCommand::PlaceEnemyCommand(float x, float y, uint64_t entityId,
     entity_.name = enemyName;
     entity_.x    = x;
     entity_.y    = y;
+    entity_.components = {
+        TransformComponent{x, y},
+        HealthComponent{100, 100},
+        StatsComponent{},
+        AIComponent{},
+        RenderComponent{}
+    };
 }
 
 void PlaceEnemyCommand::apply(SceneData& scene, World& /*world*/)

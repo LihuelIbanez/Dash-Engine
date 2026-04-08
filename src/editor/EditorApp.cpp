@@ -18,6 +18,7 @@
 #include "PrefabAsset.h"
 #include "Profiler.h"
 #include "AppPaths.h"
+#include "IconsFontAwesome6.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -79,6 +80,18 @@ bool EditorApp::init()
         io.Fonts->AddFontFromFileTTF(sfProPath, 15.0f);
     } else {
         io.Fonts->AddFontDefault();
+    }
+
+    // Merge Font Awesome 6 solid icons into the same font atlas
+    std::string faPath = AppPaths::getResourcesDir() + "/assets/fonts/fa-solid-900.ttf";
+    if (FILE* fa = fopen(faPath.c_str(), "rb")) {
+        fclose(fa);
+        ImFontConfig cfg;
+        cfg.MergeMode        = true;
+        cfg.GlyphMinAdvanceX = 13.f;   // keep icons monospace-ish
+        cfg.PixelSnapH       = true;
+        static const ImWchar icon_ranges[] = { ICON_MIN_FA, ICON_MAX_FA, 0 };
+        io.Fonts->AddFontFromFileTTF(faPath.c_str(), 13.f, &cfg, icon_ranges);
     }
 
     // Dark style with Unreal-like colour scheme
@@ -423,17 +436,17 @@ void EditorApp::drawMenuBar()
     if (!ImGui::BeginMenuBar()) return;
 
     if (ImGui::BeginMenu("File")) {
-        if (ImGui::MenuItem("New Scene",  "Ctrl+N"))
+        if (ImGui::MenuItem(ICON_FA_FILE " New Scene",     "Ctrl+N"))
             requestAction(PendingAction::NewScene);
-        if (ImGui::MenuItem("Open Scene...", "Ctrl+O"))
+        if (ImGui::MenuItem(ICON_FA_FOLDER_OPEN " Open Scene...", "Ctrl+O"))
             requestAction(PendingAction::OpenScene);
-        if (ImGui::MenuItem("Save", "Ctrl+S")) {
+        if (ImGui::MenuItem(ICON_FA_FLOPPY_DISK " Save",    "Ctrl+S")) {
             if (scene_.filePath.empty()) showSaveDialog_ = true;
             else saveScene(scene_.filePath);
         }
-        if (ImGui::MenuItem("Save As...")) showSaveDialog_ = true;
+        if (ImGui::MenuItem(ICON_FA_FLOPPY_DISK " Save As...")) showSaveDialog_ = true;
         ImGui::Separator();
-        if (ImGui::MenuItem("Exit"))
+        if (ImGui::MenuItem(ICON_FA_DOOR_OPEN " Exit"))
             requestAction(PendingAction::Exit);
         ImGui::EndMenu();
     }
@@ -445,7 +458,7 @@ void EditorApp::drawMenuBar()
         ImGui::EndMenu();
     }
     if (ImGui::BeginMenu("Assets")) {
-        if (ImGui::MenuItem("Scan for Changes")) {
+        if (ImGui::MenuItem(ICON_FA_ARROWS_ROTATE " Scan for Changes")) {
             // Force immediate scan regardless of poll interval
             fileWatcher_ = FileWatcher(assetsRoot_, 0.0f);
             fileWatcher_.scan();
@@ -471,13 +484,13 @@ void EditorApp::drawMenuBar()
         ImGui::EndMenu();
     }
     if (ImGui::BeginMenu("Edit")) {
-        std::string undoLabel = "Undo";
+        std::string undoLabel = ICON_FA_ROTATE_LEFT " Undo";
         if (commandStack_.canUndo())
             undoLabel += std::string(" (") + commandStack_.undoName() + ")";
         if (ImGui::MenuItem(undoLabel.c_str(), "Cmd+Z", false, commandStack_.canUndo()))
             performUndo();
 
-        std::string redoLabel = "Redo";
+        std::string redoLabel = ICON_FA_ROTATE_RIGHT " Redo";
         if (commandStack_.canRedo())
             redoLabel += std::string(" (") + commandStack_.redoName() + ")";
         if (ImGui::MenuItem(redoLabel.c_str(), "Cmd+Shift+Z", false, commandStack_.canRedo()))
@@ -486,7 +499,7 @@ void EditorApp::drawMenuBar()
         ImGui::EndMenu();
     }
     if (ImGui::BeginMenu("Tools")) {
-        if (ImGui::MenuItem("Validate Scene", "Shift+V")) {
+        if (ImGui::MenuItem(ICON_FA_SHIELD_HALVED " Validate Scene", "Shift+V")) {
             validationIssues_ = contentValidator_.validate(scene_, world_, assetDb_);
             showValidationPanel_ = true;
             addLog("Validation: " + std::to_string(validationIssues_.size()) + " issue(s) found.");
@@ -494,7 +507,7 @@ void EditorApp::drawMenuBar()
         ImGui::EndMenu();
     }
     if (ImGui::BeginMenu("Help")) {
-        if (ImGui::MenuItem("About DashEngine"))
+        if (ImGui::MenuItem(ICON_FA_CIRCLE_INFO " About DashEngine"))
             showAboutModal_ = true;
         ImGui::EndMenu();
     }
@@ -509,7 +522,7 @@ void EditorApp::drawToolbar()
     ImGui::PushStyleColor(ImGuiCol_Button,        {0.10f, 0.50f, 0.10f, 1.f});
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered,  {0.20f, 0.70f, 0.20f, 1.f});
     ImGui::PushStyleColor(ImGuiCol_ButtonActive,   {0.10f, 0.90f, 0.10f, 1.f});
-    if (ImGui::Button("  Build & Run  ", {160, 34})) buildAndRun();
+    if (ImGui::Button(ICON_FA_HAMMER "  Build & Run  ", {170, 34})) buildAndRun();
     ImGui::PopStyleColor(3);
 
     ImGui::SameLine();
@@ -521,13 +534,13 @@ void EditorApp::drawToolbar()
         ImGui::PushStyleColor(ImGuiCol_Button,       {0.10f, 0.35f, 0.60f, 1.f});
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, {0.15f, 0.50f, 0.80f, 1.f});
         ImGui::PushStyleColor(ImGuiCol_ButtonActive,  {0.10f, 0.60f, 0.90f, 1.f});
-        if (ImGui::Button("  Play  ", {100, 34})) enterPlayMode();
+        if (ImGui::Button(ICON_FA_PLAY "  Play  ", {110, 34})) enterPlayMode();
         ImGui::PopStyleColor(3);
     } else {
         ImGui::PushStyleColor(ImGuiCol_Button,       {0.60f, 0.15f, 0.10f, 1.f});
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, {0.80f, 0.25f, 0.15f, 1.f});
         ImGui::PushStyleColor(ImGuiCol_ButtonActive,  {0.90f, 0.30f, 0.15f, 1.f});
-        if (ImGui::Button("  Stop  ", {100, 34})) exitPlayMode();
+        if (ImGui::Button(ICON_FA_STOP "  Stop  ", {110, 34})) exitPlayMode();
         ImGui::PopStyleColor(3);
     }
 
@@ -547,10 +560,10 @@ void EditorApp::drawToolbar()
         ImGui::SameLine();
     };
 
-    toolBtn("Select",      Tool::Select);
-    toolBtn("Paint Tile",  Tool::PaintTile);
-    toolBtn("Place Enemy", Tool::PlaceEnemy);
-    toolBtn("Erase",       Tool::Erase);
+    toolBtn(ICON_FA_ARROW_POINTER " Select",      Tool::Select);
+    toolBtn(ICON_FA_PAINTBRUSH    " Paint Tile",   Tool::PaintTile);
+    toolBtn(ICON_FA_SKULL         " Place Enemy",  Tool::PlaceEnemy);
+    toolBtn(ICON_FA_ERASER        " Erase",        Tool::Erase);
 
     ImGui::TextDisabled("|");
     ImGui::SameLine();
@@ -559,7 +572,7 @@ void EditorApp::drawToolbar()
     ImGui::PushStyleColor(ImGuiCol_Button,        {0.35f, 0.20f, 0.55f, 1.f});
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered,  {0.50f, 0.30f, 0.75f, 1.f});
     ImGui::PushStyleColor(ImGuiCol_ButtonActive,   {0.60f, 0.40f, 0.85f, 1.f});
-    if (ImGui::Button("  Validate  ", {120, 34})) {
+    if (ImGui::Button(ICON_FA_SHIELD_HALVED "  Validate  ", {130, 34})) {
         validationIssues_ = contentValidator_.validate(scene_, world_, assetDb_);
         showValidationPanel_ = true;
         addLog("Validation: " + std::to_string(validationIssues_.size()) + " issue(s) found.");

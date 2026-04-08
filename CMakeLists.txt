@@ -45,6 +45,44 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(json)
 
+# ── Font Awesome 6 — icon font for the editor UI ─────────────────────────────
+# Downloads only the two files we need (TTF + C++ header); no full repo clone.
+set(FA_VERSION "6.5.2")
+set(FA_TTF_PATH    "${CMAKE_SOURCE_DIR}/assets/fonts/fa-solid-900.ttf")
+set(FA_HEADER_PATH "${CMAKE_SOURCE_DIR}/src/editor/IconsFontAwesome6.h")
+
+file(MAKE_DIRECTORY "${CMAKE_SOURCE_DIR}/assets/fonts")
+
+if(NOT EXISTS "${FA_TTF_PATH}")
+    message(STATUS "[FA] Downloading fa-solid-900.ttf (Font Awesome ${FA_VERSION})...")
+    file(DOWNLOAD
+        "https://github.com/FortAwesome/Font-Awesome/raw/${FA_VERSION}/webfonts/fa-solid-900.ttf"
+        "${FA_TTF_PATH}"
+        SHOW_PROGRESS
+        STATUS _fa_status
+    )
+    list(GET _fa_status 0 _fa_code)
+    if(NOT _fa_code EQUAL 0)
+        message(WARNING "[FA] TTF download failed — icons will not appear.")
+        file(REMOVE "${FA_TTF_PATH}")
+    endif()
+endif()
+
+if(NOT EXISTS "${FA_HEADER_PATH}")
+    message(STATUS "[FA] Downloading IconsFontAwesome6.h...")
+    file(DOWNLOAD
+        "https://raw.githubusercontent.com/juliettef/IconFontCppHeaders/main/IconsFontAwesome6.h"
+        "${FA_HEADER_PATH}"
+        SHOW_PROGRESS
+        STATUS _fah_status
+    )
+    list(GET _fah_status 0 _fah_code)
+    if(NOT _fah_code EQUAL 0)
+        message(WARNING "[FA] Header download failed — icons will not appear.")
+        file(REMOVE "${FA_HEADER_PATH}")
+    endif()
+endif()
+
 # ── Core game library (shared between game & editor) ─────────────────────────
 file(GLOB CORE_SOURCES
     "src/core/*.cpp"

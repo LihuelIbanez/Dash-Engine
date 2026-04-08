@@ -28,6 +28,13 @@ void SceneData::createDefault()
     player.x         = WORLD_W / 2.f;
     player.y         = WORLD_H / 2.f;
     player.charClass = "Warrior";
+    player.components = {
+        TransformComponent{player.x, player.y},
+        HealthComponent{100, 100},
+        StatsComponent{15, 10, 0, 3},   // Warrior defaults
+        ManaComponent{50, 50},
+        RenderComponent{}
+    };
     entities.push_back(player);
 
     modified = false;
