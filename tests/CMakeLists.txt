@@ -189,6 +189,7 @@ add_executable(test_hot_reload
     ${CMAKE_SOURCE_DIR}/src/assets/importers/TileSetImporter.cpp
     ${CMAKE_SOURCE_DIR}/src/assets/importers/GameplayConfigImporter.cpp
     ${CMAKE_SOURCE_DIR}/src/assets/importers/PrefabImporter.cpp
+    ${CMAKE_SOURCE_DIR}/src/assets/importers/SpriteImporter.cpp
 )
 target_include_directories(test_hot_reload PRIVATE
     ${CMAKE_SOURCE_DIR}/src
