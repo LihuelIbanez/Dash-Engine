@@ -623,8 +623,28 @@ void EditorApp::drawViewport()
     bool vpFocused = ImGui::IsWindowFocused();
     bool vpHovered = ImGui::IsItemHovered();
 
-    // WASD camera navigation (when viewport is focused)
-    if (vpFocused) {
+    // ── Play-mode input: forward clicks to the embedded game ─────────────────
+    if (editorMode_ == EditorMode::Play && playGame_ && vpHovered) {
+        ImGuiIO& io = ImGui::GetIO();
+        float mx = io.MousePos.x - cursorPos.x;
+        float my = io.MousePos.y - cursorPos.y;
+
+        // Map viewport-relative coords to game screen coords
+        int sx = static_cast<int>(mx * SCREEN_W / vpDisplayW_);
+        int sy = static_cast<int>(my * SCREEN_H / vpDisplayH_);
+
+        SDL_SetCursor(cursorHand_);
+
+        if (ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+            playGame_->injectClick(sx, sy, true);
+        if (ImGui::IsMouseClicked(ImGuiMouseButton_Right))
+            playGame_->injectAttack();
+    }
+
+    // ── Edit-mode interaction ────────────────────────────────────────────────
+
+    // WASD camera navigation (when viewport is focused, Edit mode only)
+    if (vpFocused && editorMode_ == EditorMode::Edit) {
         ImGuiIO& io = ImGui::GetIO();
         float speed = 12.f * io.DeltaTime;  // world-units per second
 
@@ -768,6 +788,17 @@ void EditorApp::paintTileAt(float wx, float wy)
 void EditorApp::renderWorldToTexture()
 {
     SDL_SetRenderTarget(renderer_, viewportTex_);
+
+    // ── Play mode: let the Game render into the viewport texture ─────────────
+    if (editorMode_ == EditorMode::Play && playGame_) {
+        ImGuiIO& io = ImGui::GetIO();
+        playGame_->tickUpdate(io.DeltaTime);
+        playGame_->tickRender();
+        SDL_SetRenderTarget(renderer_, nullptr);
+        return;
+    }
+
+    // ── Edit mode: normal editor rendering ───────────────────────────────────
     SDL_SetRenderDrawColor(renderer_, 15, 12, 10, 255);
     SDL_RenderClear(renderer_);
 
@@ -1099,15 +1130,34 @@ void EditorApp::enterPlayMode()
     if (editorMode_ == EditorMode::Play) return;
 
     playSession_.capture(scene_, world_);
-    editorMode_ = EditorMode::Edit;   // stays Edit until capture done
+
+    // Export current scene to temp file for the game to load
+    std::string tempScene = std::string(BUILD_DIR) + "/_play_scene.json";
+    std::string prevPath = scene_.filePath;
+    bool prevMod = scene_.modified;
+    scene_.saveToFile(tempScene);
+    scene_.filePath = prevPath;
+    scene_.modified = prevMod;
+
+    // Create embedded game instance
+    playGame_ = std::make_unique<Game>();
+    playGame_->setSceneFile(tempScene);
+    if (!playGame_->initEmbedded(renderer_)) {
+        addLog("ERROR: Could not start embedded game.");
+        playGame_.reset();
+        playSession_.restore(scene_, world_);
+        return;
+    }
+
     editorMode_ = EditorMode::Play;
-    addLog("Entered Play mode (snapshot saved).");
+    addLog("Entered Play mode (game running in viewport).");
 }
 
 void EditorApp::exitPlayMode()
 {
     if (editorMode_ != EditorMode::Play) return;
 
+    playGame_.reset();
     playSession_.restore(scene_, world_);
     selectedEntityId_ = 0;
     editorMode_ = EditorMode::Edit;

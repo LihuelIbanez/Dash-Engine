@@ -9,9 +9,11 @@
 #include "AssetBrowserPanel.h"
 #include "AssetInspectorPanel.h"
 #include "PlaySession.h"
+#include "Game.h"
 #include <string>
 #include <vector>
 #include <map>
+#include <memory>
 
 // ─────────────────────────────────────────────────────────────────────────────
 // EditorApp – Unreal-style level editor for the Isometric RPG
@@ -32,6 +34,7 @@ private:
     enum class EditorMode { Edit, Play };
     EditorMode  editorMode_ = EditorMode::Edit;
     PlaySession playSession_;
+    std::unique_ptr<Game> playGame_;     // live game instance during Play
     void enterPlayMode();
     void exitPlayMode();
 

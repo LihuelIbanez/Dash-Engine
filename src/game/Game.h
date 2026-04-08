@@ -26,9 +26,18 @@ public:
     bool init();
     void run();
 
+    // ── Embedded mode (run inside editor viewport) ───────────────────────────
+    bool initEmbedded(SDL_Renderer* renderer);
+    void tickUpdate(float dt);
+    void tickRender();                       // renders without SDL_RenderPresent
+    void injectClick(int screenX, int screenY, bool leftButton);
+    void injectAttack();
+    bool isRunning() const { return running_; }
+
 private:
     SDL_Window*   window_   = nullptr;
     SDL_Renderer* renderer_ = nullptr;
+    bool          embedded_ = false;         // true when hosted by editor
 
     bool          running_  = false;
     World         world_;

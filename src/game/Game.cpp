@@ -323,9 +323,11 @@ void Game::loadGame(const std::string& path)
 
 Game::~Game()
 {
-    if (renderer_) SDL_DestroyRenderer(renderer_);
-    if (window_)   SDL_DestroyWindow(window_);
-    SDL_Quit();
+    if (!embedded_) {
+        if (renderer_) SDL_DestroyRenderer(renderer_);
+        if (window_)   SDL_DestroyWindow(window_);
+        SDL_Quit();
+    }
 }
 
 bool Game::init()
@@ -402,6 +404,94 @@ void Game::run()
         render();
         Profiler::instance().endFrame();
     }
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Embedded mode — run game inside editor viewport
+// ═════════════════════════════════════════════════════════════════════════════
+bool Game::initEmbedded(SDL_Renderer* renderer)
+{
+    renderer_ = renderer;
+    embedded_ = true;
+    running_  = true;
+
+    savesDir_ = "saves";
+    std::filesystem::create_directories(savesDir_);
+
+    worldSeed_ = 12345;
+    std::srand(worldSeed_);
+    world_.generate(worldSeed_);
+    gameDb_.load("assets");
+
+    if (!sceneFile_.empty() && loadSceneFile()) {
+        std::printf("[Game] Embedded: loaded scene %s\n", sceneFile_.c_str());
+    } else {
+        if (auto* cls = gameDb_.findPlayerClass("warrior")) {
+            player_.stats.attack      = cls->attack;
+            player_.stats.defense     = cls->defense;
+            player_.stats.magicAttack = cls->magicAttack;
+            player_.stats.speed       = cls->speed;
+            player_.stats.critChance  = cls->critChance;
+            player_.maxHealth         = cls->maxHp;
+            player_.health            = cls->maxHp;
+            player_.maxMana           = cls->maxMana;
+            player_.mana              = cls->maxMana;
+            player_.attackCooldownMax = cls->attackCooldown;
+        }
+        spawnEnemiesFromData();
+    }
+
+    initSystems();
+    return true;
+}
+
+void Game::tickUpdate(float dt)
+{
+    if (dt > 0.05f) dt = 0.05f;
+    update(dt);
+}
+
+void Game::tickRender()
+{
+    SDL_SetRenderDrawColor(renderer_, 8, 6, 4, 255);
+    SDL_RenderClear(renderer_);
+
+    float camX = player_.x;
+    float camY = player_.y;
+
+    world_.draw(renderer_, camX, camY);
+
+    for (auto& e : enemies_)
+        if (e->isAlive()) e->draw(renderer_, camX, camY);
+
+    player_.draw(renderer_, camX, camY);
+
+    renderHUD();
+    // No SDL_RenderPresent — caller (editor) handles presentation
+}
+
+void Game::injectClick(int screenX, int screenY, bool leftButton)
+{
+    float wx, wy;
+    if (!screenToWorld(screenX, screenY, wx, wy)) return;
+
+    if (leftButton) {
+        // Check if an enemy is near the click
+        for (auto& e : enemies_) {
+            if (!e->isAlive()) continue;
+            float dx = e->x - wx, dy = e->y - wy;
+            if (std::sqrt(dx * dx + dy * dy) < 1.0f) {
+                player_.setMoveTarget(e->x, e->y);
+                return;
+            }
+        }
+        player_.setMoveTarget(wx, wy);
+    }
+}
+
+void Game::injectAttack()
+{
+    player_.triggerAttack();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

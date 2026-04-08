@@ -95,11 +95,17 @@ file(GLOB EDITOR_PLAYMODE_SOURCES "src/editor/playmode/*.cpp")
 file(GLOB ASSET_SOURCES "src/assets/*.cpp")
 file(GLOB IMPORTER_SOURCES "src/assets/importers/*.cpp")
 file(GLOB PANEL_SOURCES "src/editor/panels/*.cpp")
-add_executable(DashEngine ${EDITOR_SOURCES} ${EDITOR_CMD_SOURCES} ${EDITOR_PLAYMODE_SOURCES} ${ASSET_SOURCES} ${IMPORTER_SOURCES} ${PANEL_SOURCES})
+add_executable(DashEngine
+    ${EDITOR_SOURCES} ${EDITOR_CMD_SOURCES} ${EDITOR_PLAYMODE_SOURCES}
+    ${ASSET_SOURCES} ${IMPORTER_SOURCES} ${PANEL_SOURCES}
+    src/game/Game.cpp
+    ${RUNTIME_SOURCES} ${SYSTEM_SOURCES} ${DATA_SOURCES} ${SAVE_SOURCES}
+)
 target_include_directories(DashEngine PRIVATE
     src src/core src/entities src/world src/rendering src/editor
     src/editor/commands src/editor/panels src/editor/playmode
     src/assets src/assets/importers
+    src/game src/game/runtime src/game/systems src/game/data src/game/save
     ${SDL2_INCLUDE_DIRS}
 )
 target_link_libraries(DashEngine PRIVATE
