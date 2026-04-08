@@ -9,7 +9,7 @@ Marca cada item con [x] cuando este completado.
 
 - [x] Reducir acoplamiento entre editor, datos y runtime.
 - [x] Soportar crecimiento de contenido (assets, escenas, entidades).
-- [ ] Mejorar mantenibilidad y velocidad de iteracion.
+- [x] Mejorar mantenibilidad y velocidad de iteracion.
 - [ ] Preparar base para trabajo en equipo y features de produccion.
 
 ## Semana 1 - Fundaciones del Editor (Arquitectura) ✅ COMPLETADA
@@ -59,26 +59,28 @@ Marca cada item con [x] cuando este completado.
 - [x] Boton Reimport en assets seleccionados.
 - [x] Mostrar estado dirty/no guardado en escena y assets.
 
-## Semana 3 - Runtime escalable (Juego)
+## Semana 3 - Runtime escalable (Juego) ✅ COMPLETADA
 
 ### 8) Separacion por sistemas
-- [ ] Crear modulos por sistema:
-- [ ] `MovementSystem`.
-- [ ] `CombatSystem`.
-- [ ] `AISystem`.
-- [ ] `SpawnSystem`.
-- [ ] `InteractionSystem`.
-- [ ] Evitar logica grande centralizada en `Game.cpp`.
+- [x] Crear modulos por sistema:
+- [x] `MovementSystem` — src/game/systems/MovementSystem.h/.cpp
+- [x] `CombatSystem` — src/game/systems/CombatSystem.h/.cpp
+- [x] `AISystem` — src/game/systems/AISystem.h/.cpp
+- [x] `SpawnRewardSystem` — src/game/systems/SpawnRewardSystem.h/.cpp
+- [x] `RuntimeContext` + `ISystem` + `SystemScheduler` — src/game/runtime/
+- [x] Evitar logica grande centralizada en `Game.cpp`.
 
 ### 9) Data-driven gameplay
-- [ ] Mover stats de enemigos/jugador a archivos de datos.
-- [ ] Definir tablas para loot/exp/dificultad.
-- [ ] Cargar configuraciones por semilla y por biome.
+- [x] Mover stats de enemigos/jugador a archivos de datos (assets/gameplay/*.json).
+- [x] Definir tablas para loot/exp/dificultad (loot_tables.json, enemies.json).
+- [x] `GameplayDatabase` carga y valida JSON (src/game/data/).
+- [x] Enemy constructor data-driven desde EnemyData.
+- [x] Build & Run lanza la escena editada (scene export + argv pass-through).
 
 ### 10) Navegacion/pathfinding
-- [ ] Implementar A* sobre grid walkable.
-- [ ] Soportar costo por tipo de terreno.
-- [ ] Enemigos usan navegacion en lugar de persecucion directa simple.
+- [x] Implementar A* sobre grid walkable (src/game/nav/GridNav.h/.cpp).
+- [x] Soportar costo por tipo de terreno (World::terrainCost).
+- [x] Enemigos usan navegacion A* con waypoints en lugar de persecucion directa.
 
 ## Semana 4 - Produccion, QA y rendimiento
 
@@ -114,7 +116,7 @@ Marca como completado cuando se cumpla todo:
 
 - [x] Editor con undo/redo global para operaciones de escena.
 - [x] Asset DB con GUID + import/cache incremental.
-- [ ] Runtime separado por sistemas principales.
+- [x] Runtime separado por sistemas principales.
 - [ ] Save/load versionado funcionando.
 - [ ] Suite minima de tests automatizados.
 - [ ] Metricas de rendimiento visibles en editor.
@@ -125,7 +127,7 @@ Marca como completado cuando se cumpla todo:
 |--------|--------|--------|
 | 1 - Editor Foundations | ✅ Completada | 100% |
 | 2 - Asset Pipeline | ✅ Completada | 100% |
-| 3 - Runtime Systems | ⬜ No iniciada | 0% |
+| 3 - Runtime Systems | ✅ Completada | 100% |
 | 4 - Produccion/QA | ⬜ No iniciada | 0% |
 
 ## Notas

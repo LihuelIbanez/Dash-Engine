@@ -3,11 +3,11 @@
     {
       "assetType": "GameplayConfig",
       "dependencies": [],
-      "guid": "db279756-b173-48fe-9483-9c070f513105",
-      "hash": "6f9774cc21f9bc7c",
-      "importPath": "gameplay/loot_tables.json",
+      "guid": "1ed7206e-58fa-4d26-beae-779e3bf6b035",
+      "hash": "471871c763c1aa69",
+      "importPath": "gameplay/enemies.json",
       "lastImportTime": 1775598836,
-      "sourcePath": "gameplay/loot_tables.json"
+      "sourcePath": "gameplay/enemies.json"
     },
     {
       "assetType": "GameplayConfig",
@@ -21,11 +21,11 @@
     {
       "assetType": "GameplayConfig",
       "dependencies": [],
-      "guid": "1ed7206e-58fa-4d26-beae-779e3bf6b035",
-      "hash": "471871c763c1aa69",
-      "importPath": "gameplay/enemies.json",
+      "guid": "db279756-b173-48fe-9483-9c070f513105",
+      "hash": "6f9774cc21f9bc7c",
+      "importPath": "gameplay/loot_tables.json",
       "lastImportTime": 1775598836,
-      "sourcePath": "gameplay/enemies.json"
+      "sourcePath": "gameplay/loot_tables.json"
     }
   ]
 }
