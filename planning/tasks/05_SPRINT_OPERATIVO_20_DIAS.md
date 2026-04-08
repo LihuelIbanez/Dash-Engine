@@ -8,7 +8,7 @@ Usa este tablero para mover el estado diario del sprint. Solo debe haber 1 item 
 
 ### To Do
 
-- [ ] D20 - Tests + profiling + cierre (6h)
+(vacio)
 
 ### Doing
 
@@ -35,6 +35,7 @@ Usa este tablero para mover el estado diario del sprint. Solo debe haber 1 item 
 - [x] D17 - Pathfinding A* (6h) — Completado: GridNav.h/.cpp con A* 8-dir, terrainCost por tipo de tile, Enemy Chase usa waypoints A*, path refresh 0.5s, corner-cutting prevention
 - [x] D18 - Play Mode con rollback (6h) — Completado: PlaySession.h/.cpp con capture/restore, EditorMode Edit/Play, boton Play/Stop en toolbar, snapshot de SceneData + World grid, overlay "PLAYING" en viewport, herramientas de edicion deshabilitadas en modo Play
 - [x] D19 - Save/Load versionado (6h) — Completado: SaveGame.h/.cpp con save/load JSON, SaveVersioning.h/.cpp con migracion por version, captureState/applyState en Game, F5 quicksave / F9 quickload, carpeta saves/
+- [x] D20 - Tests + profiling + cierre (6h) — Completado: 4 test suites (21 tests), Profiler.h/.cpp singleton con ScopeTimer RAII, Performance panel en editor, instrumentacion Game.cpp
 
 ## Registro Diario de Ejecucion
 
@@ -57,9 +58,9 @@ Usa una linea por dia para dejar trazabilidad de avance real.
 - [x] Dia 15 | ID: D15 | Plan: 6h | Real: ~0.3h | Bloqueos: Ninguno | Resultado: AISystem.h/.cpp y SpawnRewardSystem.h/.cpp extraidos. Game.cpp limpio solo con includes e initSystems().
 - [x] Dia 16 | ID: D16 | Plan: 6h | Real: ~0.5h | Bloqueos: Ninguno | Resultado: GameplayDatabase.h/.cpp carga player_classes/enemies/loot_tables JSON. Enemy constructor data-driven. Game.cpp spawn desde datos.
 - [x] Dia 17 | ID: D17 | Plan: 6h | Real: ~0.5h | Bloqueos: Ninguno | Resultado: GridNav.h/.cpp A* 8-dir con octile heuristic, terrainCost() en World (Sand 1.3, Forest 1.5, Mountain 2.0), Enemy Chase sigue waypoints con refresh 0.5s, prevencion corner-cutting.
-- [ ] Dia 18 | ID: D18 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __
-- [ ] Dia 19 | ID: D19 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __
-- [ ] Dia 20 | ID: D20 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __
+- [x] Dia 18 | ID: D18 | Plan: 6h | Real: ~0.5h | Bloqueos: Ninguno | Resultado: PlaySession.h/.cpp con capture/restore, EditorMode Edit/Play, boton Play/Stop, snapshot SceneData+World, overlay PLAYING.
+- [x] Dia 19 | ID: D19 | Plan: 6h | Real: ~0.5h | Bloqueos: Ninguno | Resultado: SaveGame.h/.cpp con JSON serialization, SaveVersioning con migracion, captureState/applyState en Game, F5/F9 quicksave/load.
+- [x] Dia 20 | ID: D20 | Plan: 6h | Real: ~0.5h | Bloqueos: Ninguno | Resultado: 4 test suites (21 tests) pass, Profiler singleton con ScopeTimer RAII, Performance panel ImGui en editor, Game.cpp instrumentado.
 
 ## Reglas de ejecucion
 

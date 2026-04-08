@@ -48,6 +48,7 @@ FetchContent_MakeAvailable(json)
 # ── Core game library (shared between game & editor) ─────────────────────────
 file(GLOB CORE_SOURCES
     "src/core/*.cpp"
+    "src/core/profiling/*.cpp"
     "src/entities/*.cpp"
     "src/world/*.cpp"
     "src/game/nav/*.cpp"
@@ -56,6 +57,7 @@ add_library(game_core STATIC ${CORE_SOURCES})
 target_include_directories(game_core PUBLIC
     src
     src/core
+    src/core/profiling
     src/entities
     src/world
     src/rendering
@@ -120,3 +122,10 @@ endif()
 target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -O2)
 target_compile_options(DashEngine PRIVATE -Wall -Wextra -O2)
 target_compile_options(game_core PRIVATE -Wall -Wextra -O2)
+
+# ── Tests (opt-in via -DBUILD_TESTING=ON) ─────────────────────────────────────
+option(BUILD_TESTING "Build unit tests" OFF)
+if(BUILD_TESTING)
+    enable_testing()
+    add_subdirectory(tests)
+endif()

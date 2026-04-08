@@ -7,6 +7,7 @@
 #include "PaintTileCommand.h"
 #include "PlaceEnemyCommand.h"
 #include "EraseCommand.h"
+#include "Profiler.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -234,6 +235,7 @@ void EditorApp::buildDefaultLayout(ImGuiID dockspaceId)
     ImGui::DockBuilderDockWindow("Asset Browser",     dockBottom);
     ImGui::DockBuilderDockWindow("Asset Inspector",   dockProperties);
     ImGui::DockBuilderDockWindow("Build Log",        dockBottom);
+    ImGui::DockBuilderDockWindow("Performance",      dockBottom);
 
     ImGui::DockBuilderFinish(dockspaceId);
 }
@@ -244,6 +246,7 @@ void EditorApp::buildDefaultLayout(ImGuiID dockspaceId)
 void EditorApp::run()
 {
     while (running_) {
+        Profiler::instance().beginFrame();
         SDL_Event ev;
         while (SDL_PollEvent(&ev)) {
             ImGui_ImplSDL2_ProcessEvent(&ev);
@@ -302,6 +305,7 @@ void EditorApp::run()
         drawTilePalette();
         drawViewport();
         drawBuildLog();
+        drawPerformancePanel();
         drawFileBrowser();
         drawFileEditor();
         assetBrowserPanel_.draw(assetDb_, importManager_, assetsRoot_,
@@ -329,6 +333,7 @@ void EditorApp::run()
         SDL_RenderClear(renderer_);
         ImGui_ImplSDLRenderer2_RenderDrawData(ImGui::GetDrawData(), renderer_);
         SDL_RenderPresent(renderer_);
+        Profiler::instance().endFrame();
     }
 }
 
@@ -844,6 +849,44 @@ void EditorApp::drawBuildLog()
         ImGui::TextWrapped("%s", msg.c_str());
     if (ImGui::GetScrollY() >= ImGui::GetScrollMaxY())
         ImGui::SetScrollHereY(1.f);
+    ImGui::End();
+}
+
+void EditorApp::drawPerformancePanel()
+{
+    ImGui::Begin("Performance");
+
+    auto& prof = Profiler::instance();
+    ImGui::Text("FPS: %.1f", prof.fps());
+    ImGui::Text("Frame: %.2f ms  (avg %.2f ms, peak %.2f ms)",
+                prof.frameDtMs(), prof.frameAvgMs(), prof.framePeakMs());
+
+    ImGui::Separator();
+    ImGui::Text("Subsystems:");
+
+    if (ImGui::BeginTable("##PerfTable", 4,
+            ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
+            ImGuiTableFlags_SizingStretchProp)) {
+        ImGui::TableSetupColumn("Section");
+        ImGui::TableSetupColumn("Last (ms)");
+        ImGui::TableSetupColumn("Avg (ms)");
+        ImGui::TableSetupColumn("Peak (ms)");
+        ImGui::TableHeadersRow();
+
+        for (auto& s : prof.sections()) {
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            ImGui::TextUnformatted(s.name.c_str());
+            ImGui::TableSetColumnIndex(1);
+            ImGui::Text("%.3f", s.lastMs);
+            ImGui::TableSetColumnIndex(2);
+            ImGui::Text("%.3f", s.avgMs);
+            ImGui::TableSetColumnIndex(3);
+            ImGui::Text("%.3f", s.peakMs);
+        }
+        ImGui::EndTable();
+    }
+
     ImGui::End();
 }
 

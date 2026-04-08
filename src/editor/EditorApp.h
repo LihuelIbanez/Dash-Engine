@@ -123,6 +123,7 @@ private:
     void drawTilePalette();
     void drawViewport();
     void drawBuildLog();
+    void drawPerformancePanel();
     void drawFileBrowser();
     void drawFileEditor();
     void drawOpenDialog();

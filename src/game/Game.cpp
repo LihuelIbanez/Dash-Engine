@@ -5,6 +5,7 @@
 #include "SpawnRewardSystem.h"
 #include "GameplayDatabase.h"
 #include "SaveGame.h"
+#include "Profiler.h"
 #include <nlohmann/json.hpp>
 #include <fstream>
 #include <filesystem>
@@ -395,9 +396,11 @@ void Game::run()
         prev = now;
         if (dt > 0.05f) dt = 0.05f;
 
+        Profiler::instance().beginFrame();
         processEvents();
         update(dt);
         render();
+        Profiler::instance().endFrame();
     }
 }
 
@@ -455,6 +458,7 @@ void Game::processEvents()
 // ─────────────────────────────────────────────────────────────────────────────
 void Game::update(float dt)
 {
+    auto s = Profiler::instance().scope("Update");
     ctx_.dt      = dt;
     ctx_.running = running_;
 
@@ -468,6 +472,7 @@ void Game::update(float dt)
 // ─────────────────────────────────────────────────────────────────────────────
 void Game::render()
 {
+    auto s = Profiler::instance().scope("Render");
     // Very dark background — Diablo's near-black
     SDL_SetRenderDrawColor(renderer_, 8, 6, 4, 255);
     SDL_RenderClear(renderer_);
