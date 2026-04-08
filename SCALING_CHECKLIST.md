@@ -101,14 +101,42 @@ Marca cada item con [x] cuando este completado.
 - [x] Medir tiempos por frame: update, render, AI, pathfinding.
 - [x] Registrar picos de frame time en log.
 
-## Backlog de Alto Impacto (siguiente mes)
+## Sprint 2 - Features Avanzadas (D21-D30)
 
-- [ ] Sistema de prefabs/arquetipos con overrides por instancia.
-- [ ] Hot-reload de assets sin reiniciar editor.
+### 14) Sistema de eventos (D21)
+- [x] EventDispatcher con subscribe/emit tipado.
+- [x] Eventos core: DamageEvent, DeathEvent, LevelUpEvent.
+- [x] Integrar en CombatSystem y SpawnRewardSystem.
+
+### 15) Comandos Move/Edit Property (D22)
+- [ ] MoveEntityCommand (drag en viewport con undo/redo).
+- [ ] EditPropertyCommand generico (undo/redo).
+
+### 16) Componentes base (D23-D24)
+- [ ] Crear estructuras base de componentes (`Transform`, `Render`, `Combat`, etc.).
+- [ ] EntityRegistry con almacenamiento por componentes.
+- [ ] Migracion de EntityData a representacion por componentes.
+
+### 17) Inspector generico con reflection (D25)
 - [ ] Inspector generico con metadata/reflection.
-- [ ] Sistema de eventos desacoplado (`OnDamage`, `OnDeath`, etc.).
+- [ ] Edicion de componentes via EditPropertyCommand.
+
+### 18) Prefabs (D26)
+- [ ] Sistema de prefabs/arquetipos con overrides por instancia.
+- [ ] PrefabImporter para asset pipeline.
+
+### 19) Hot-reload (D27)
+- [ ] Hot-reload de assets sin reiniciar editor.
+- [ ] FileWatcher + reimport automatico.
+
+### 20) Validacion y Packaging (D28-D29)
 - [ ] Herramientas de validacion de contenido (map checks).
 - [ ] Paquete de build reproducible para editor y juego.
+
+### 21) Cierre Sprint 2 (D30)
+- [ ] Tests de regresion completos.
+- [ ] Build release 0 warnings.
+- [ ] Tag v2.0-alpha.
 
 ## Definition of Done (Escalado inicial)
 
@@ -129,6 +157,7 @@ Marca como completado cuando se cumpla todo:
 | 2 - Asset Pipeline | ✅ Completada | 100% |
 | 3 - Runtime Systems | ✅ Completada | 100% |
 | 4 - Produccion/QA | ✅ Completada | 100% |
+| Sprint 2 - Features Avanzadas | 🔧 Pendiente | 0% |
 
 ## Notas
 

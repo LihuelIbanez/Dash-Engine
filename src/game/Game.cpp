@@ -24,6 +24,7 @@ void Game::initSystems()
     ctx_.player  = &player_;
     ctx_.enemies = &enemies_;
     ctx_.score   = &score_;
+    ctx_.events  = &dispatcher_;
 
     scheduler_.addSystem(std::make_unique<MovementSystem>());
     scheduler_.addSystem(std::make_unique<AISystem>());
@@ -553,6 +554,7 @@ void Game::update(float dt)
     ctx_.running = running_;
 
     scheduler_.updateAll(ctx_);
+    dispatcher_.flush();
 
     running_ = ctx_.running;
 }

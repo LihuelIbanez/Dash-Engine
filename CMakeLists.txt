@@ -57,6 +57,7 @@ add_library(game_core STATIC ${CORE_SOURCES})
 target_include_directories(game_core PUBLIC
     src
     src/core
+    src/core/events
     src/core/profiling
     src/entities
     src/world

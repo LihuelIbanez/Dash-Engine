@@ -5,6 +5,8 @@
 #include <vector>
 #include <memory>
 
+class EventDispatcher;   // forward declaration (src/core/events/EventDispatcher.h)
+
 // ─────────────────────────────────────────────────────────────────────────────
 // RuntimeContext – shared state passed to every system each frame
 // ─────────────────────────────────────────────────────────────────────────────
@@ -17,4 +19,6 @@ struct RuntimeContext {
     std::vector<std::unique_ptr<Enemy>>*  enemies = nullptr;
 
     int*   score = nullptr;       // points counter
+
+    EventDispatcher* events = nullptr;   // event bus (owned by Game)
 };
