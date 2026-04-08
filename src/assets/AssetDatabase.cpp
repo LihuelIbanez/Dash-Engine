@@ -152,6 +152,16 @@ const AssetRecord* AssetDatabase::findBySourcePath(const std::string& sourcePath
 // ─────────────────────────────────────────────────────────────────────────────
 // removeMissingAssets - prune records whose source file no longer exists
 // ─────────────────────────────────────────────────────────────────────────────
+void AssetDatabase::removeBySourcePath(const std::string& sourcePath)
+{
+    for (auto it = records_.begin(); it != records_.end(); ++it) {
+        if (it->second.sourcePath == sourcePath) {
+            records_.erase(it);
+            return;
+        }
+    }
+}
+
 void AssetDatabase::removeMissingAssets(const std::string& assetsRoot)
 {
     for (auto it = records_.begin(); it != records_.end(); ) {

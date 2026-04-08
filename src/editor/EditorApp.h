@@ -6,6 +6,7 @@
 #include "CommandStack.h"
 #include "AssetDatabase.h"
 #include "ImportManager.h"
+#include "FileWatcher.h"
 #include "AssetBrowserPanel.h"
 #include "AssetInspectorPanel.h"
 #include "PlaySession.h"
@@ -58,7 +59,10 @@ private:
     std::string    libraryRoot_;
     AssetBrowserPanel   assetBrowserPanel_;
     AssetInspectorPanel assetInspectorPanel_;
-
+    // ── Hot-reload ──────────────────────────────────────────────────
+    FileWatcher fileWatcher_;
+    bool        autoReload_ = true;
+    std::vector<FileWatcher::FileChange> deferredReloads_;
     // ── Camera ───────────────────────────────────────────────────────────────
     float camX_ = 12.f;
     float camY_ = 12.f;

@@ -13,6 +13,7 @@ public:
     const AssetRecord* findByGuid(const std::string& guid) const;
     const AssetRecord* findBySourcePath(const std::string& sourcePath) const;
     void removeMissingAssets(const std::string& assetsRoot);
+    void removeBySourcePath(const std::string& sourcePath);
 
     const std::unordered_map<std::string, AssetRecord>& records() const { return records_; }
 

@@ -136,6 +136,10 @@ bool EditorApp::init()
             assetDb_.save(assetDbPath_);
     }
 
+    // ── File watcher baseline ────────────────────────────────────────────────
+    fileWatcher_ = FileWatcher(assetsRoot_, 1.0f);
+    fileWatcher_.reset(); // establish baseline (no spurious Added events)
+
     newScene();
     running_ = true;
     addLog("Editor ready.");
@@ -298,6 +302,28 @@ void EditorApp::run()
         ImGui_ImplSDL2_NewFrame();
         ImGui::NewFrame();
 
+        // ── Hot-reload: detect changed assets ────────────────────────────────
+        fileWatcher_.scan();
+        const auto& hwChanges = fileWatcher_.changes();
+        if (!hwChanges.empty()) {
+            if (editorMode_ == EditorMode::Edit && autoReload_) {
+                std::vector<std::string> reloadErrors;
+                bool dbChanged = importManager_.reimportChanged(
+                    hwChanges, assetsRoot_, libraryRoot_, assetDb_, reloadErrors);
+                for (const auto& ch : hwChanges)
+                    addLog("[Hot-Reload] Reimported: " + ch.relativePath);
+                for (const auto& err : reloadErrors)
+                    addLog("[IMPORT] " + err);
+                if (dbChanged) {
+                    assetDb_.save(assetDbPath_);
+                }
+            } else if (editorMode_ == EditorMode::Play) {
+                // Queue changes to apply when returning to Edit
+                for (const auto& ch : hwChanges)
+                    deferredReloads_.push_back(ch);
+            }
+        }
+
         // Full-window dockspace
         ImGuiViewport* vp = ImGui::GetMainViewport();
         ImGui::SetNextWindowPos(vp->WorkPos);
@@ -391,6 +417,34 @@ void EditorApp::drawMenuBar()
     }
     if (ImGui::BeginMenu("View")) {
         ImGui::MenuItem("Build Log", nullptr, &showBuildLog_);
+        ImGui::Separator();
+        ImGui::MenuItem("Auto-Reload Assets", nullptr, &autoReload_);
+        ImGui::EndMenu();
+    }
+    if (ImGui::BeginMenu("Assets")) {
+        if (ImGui::MenuItem("Scan for Changes")) {
+            // Force immediate scan regardless of poll interval
+            fileWatcher_ = FileWatcher(assetsRoot_, 0.0f);
+            fileWatcher_.scan();
+            const auto& fwChanges = fileWatcher_.changes();
+            if (fwChanges.empty()) {
+                addLog("[Hot-Reload] No changes detected.");
+            } else {
+                std::vector<std::string> errs;
+                bool dbChanged = importManager_.reimportChanged(
+                    fwChanges, assetsRoot_, libraryRoot_, assetDb_, errs);
+                for (const auto& ch : fwChanges)
+                    addLog("[Hot-Reload] Reimported: " + ch.relativePath);
+                for (const auto& err : errs)
+                    addLog("[IMPORT] " + err);
+                if (dbChanged) {
+                    assetDb_.save(assetDbPath_);
+                }
+            }
+            // Restore normal watcher
+            fileWatcher_ = FileWatcher(assetsRoot_, 1.0f);
+            fileWatcher_.reset();
+        }
         ImGui::EndMenu();
     }
     if (ImGui::BeginMenu("Edit")) {
@@ -1502,6 +1556,21 @@ void EditorApp::exitPlayMode()
     selectedEntityId_ = 0;
     editorMode_ = EditorMode::Edit;
     addLog("Exited Play mode (scene restored).");
+
+    // ── Apply hot-reload changes that were deferred during Play ──────────────
+    if (!deferredReloads_.empty()) {
+        std::vector<std::string> reloadErrors;
+        bool dbChanged = importManager_.reimportChanged(
+            deferredReloads_, assetsRoot_, libraryRoot_, assetDb_, reloadErrors);
+        for (const auto& ch : deferredReloads_)
+            addLog("[Hot-Reload] Reimported: " + ch.relativePath);
+        for (const auto& err : reloadErrors)
+            addLog("[IMPORT] " + err);
+        if (dbChanged) {
+            assetDb_.save(assetDbPath_);
+        }
+        deferredReloads_.clear();
+    }
 }
 
 void EditorApp::buildAndRun()

@@ -1,5 +1,6 @@
 #pragma once
 #include "AssetDatabase.h"
+#include "FileWatcher.h"
 #include "importers/IImporter.h"
 #include <memory>
 #include <string>
@@ -31,6 +32,14 @@ public:
 
     // Infer asset type from file extension.
     static AssetType inferAssetType(const std::string& relativePath);
+
+    // Reimport only the files listed in changes (from FileWatcher).
+    // Returns true if any record was modified.
+    bool reimportChanged(const std::vector<FileWatcher::FileChange>& changes,
+                         const std::string& assetsRoot,
+                         const std::string& libraryRoot,
+                         AssetDatabase& db,
+                         std::vector<std::string>& outErrors);
 
 private:
     std::unordered_map<AssetType, std::unique_ptr<IImporter>> importers_;

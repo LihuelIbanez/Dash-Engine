@@ -141,6 +141,30 @@ bool ImportManager::importAsset(const std::string& assetsRoot,
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// reimportChanged — reimport only changed assets reported by FileWatcher
+// ─────────────────────────────────────────────────────────────────────────────
+bool ImportManager::reimportChanged(const std::vector<FileWatcher::FileChange>& changes,
+                                    const std::string& assetsRoot,
+                                    const std::string& libraryRoot,
+                                    AssetDatabase& db,
+                                    std::vector<std::string>& outErrors)
+{
+    bool anyChanged = false;
+    for (const auto& change : changes) {
+        if (change.type == FileWatcher::FileChange::Added ||
+            change.type == FileWatcher::FileChange::Modified) {
+            if (importAsset(assetsRoot, libraryRoot, change.relativePath,
+                            db, outErrors, /*force=*/true))
+                anyChanged = true;
+        } else if (change.type == FileWatcher::FileChange::Deleted) {
+            db.removeBySourcePath(change.relativePath);
+            anyChanged = true;
+        }
+    }
+    return anyChanged;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // importAll — scan assets/ and import everything that changed
 // ─────────────────────────────────────────────────────────────────────────────
 int ImportManager::importAll(const std::string& assetsRoot,
