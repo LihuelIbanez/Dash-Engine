@@ -124,14 +124,15 @@ bool EditorApp::init()
         SCREEN_W, SCREEN_H);
 
     // ── Scenes directory ─────────────────────────────────────────────────────
-    scenesDir_ = AppPaths::getResourcesDir() + "/scenes";
-    fs::create_directories(scenesDir_);
+    // ── Scenes / asset paths ─────────────────────────────────────────────────
+    projectManager_.loadRecents();
+    refreshProjectPaths();   // sets scenesDir_, assetsRoot_, libraryRoot_
 
     // ── File browser root ────────────────────────────────────────────────────
     fileBrowserRoot_ = AppPaths::getResourcesDir() + "/src";
 
     // ── Asset Database ─────────────────────────────────────────────────────
-    assetDbPath_ = AppPaths::getResourcesDir() + "/assets/asset_db.json";
+    assetDbPath_ = assetsRoot_ + "/asset_db.json";
     if (fs::exists(assetDbPath_)) {
         if (assetDb_.load(assetDbPath_))
             addLog("Asset DB loaded (" + std::to_string(assetDb_.records().size()) + " records).");
@@ -142,8 +143,6 @@ bool EditorApp::init()
     }
 
     // ── Initial asset import ─────────────────────────────────────────────────
-    assetsRoot_  = AppPaths::getResourcesDir() + "/assets";
-    libraryRoot_ = AppPaths::getResourcesDir() + "/library";
     {
         std::vector<std::string> importErrors;
         int count = importManager_.importAll(assetsRoot_, libraryRoot_, assetDb_, importErrors);
@@ -206,6 +205,86 @@ void EditorApp::addLog(const std::string& msg)
 {
     log_.push_back(msg);
     if (log_.size() > 500) log_.erase(log_.begin());
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Project management
+// ═════════════════════════════════════════════════════════════════════════════
+
+void EditorApp::refreshProjectPaths()
+{
+    if (projectManager_.hasActiveProject()) {
+        const auto& m = projectManager_.manifest();
+        assetsRoot_  = m.absoluteAssetsDir();
+        libraryRoot_ = m.absoluteLibraryDir();
+        scenesDir_   = m.absoluteScenesDir();
+    } else {
+        // Legacy mode: fall back to AppPaths-relative directories.
+        assetsRoot_  = AppPaths::getResourcesDir() + "/assets";
+        libraryRoot_ = AppPaths::getResourcesDir() + "/library";
+        scenesDir_   = AppPaths::getResourcesDir() + "/scenes";
+    }
+    fs::create_directories(scenesDir_);
+}
+
+void EditorApp::reinitAssetPipeline()
+{
+    // Save current DB before switching context.
+    if (!assetDbPath_.empty())
+        assetDb_.save(assetDbPath_);
+
+    assetDbPath_ = assetsRoot_ + "/asset_db.json";
+    assetDb_     = AssetDatabase{};
+    if (fs::exists(assetDbPath_)) {
+        if (assetDb_.load(assetDbPath_))
+            addLog("Asset DB loaded (" + std::to_string(assetDb_.records().size()) + " records).");
+        else
+            addLog("[WARN] Failed to reload asset DB.");
+    }
+
+    // Re-import assets for the new root.
+    std::vector<std::string> errors;
+    int count = importManager_.importAll(assetsRoot_, libraryRoot_, assetDb_, errors);
+    if (count > 0) {
+        addLog("Imported " + std::to_string(count) + " asset(s).");
+        assetDb_.save(assetDbPath_);
+    }
+    for (auto& e : errors) addLog("[IMPORT] " + e);
+
+    // Reset file watcher to new assets directory.
+    fileWatcher_ = FileWatcher(assetsRoot_, 1.0f);
+    fileWatcher_.reset();
+
+    // Refresh pointers held by the sprite editor.
+    spriteEditor_.assetsRoot  = &assetsRoot_;
+    spriteEditor_.libraryRoot = &libraryRoot_;
+}
+
+bool EditorApp::openProject(const std::string& manifestPath)
+{
+    if (!projectManager_.openProject(manifestPath)) {
+        addLog("[ERROR] Failed to open project: " + manifestPath);
+        return false;
+    }
+    addLog("Opened project: " + projectManager_.manifest().name
+           + "  (" + projectManager_.manifest().projectRoot + ")");
+    refreshProjectPaths();
+    reinitAssetPipeline();
+    projectManager_.saveRecents();
+    return true;
+}
+
+bool EditorApp::createProject(const std::string& dirPath, const std::string& name)
+{
+    if (!projectManager_.createProject(dirPath, name)) {
+        addLog("[ERROR] Failed to create project at: " + dirPath);
+        return false;
+    }
+    addLog("Created project: " + name + "  (" + dirPath + ")");
+    refreshProjectPaths();
+    reinitAssetPipeline();
+    projectManager_.saveRecents();
+    return true;
 }
 
 EntityData* EditorApp::findEntityById(uint64_t id)

@@ -15,8 +15,9 @@ Este directorio separa las tareas por semana para ejecutar el escalado del edito
 | Sprint 2 - Features Avanzadas | ✅ Completada | D21-D30 completados, tag v2.0-alpha |
 | Sprint 3 - Polish & Ship | 🔧 En progreso | D31-D35 pendientes |
 | Sprint 4 - Sprite Editor | ✅ Completada | D36-D45 completados |
+| Sprint 5 - Project Bundles | 🔧 En progreso | D46-D54 en curso |
 
-**Proximo paso:** Iniciar nuevo sprint/roadmap post-Sprite Editor (pendiente de definicion).
+**Proximo paso:** Ejecutar Sprint 5 — separar Game Bundle del Editor Bundle (ver 11_SPRINT5_PROJECT_BUNDLES.md).
 
 ## Funcionalidades ya implementadas (fuera del plan)
 
@@ -63,6 +64,9 @@ El proyecto ya cuenta con una base funcional significativa:
 
 ### Sprint 3 (D31-D35)
 - 09_SPRINT3_POLISH_AND_SHIP.md (tablero + registro diario + specs por dia)
+
+### Sprint 5 (D46-D54)
+- 11_SPRINT5_PROJECT_BUNDLES.md
 
 ### General
 - 99_ACCEPTANCE_CHECKLIST.md

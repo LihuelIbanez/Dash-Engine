@@ -167,12 +167,14 @@ file(GLOB EDITOR_SOURCES "src/editor/*.cpp")
 file(GLOB EDITOR_CMD_SOURCES "src/editor/commands/*.cpp")
 file(GLOB EDITOR_PLAYMODE_SOURCES "src/editor/playmode/*.cpp")
 file(GLOB EDITOR_VALIDATION_SOURCES "src/editor/validation/*.cpp")
+file(GLOB EDITOR_PROJECT_SOURCES "src/editor/project/*.cpp")
 file(GLOB ASSET_SOURCES "src/assets/*.cpp")
 file(GLOB IMPORTER_SOURCES "src/assets/importers/*.cpp")
 file(GLOB PANEL_SOURCES "src/editor/panels/*.cpp")
 add_executable(DashEngine
     ${EDITOR_SOURCES} ${EDITOR_CMD_SOURCES} ${EDITOR_PLAYMODE_SOURCES}
     ${EDITOR_VALIDATION_SOURCES}
+    ${EDITOR_PROJECT_SOURCES}
     ${ASSET_SOURCES} ${IMPORTER_SOURCES} ${PANEL_SOURCES}
     src/game/Game.cpp
     ${RUNTIME_SOURCES} ${SYSTEM_SOURCES} ${DATA_SOURCES} ${SAVE_SOURCES}
@@ -180,6 +182,7 @@ add_executable(DashEngine
 target_include_directories(DashEngine PRIVATE
     src src/core src/core/components src/entities src/world src/rendering src/editor
     src/editor/commands src/editor/panels src/editor/playmode src/editor/validation
+    src/editor/project
     src/assets src/assets/importers
     src/game src/game/runtime src/game/systems src/game/data src/game/save src/game/nav
     "${CMAKE_BINARY_DIR}/generated"

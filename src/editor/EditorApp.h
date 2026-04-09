@@ -16,6 +16,7 @@
 #include "ContentValidator.h"
 #include "ValidationPanel.h"
 #include "SpriteEditorPanel.h"
+#include "project/ProjectManager.h"
 #include <string>
 #include <vector>
 #include <map>
@@ -55,6 +56,15 @@ private:
     EntityData* findEntityById(uint64_t id);
     void performUndo();
     void performRedo();
+
+    // ── Project ───────────────────────────────────────────────────────────────
+    ProjectManager projectManager_;
+    // Open a .dashproject file and refresh all dependent editor paths.
+    bool openProject(const std::string& manifestPath);
+    // Create a new project folder + .dashproject and open it.
+    bool createProject(const std::string& dirPath, const std::string& name);
+    // Re-sync assetsRoot_, libraryRoot_, scenesDir_ from active project (or AppPaths).
+    void refreshProjectPaths();
 
     // ── Asset Database ────────────────────────────────────────────────────────
     AssetDatabase  assetDb_;
@@ -182,4 +192,7 @@ private:
     void paintTileAt(float wx, float wy);
 
     void addLog(const std::string& msg);
+
+    // Persist and restore asset DB, file watcher from current assetsRoot_/libraryRoot_.
+    void reinitAssetPipeline();
 };

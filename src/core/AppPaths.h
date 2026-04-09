@@ -137,4 +137,41 @@ inline std::string getSavesDir()
     return cached;
 }
 
+// Returns the user-writable directory for editor configuration/preferences.
+// macOS: ~/Library/Application Support/DashEngine
+// Linux: ~/.config/DashEngine
+// Fallback: ./config
+inline std::string getConfigDir()
+{
+    static const std::string cached = []() -> std::string {
+        namespace fs = std::filesystem;
+#if defined(__APPLE__)
+        const char* home = std::getenv("HOME");
+        if (home) {
+            fs::path p = fs::path(home) / "Library" / "Application Support" / "DashEngine";
+            std::error_code ec;
+            fs::create_directories(p, ec);
+            if (!ec) return p.string();
+        }
+#elif defined(__linux__)
+        const char* xdg = std::getenv("XDG_CONFIG_HOME");
+        if (xdg) {
+            fs::path p = fs::path(xdg) / "DashEngine";
+            std::error_code ec;
+            fs::create_directories(p, ec);
+            if (!ec) return p.string();
+        }
+        const char* home = std::getenv("HOME");
+        if (home) {
+            fs::path p = fs::path(home) / ".config" / "DashEngine";
+            std::error_code ec;
+            fs::create_directories(p, ec);
+            if (!ec) return p.string();
+        }
+#endif
+        return "config";
+    }();
+    return cached;
+}
+
 } // namespace AppPaths
