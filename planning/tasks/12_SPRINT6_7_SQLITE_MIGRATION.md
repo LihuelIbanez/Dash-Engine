@@ -406,3 +406,19 @@ Equipo recomendado:
 2. Query tooling para analytics de contenido.
 3. Sincronizacion remota (si luego se requiere multi-user).
 4. Compactacion y mantenimiento DB (VACUUM/ANALYZE en pipeline).
+
+### D69 - Benchmark reproducible de cutover (post Sprint 7)
+
+Objetivo:
+- Medir y comparar JSON vs SQLite en operaciones criticas despues del cutover.
+
+Alcance:
+- Listado de escenas.
+- Carga de escena.
+- Carga de gameplay DB.
+
+Implementacion:
+- `tests/test_sqlite_cutover_performance.cpp`.
+- Salida de tiempos en ms y umbral de regresion controlado.
+
+Estado: ✅ Implementado

@@ -487,3 +487,65 @@ target_compile_definitions(test_gameplay_db_sqlite PRIVATE
 target_compile_options(test_gameplay_db_sqlite PRIVATE -Wall -Wextra -O2)
 add_test(NAME test_gameplay_db_sqlite COMMAND test_gameplay_db_sqlite)
 
+# ── SQLite cutover performance benchmark (D69) ─────────────────────────────
+add_executable(test_sqlite_cutover_performance
+    test_sqlite_cutover_performance.cpp
+    ${CMAKE_SOURCE_DIR}/src/editor/project/ProjectManifest.cpp
+    ${CMAKE_SOURCE_DIR}/src/editor/project/ProjectDataMigrator.cpp
+    ${CMAKE_SOURCE_DIR}/src/editor/SceneData.cpp
+    ${CMAKE_SOURCE_DIR}/src/editor/scene/SceneRepositorySqlite.cpp
+    ${CMAKE_SOURCE_DIR}/src/game/data/GameplayDatabase.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/db/SqliteDb.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/db/SqliteStatement.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/db/SchemaManager.cpp
+)
+target_include_directories(test_sqlite_cutover_performance PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/src/core
+    ${CMAKE_SOURCE_DIR}/src/core/components
+    ${CMAKE_SOURCE_DIR}/src/editor
+    ${CMAKE_SOURCE_DIR}/src/editor/project
+    ${CMAKE_SOURCE_DIR}/src/editor/scene
+    ${CMAKE_SOURCE_DIR}/src/game
+    ${CMAKE_SOURCE_DIR}/src/game/data
+)
+target_link_libraries(test_sqlite_cutover_performance PRIVATE
+    game_core
+    nlohmann_json::nlohmann_json
+    SQLite3::SQLite3
+)
+target_compile_definitions(test_sqlite_cutover_performance PRIVATE
+    PROJECT_DIR="${CMAKE_SOURCE_DIR}"
+)
+target_compile_options(test_sqlite_cutover_performance PRIVATE -Wall -Wextra -O2)
+add_test(NAME test_sqlite_cutover_performance COMMAND test_sqlite_cutover_performance)
+
+# ── CLI tool: migrate an arbitrary project root to SQLite ───────────────────
+add_executable(migrate_project_data
+    migrate_project_data.cpp
+    ${CMAKE_SOURCE_DIR}/src/editor/project/ProjectManifest.cpp
+    ${CMAKE_SOURCE_DIR}/src/editor/project/ProjectDataMigrator.cpp
+    ${CMAKE_SOURCE_DIR}/src/editor/SceneData.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/db/SqliteDb.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/db/SqliteStatement.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/db/SchemaManager.cpp
+)
+target_include_directories(migrate_project_data PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/src/core
+    ${CMAKE_SOURCE_DIR}/src/core/components
+    ${CMAKE_SOURCE_DIR}/src/editor
+    ${CMAKE_SOURCE_DIR}/src/editor/project
+    ${CMAKE_SOURCE_DIR}/src/world
+    ${CMAKE_SOURCE_DIR}/src/rendering
+)
+target_link_libraries(migrate_project_data PRIVATE
+    game_core
+    nlohmann_json::nlohmann_json
+    SQLite3::SQLite3
+)
+target_compile_definitions(migrate_project_data PRIVATE
+    PROJECT_DIR="${CMAKE_SOURCE_DIR}"
+)
+target_compile_options(migrate_project_data PRIVATE -Wall -Wextra -O2)
+

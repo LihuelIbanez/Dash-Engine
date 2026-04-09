@@ -40,6 +40,7 @@ Si falla cualquiera, la migracion queda marcada como fallida.
 3. GameplayDatabase carga clases/enemigos/loot desde SQLite.
 4. SaveGame quicksave/quicload (F5/F9) funciona en sqlite/hybrid.
 5. Build & Run y export no presentan regresiones.
+6. Benchmark D69 en verde (`test_sqlite_cutover_performance`).
 
 ## Rollback operativo
 
@@ -74,3 +75,4 @@ Si falla cualquiera, la migracion queda marcada como fallida.
   - test_gameplay_db_sqlite
   - test_project_data_migrator
   - test_save_game
+   - test_sqlite_cutover_performance

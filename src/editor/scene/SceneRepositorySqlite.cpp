@@ -7,10 +7,24 @@
 #include <sqlite3.h>
 #include <chrono>
 #include <filesystem>
+#include <mutex>
+#include <unordered_set>
 
 namespace fs = std::filesystem;
 
 namespace {
+
+std::mutex& schemaCacheMutex()
+{
+    static std::mutex m;
+    return m;
+}
+
+std::unordered_set<std::string>& schemaCache()
+{
+    static std::unordered_set<std::string> s;
+    return s;
+}
 
 std::string migrationsDirPath()
 {
@@ -35,6 +49,13 @@ SceneRepositorySqlite::SceneRepositorySqlite(std::string dbPath)
 
 bool SceneRepositorySqlite::ensureSchema(std::string* error) const
 {
+    {
+        std::lock_guard<std::mutex> lock(schemaCacheMutex());
+        if (schemaCache().find(dbPath_) != schemaCache().end()) {
+            return true;
+        }
+    }
+
     SqliteDb db;
     if (!db.open(dbPath_, error)) {
         return false;
@@ -44,6 +65,12 @@ bool SceneRepositorySqlite::ensureSchema(std::string* error) const
         if (error) *error = "failed to apply schema migrations";
         return false;
     }
+
+    {
+        std::lock_guard<std::mutex> lock(schemaCacheMutex());
+        schemaCache().insert(dbPath_);
+    }
+
     return true;
 }
 

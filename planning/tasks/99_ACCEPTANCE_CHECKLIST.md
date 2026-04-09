@@ -77,6 +77,7 @@ Usa este archivo para control de cierre por fase.
 - [x] D66: indices de performance agregados en migracion `002_performance_indexes.sql`.
 - [x] D67: hardening con backup previo, `foreign_keys=ON`, `integrity_check` y `foreign_key_check`.
 - [x] D68: runbook operativo SQLite documentado.
+- [x] D69: benchmark reproducible JSON vs SQLite para scene list/load y gameplay load.
 
 ## Resumen de avance
 
@@ -89,6 +90,6 @@ Usa este archivo para control de cierre por fase.
 | Sprint 3 - Polish | 0 | 4 | 0% |
 | Sprint 4 - Sprite Editor | 5 | 5 | 100% |
 | Sprint 5 - Project Bundles | 9 | 9 | 100% |
-| Sprint 6-7 - SQLite Migration | 14 | 14 | 100% |
+| Sprint 6-7 - SQLite Migration | 15 | 15 | 100% |
 | **Total S1+S2** | **16** | **16** | **100%** |
-| **Total incluyendo S3-S7** | **44** | **48** | **92%** |
+| **Total incluyendo S3-S7** | **45** | **49** | **92%** |
