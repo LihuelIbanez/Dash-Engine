@@ -8,6 +8,7 @@
 
 #include <GLFW/glfw3.h>
 
+#include "game/physics/DebugPhysicsDraw.h"
 #include "rendering/vulkan/PipelineBuilder.h"
 
 #ifndef VULKAN_SHADER_DIR
@@ -111,6 +112,15 @@ static Mat4 lookAt(const Vec3& eye, const Vec3& center, const Vec3& up)
     out.m[12] = -dot(s, eye);
     out.m[13] = -dot(u, eye);
     out.m[14] = dot(f, eye);
+    return out;
+}
+
+static Mat4 translate(const Vec3& t)
+{
+    Mat4 out = identity();
+    out.m[12] = t.x;
+    out.m[13] = t.y;
+    out.m[14] = t.z;
     return out;
 }
 
@@ -381,8 +391,27 @@ bool Renderer::init(WindowContext& window)
         return false;
     }
 
+    if (!physicsWorld_.init()) {
+        std::fprintf(stderr, "[D80] PhysicsWorld initialization failed.\n");
+        return false;
+    }
+    physicsWorld_.setGravity({0.0f, -9.8f, 0.0f});
+    physicsWorld_.setRestitution(0.20f);
+    physicsWorld_.setCollisionCallback([](const dash::physics::CollisionEvent& ev) {
+        if (ev.type == dash::physics::CollisionEventType::Enter) {
+            std::printf("[D82] Collision Enter: %d <-> %d\n", ev.a, ev.b);
+        }
+    });
+
+    floorBodyId_ = physicsWorld_.createStaticPlane(-0.7f);
+    cubeBodyId_ = physicsWorld_.createDynamicBox({0.0f, 0.8f, 0.0f}, {0.30f, 0.30f, 0.30f}, 1.0f);
+    transformProxy_.syncFromPhysics(physicsWorld_, cubeBodyId_, cubeTransform_);
+    dash::physics::DebugPhysicsDraw::logBodyAabb(physicsWorld_, floorBodyId_, "floor");
+    dash::physics::DebugPhysicsDraw::logBodyAabb(physicsWorld_, cubeBodyId_, "cube");
+
     initialized_ = true;
     std::puts("[D78] Renderer + FrameGraphLite initialized.");
+    std::puts("[D80-D83] PhysicsWorld active (fixed-step + cube/plane baseline).");
     return true;
 }
 
@@ -401,7 +430,7 @@ bool Renderer::updateCameraUbo(uint32_t imageIndex)
     Vec3 forward = forwardFromAngles();
     const Vec3 target{ cameraX_ + forward.x, cameraY_ + forward.y, cameraZ_ + forward.z };
 
-    Mat4 model = identity();
+    Mat4 model = translate({cubeTransform_.position.x, cubeTransform_.position.y, cubeTransform_.position.z});
     Mat4 view = lookAt({cameraX_, cameraY_, cameraZ_}, target, {0.0f, 1.0f, 0.0f});
     Mat4 proj = perspective(
         60.0f * 0.0174532925f,
@@ -435,6 +464,17 @@ bool Renderer::runSmoke(WindowContext& window, uint32_t targetFrames)
         const auto now = std::chrono::steady_clock::now();
         const float dt = std::chrono::duration<float>(now - lastTime).count();
         lastTime = now;
+
+        fixedAccumulator_ += dt;
+        static constexpr float kFixedDt = 1.0f / 60.0f;
+        static constexpr int kMaxSubsteps = 4;
+        int substeps = 0;
+        while (fixedAccumulator_ >= kFixedDt && substeps < kMaxSubsteps) {
+            physicsWorld_.step(kFixedDt);
+            fixedAccumulator_ -= kFixedDt;
+            ++substeps;
+        }
+        transformProxy_.syncFromPhysics(physicsWorld_, cubeBodyId_, cubeTransform_);
 
         auto forwardFromAngles = [&]() -> Vec3 {
             const float yaw = yawDegrees_ * 0.0174532925f;
@@ -537,6 +577,11 @@ bool Renderer::runSmoke(WindowContext& window, uint32_t targetFrames)
 
         if (!frameGraph_.endFrame(imageIndex)) break;
         ++renderedFrames;
+
+        if (renderedFrames == targetFrames) {
+            const dash::physics::Vec3 p = physicsWorld_.position(cubeBodyId_);
+            std::printf("[D83] Baseline settled cube position: (%.3f, %.3f, %.3f)\n", p.x, p.y, p.z);
+        }
     }
 
     vkDeviceWaitIdle(deviceContext_.device());

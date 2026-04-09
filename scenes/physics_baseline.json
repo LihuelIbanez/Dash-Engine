@@ -1,0 +1,28 @@
+{
+  "name": "Physics Baseline",
+  "scene_version": 1,
+  "worldSeed": 12345,
+  "nextEntityId": 2,
+  "tileOverrides": [],
+  "entities": [
+    {
+      "id": 1,
+      "type": "Cube",
+      "name": "FallingCube",
+      "x": 0.0,
+      "y": 0.8,
+      "z": 0.0,
+      "physics": {
+        "body": "dynamic",
+        "collider": "box",
+        "halfExtents": [0.3, 0.3, 0.3],
+        "mass": 1.0
+      }
+    }
+  ],
+  "physics": {
+    "gravity": [0.0, -9.8, 0.0],
+    "floorPlaneY": -0.7,
+    "fixedStep": 0.0166667
+  }
+}

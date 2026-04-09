@@ -9,7 +9,7 @@ int main()
     std::printf("%s", dash::vkexp::VulkanDiagnostics::buildReport().c_str());
 
     dash::vkexp::WindowContext window;
-    if (!window.init(1280, 720, "Dash Vulkan Bootstrap (D70-D78)")) {
+    if (!window.init(1280, 720, "Dash Vulkan Bootstrap (D70-D84)")) {
         return 1;
     }
 

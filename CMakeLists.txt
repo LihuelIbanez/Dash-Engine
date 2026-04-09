@@ -126,6 +126,7 @@ file(GLOB CORE_SOURCES
     "src/entities/*.cpp"
     "src/world/*.cpp"
     "src/game/nav/*.cpp"
+    "src/game/physics/*.cpp"
 )
 add_library(game_core STATIC ${CORE_SOURCES})
 target_include_directories(game_core PUBLIC
@@ -173,7 +174,7 @@ if(ENABLE_VULKAN_EXPERIMENTAL)
         target_include_directories(vulkan_experimental PUBLIC
             ${CMAKE_SOURCE_DIR}/src
         )
-        target_link_libraries(vulkan_experimental PUBLIC Vulkan::Vulkan ${GLFW_VK_TARGET})
+        target_link_libraries(vulkan_experimental PUBLIC Vulkan::Vulkan ${GLFW_VK_TARGET} game_core)
         target_compile_options(vulkan_experimental PRIVATE -Wall -Wextra -O2)
 
         set(VULKAN_SHADER_SRC_DIR "${CMAKE_SOURCE_DIR}/assets/shaders")

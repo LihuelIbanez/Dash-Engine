@@ -549,3 +549,6 @@ target_compile_definitions(migrate_project_data PRIVATE
 )
 target_compile_options(migrate_project_data PRIVATE -Wall -Wextra -O2)
 
+# ── Physics determinism baseline (D84) ─────────────────────────────────────
+dash_add_test(test_physics_determinism test_physics_determinism.cpp)
+

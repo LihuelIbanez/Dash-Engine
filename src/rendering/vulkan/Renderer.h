@@ -11,6 +11,8 @@
 #include "rendering/vulkan/DeviceContext.h"
 #include "rendering/vulkan/FrameGraphLite.h"
 #include "rendering/vulkan/SwapchainContext.h"
+#include "game/physics/PhysicsWorld.h"
+#include "game/physics/TransformProxy.h"
 
 namespace dash::vkexp {
 
@@ -51,6 +53,13 @@ private:
     VkPipeline pipeline_ = VK_NULL_HANDLE;
 
     bool initialized_ = false;
+
+    dash::physics::PhysicsWorld physicsWorld_;
+    dash::physics::TransformProxy transformProxy_;
+    dash::physics::Transform3 cubeTransform_{};
+    int floorBodyId_ = -1;
+    int cubeBodyId_ = -1;
+    float fixedAccumulator_ = 0.0f;
 
     float cameraX_ = 0.0f;
     float cameraY_ = 0.0f;

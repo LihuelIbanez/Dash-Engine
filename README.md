@@ -15,7 +15,7 @@ Asset Pipeline  [█████████████████████
 Game Runtime    [██████████████████████████████]  100%
 Production / QA [██████████████████████████████]  100%
 SQLite Persistence [██████████████████████████████]  100%
-Vulkan 3D Roadmap [..............................]    0%  (Sprint 8-12 planificado)
+Vulkan 3D Roadmap [█████.........................]   18%  (D70-D84 en progreso)
 ```
 
 | Módulo | Estado | Detalle |
@@ -26,7 +26,7 @@ Vulkan 3D Roadmap [..............................]    0%  (Sprint 8-12 planifica
 | Game Runtime | ✅ Completo | 4 sistemas independientes, data-driven desde JSON, A* pathfinding, save/load versionado, EventDispatcher integrado |
 | Production / QA | ✅ Completo | Suite ctest automatizada, ContentValidator, Packaging cmake, VersionInfo embebida |
 | SQLite Persistence | ✅ Completo | Migraciones versionadas, repositorios de assets/scenes/savegame en SQLite, fallback JSON/hybrid/sqlite |
-| Vulkan 3D Roadmap | 🧭 Planificado | Sprints 8-12 definidos (D70-D110) para render 3D, fisicas, audio, import y portabilidad |
+| Vulkan 3D Roadmap | 🚧 En progreso | D70-D78 completos (bootstrap/render/camara/refactor) + base D80-D84 (PhysicsWorld, timestep fijo, baseline y test determinista) |
 
 **Sprint 7 completado:** migracion SQLite consolidada (foundation + cutover), migrador de datos, runbook y pruebas de integridad.
 
