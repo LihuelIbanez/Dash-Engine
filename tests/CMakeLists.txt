@@ -292,3 +292,75 @@ target_link_libraries(test_sprite_editor PRIVATE
 target_compile_options(test_sprite_editor PRIVATE -Wall -Wextra -O2)
 add_test(NAME test_sprite_editor COMMAND test_sprite_editor)
 
+# ── ProjectManifest roundtrip (D53) ──────────────────────────────────────────
+add_executable(test_project_manifest
+    test_project_manifest.cpp
+    ${CMAKE_SOURCE_DIR}/src/editor/project/ProjectManifest.cpp
+)
+target_include_directories(test_project_manifest PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/src/core
+    ${CMAKE_SOURCE_DIR}/src/editor
+    ${CMAKE_SOURCE_DIR}/src/editor/project
+    ${SDL2_INCLUDE_DIRS}
+)
+target_link_libraries(test_project_manifest PRIVATE
+    nlohmann_json::nlohmann_json
+    ${SDL2_LIBRARIES}
+)
+target_compile_options(test_project_manifest PRIVATE -Wall -Wextra -O2)
+add_test(NAME test_project_manifest COMMAND test_project_manifest)
+
+# ── ProjectManager create/open workflow (D53) ───────────────────────────────
+add_executable(test_project_manager
+    test_project_manager.cpp
+    ${CMAKE_SOURCE_DIR}/src/editor/project/ProjectManifest.cpp
+    ${CMAKE_SOURCE_DIR}/src/editor/project/ProjectManager.cpp
+)
+target_include_directories(test_project_manager PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/src/core
+    ${CMAKE_SOURCE_DIR}/src/editor
+    ${CMAKE_SOURCE_DIR}/src/editor/project
+    ${SDL2_INCLUDE_DIRS}
+)
+target_link_libraries(test_project_manager PRIVATE
+    nlohmann_json::nlohmann_json
+    ${SDL2_LIBRARIES}
+)
+target_compile_options(test_project_manager PRIVATE -Wall -Wextra -O2)
+add_test(NAME test_project_manager COMMAND test_project_manager)
+
+# ── GameBuildPipeline export bundle (D53) ────────────────────────────────────
+add_executable(test_game_build_pipeline
+    test_game_build_pipeline.cpp
+    ${CMAKE_SOURCE_DIR}/src/editor/project/ProjectManifest.cpp
+    ${CMAKE_SOURCE_DIR}/src/editor/project/GameBuildPipeline.cpp
+)
+target_include_directories(test_game_build_pipeline PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/src/core
+    ${CMAKE_SOURCE_DIR}/src/editor
+    ${CMAKE_SOURCE_DIR}/src/editor/project
+    ${SDL2_INCLUDE_DIRS}
+)
+target_link_libraries(test_game_build_pipeline PRIVATE
+    nlohmann_json::nlohmann_json
+    ${SDL2_LIBRARIES}
+)
+target_compile_options(test_game_build_pipeline PRIVATE -Wall -Wextra -O2)
+add_test(NAME test_game_build_pipeline COMMAND test_game_build_pipeline)
+
+# ── Runtime isolation source check (D53) ─────────────────────────────────────
+add_executable(test_runtime_isolation
+    test_runtime_isolation.cpp
+)
+target_include_directories(test_runtime_isolation PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+)
+target_compile_definitions(test_runtime_isolation PRIVATE
+    PROJECT_DIR="${CMAKE_SOURCE_DIR}"
+)
+target_compile_options(test_runtime_isolation PRIVATE -Wall -Wextra -O2)
+add_test(NAME test_runtime_isolation COMMAND test_runtime_isolation)
+

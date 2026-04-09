@@ -2,7 +2,7 @@
 
 Este directorio separa las tareas por semana para ejecutar el escalado del editor y del juego.
 
-**Ultima actualizacion: 2026-04-08**
+**Ultima actualizacion: 2026-04-09**
 
 ## Estado actual del sprint
 
@@ -15,9 +15,9 @@ Este directorio separa las tareas por semana para ejecutar el escalado del edito
 | Sprint 2 - Features Avanzadas | ✅ Completada | D21-D30 completados, tag v2.0-alpha |
 | Sprint 3 - Polish & Ship | 🔧 En progreso | D31-D35 pendientes |
 | Sprint 4 - Sprite Editor | ✅ Completada | D36-D45 completados |
-| Sprint 5 - Project Bundles | 🔧 En progreso | D46-D54 en curso |
+| Sprint 5 - Project Bundles | ✅ Completada | D46-D54 completados |
 
-**Proximo paso:** Ejecutar Sprint 5 — separar Game Bundle del Editor Bundle (ver 11_SPRINT5_PROJECT_BUNDLES.md).
+**Proximo paso:** Retomar Sprint 3 (D31-D35) y consolidar release final post-bundles.
 
 ## Funcionalidades ya implementadas (fuera del plan)
 
@@ -36,7 +36,7 @@ El proyecto ya cuenta con una base funcional significativa:
 - EventDispatcher tipado (DamageEvent/DeathEvent/LevelUpEvent/HealthChangeEvent)
 - Inspector generico con reflection y undo/redo de componentes
 - Sprite Editor completo con preview isometrico y metadatos de pivot (.sprite.json)
-- 14 suites de tests automatizados (ctest)
+- 18 tests automatizados (ctest)
 
 ## Orden recomendado
 

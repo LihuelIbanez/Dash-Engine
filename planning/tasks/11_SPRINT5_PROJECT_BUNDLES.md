@@ -19,6 +19,14 @@ Un **proyecto** (`.dashproject`) es la unidad de trabajo del editor: especifica 
 
 ### To Do
 
+(vacío)
+
+### Doing
+
+(vacío)
+
+### Done
+
 - D46 — ProjectManifest: modelo de datos + serialización
 - D47 — ProjectManager: abrir / crear / cerrar proyectos en el editor
 - D48 — Migrar AppPaths a paths relativos al proyecto
@@ -28,14 +36,6 @@ Un **proyecto** (`.dashproject`) es la unidad de trabajo del editor: especifica 
 - D52 — Aislamiento de headers editor/game (sin leakage)
 - D53 — Tests de integración de separación
 - D54 — Documentación y cierre
-
-### Doing
-
-(vacío)
-
-### Done
-
-(vacío)
 
 ---
 

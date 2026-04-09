@@ -80,12 +80,18 @@ GameBuildPipeline::BuildResult GameBuildPipeline::build(const ProjectManifest& m
         return res;
     }
 
-    // 1) Build runtime executable
-    res.log.push_back("[BuildPipeline] Building target IsometricRPG...");
-    std::string cmd = "cd \"" + buildDir + "\" && cmake --build . --target IsometricRPG --parallel 2>&1";
-    if (!runCommandCapture(cmd, res.log)) {
-        res.log.push_back("[ERROR] Build failed.");
-        return res;
+    // 1) Build runtime executable (can be skipped in tests)
+    const char* skipBuildEnv = std::getenv("DASH_SKIP_GAME_BUILD");
+    const bool skipBuild = (skipBuildEnv && std::string(skipBuildEnv) == "1");
+    if (!skipBuild) {
+        res.log.push_back("[BuildPipeline] Building target IsometricRPG...");
+        std::string cmd = "cd \"" + buildDir + "\" && cmake --build . --target IsometricRPG --parallel 2>&1";
+        if (!runCommandCapture(cmd, res.log)) {
+            res.log.push_back("[ERROR] Build failed.");
+            return res;
+        }
+    } else {
+        res.log.push_back("[BuildPipeline] Skipping build (DASH_SKIP_GAME_BUILD=1).");
     }
 
     fs::path exePath = fs::path(buildDir) / "IsometricRPG";

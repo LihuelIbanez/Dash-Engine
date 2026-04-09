@@ -62,8 +62,8 @@ Usa este archivo para control de cierre por fase.
 - [x] Build Game Pipeline: exportar directorio auto-contenido con ejecutable + assets del proyecto. *(D50)*
 - [x] WelcomePanel / Launcher con New Project, Open Project y Recent Projects. *(D51)*
 - [x] Aislamiento verificado: `check_isolation` target no detecta headers de editor en game_runtime. *(D52)*
-- [ ] ≥ 18 tests (ctest 100% pass) incluyendo project_manifest, project_manager y build_pipeline. *(D53)*
-- [ ] README y checklists actualizados; tag `v5.0-alpha`. *(D54)*
+- [x] ≥ 18 tests (ctest 100% pass) incluyendo project_manifest, project_manager y build_pipeline. *(D53)*
+- [x] README y checklists actualizados; tag `v5.0-alpha` pendiente de release. *(D54)*
 
 ## Resumen de avance
 
@@ -75,6 +75,6 @@ Usa este archivo para control de cierre por fase.
 | D - Produccion y QA | 4 | 4 | 100% |
 | Sprint 3 - Polish | 0 | 4 | 0% |
 | Sprint 4 - Sprite Editor | 5 | 5 | 100% |
-| Sprint 5 - Project Bundles | 7 | 9 | 78% |
+| Sprint 5 - Project Bundles | 9 | 9 | 100% |
 | **Total S1+S2** | **16** | **16** | **100%** |
-| **Total incluyendo S3-S5** | **28** | **34** | **82%** |
+| **Total incluyendo S3-S5** | **30** | **34** | **88%** |
