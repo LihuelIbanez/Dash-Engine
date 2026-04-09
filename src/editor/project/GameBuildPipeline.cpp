@@ -12,6 +12,27 @@ using json = nlohmann::json;
 
 namespace {
 
+fs::path resolveBuiltExecutable(const std::string& buildDir, const std::string& targetName)
+{
+    std::error_code ec;
+    const fs::path buildRoot(buildDir);
+
+    const std::array<fs::path, 3> candidates = {
+        buildRoot / targetName,
+        buildRoot / "src" / "game" / targetName,
+        buildRoot / "Debug" / targetName,
+    };
+
+    for (const auto& candidate : candidates) {
+        if (fs::exists(candidate, ec) && fs::is_regular_file(candidate, ec)) {
+            return candidate;
+        }
+        ec.clear();
+    }
+
+    return {};
+}
+
 bool runCommandCapture(const std::string& cmd, std::vector<std::string>& out)
 {
     FILE* pipe = popen(cmd.c_str(), "r");
@@ -94,11 +115,12 @@ GameBuildPipeline::BuildResult GameBuildPipeline::build(const ProjectManifest& m
         res.log.push_back("[BuildPipeline] Skipping build (DASH_SKIP_GAME_BUILD=1).");
     }
 
-    fs::path exePath = fs::path(buildDir) / "IsometricRPG";
+    fs::path exePath = resolveBuiltExecutable(buildDir, "IsometricRPG");
     if (!fs::exists(exePath, ec)) {
-        res.log.push_back("[ERROR] Built executable not found at: " + exePath.string());
+        res.log.push_back("[ERROR] Built executable not found under build directory: " + buildDir);
         return res;
     }
+    res.log.push_back("[BuildPipeline] Using executable: " + exePath.string());
 
 #if defined(__APPLE__)
     // 2) Create .app bundle

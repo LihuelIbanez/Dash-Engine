@@ -66,20 +66,11 @@
     {
       "assetType": "Unknown",
       "dependencies": [],
-      "guid": "5ccb041f-e0d4-44ff-bd85-66a110633979",
-      "hash": "9e759d19cffb066d",
-      "importPath": "sprites/sprite_16x16.png",
-      "lastImportTime": 1775685359,
-      "sourcePath": "sprites/sprite_16x16.png"
-    },
-    {
-      "assetType": "GameplayConfig",
-      "dependencies": [],
-      "guid": "fc19d320-87b9-407c-ac01-3571ca2efada",
-      "hash": "792da40833c2d608",
-      "importPath": "sprites/default_palette.json",
-      "lastImportTime": 1775667384,
-      "sourcePath": "sprites/default_palette.json"
+      "guid": "cfc6551e-0a67-46a8-9600-8806e5198aaa",
+      "hash": "c77c6b364b08a68a",
+      "importPath": "sprites/sprite_32x32.png",
+      "lastImportTime": 1775686321,
+      "sourcePath": "sprites/sprite_32x32.png"
     },
     {
       "assetType": "Unknown",
@@ -102,11 +93,20 @@
     {
       "assetType": "Unknown",
       "dependencies": [],
-      "guid": "cfc6551e-0a67-46a8-9600-8806e5198aaa",
-      "hash": "c77c6b364b08a68a",
-      "importPath": "sprites/sprite_32x32.png",
-      "lastImportTime": 1775686321,
-      "sourcePath": "sprites/sprite_32x32.png"
+      "guid": "5ccb041f-e0d4-44ff-bd85-66a110633979",
+      "hash": "9e759d19cffb066d",
+      "importPath": "sprites/sprite_16x16.png",
+      "lastImportTime": 1775685359,
+      "sourcePath": "sprites/sprite_16x16.png"
+    },
+    {
+      "assetType": "GameplayConfig",
+      "dependencies": [],
+      "guid": "fc19d320-87b9-407c-ac01-3571ca2efada",
+      "hash": "792da40833c2d608",
+      "importPath": "sprites/default_palette.json",
+      "lastImportTime": 1775667384,
+      "sourcePath": "sprites/default_palette.json"
     }
   ]
 }

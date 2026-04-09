@@ -43,6 +43,11 @@ int main()
     ASSERT(pm.hasActiveProject(), "project active after open");
     ASSERT(pm.manifest().name == "ManagerTest", "manifest name loaded");
 
+    pm.closeProject();
+    ASSERT(pm.openProject(tmpRoot.string()), "openProject accepts a project directory");
+    ASSERT(pm.hasActiveProject(), "project active after opening directory");
+    ASSERT(pm.manifest().name == "ManagerTest", "manifest name loaded from directory");
+
     ASSERT(!pm.recentProjects().empty(), "recents has entries");
     ASSERT(pm.recentProjects().front().find("ManagerTest.dashproject") != std::string::npos,
            "recent contains manifest path");

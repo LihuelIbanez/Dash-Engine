@@ -36,13 +36,13 @@ int main()
 
     fs::create_directories(projectRoot / "assets" / "sprites", ec);
     fs::create_directories(projectRoot / "scenes", ec);
-    fs::create_directories(buildDir, ec);
+    fs::create_directories(buildDir / "src" / "game", ec);
 
     writeText(projectRoot / "assets" / "sprites" / "hero.png", "fakepng");
     writeText(projectRoot / "scenes" / "default.json", "{}");
 
     // Fake build output executable so pipeline can run in test mode.
-    fs::path fakeExe = buildDir / "IsometricRPG";
+    fs::path fakeExe = buildDir / "src" / "game" / "IsometricRPG";
     writeText(fakeExe, "#!/bin/sh\necho fake\n");
     fs::permissions(fakeExe,
                     fs::perms::owner_exec | fs::perms::owner_read | fs::perms::owner_write,

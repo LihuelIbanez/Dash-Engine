@@ -113,9 +113,13 @@ private:
     // ── File dialogs ─────────────────────────────────────────────────────────
     std::string              scenesDir_;
     std::vector<std::string> sceneFiles_;
+    std::string              selectedSceneFile_;
+    bool                     showSceneSelector_ = true;
     bool  showOpenDialog_ = false;
     bool  showSaveDialog_ = false;
+    bool  showCreateSceneDialog_ = false;
     char  saveFileName_[256] = "scene.json";
+    char  createSceneFileName_[256] = "new_scene.json";
 
     // ── Unsaved-changes confirmation ─────────────────────────────────────────
     enum class PendingAction { None, NewScene, OpenScene, Exit };
@@ -127,7 +131,17 @@ private:
 
     // ── Build / log ──────────────────────────────────────────────────────────
     std::vector<std::string> log_;
+    bool showToolbar_ = true;
+    bool showSceneHierarchy_ = true;
+    bool showPropertiesPanel_ = true;
+    bool showTilePalette_ = true;
+    bool showViewport_ = true;
     bool showBuildLog_ = true;
+    bool showPerformancePanel_ = true;
+    bool showFileBrowser_ = true;
+    bool showFileEditor_ = true;
+    bool showAssetBrowser_ = true;
+    bool showAssetInspector_ = true;
     WelcomePanel welcomePanel_;
 
     // ── Cursors ──────────────────────────────────────────────────────────────
@@ -175,14 +189,17 @@ private:
     void drawPerformancePanel();
     void drawFileBrowser();
     void drawFileEditor();
+    void drawSceneSelector();
     void drawOpenDialog();
     void drawSaveDialog();
+    void drawCreateSceneDialog();
 
     // ── Actions ──────────────────────────────────────────────────────────────
     void newScene();
     void refreshSceneFiles();
     void saveScene(const std::string& path);
     void openScene(const std::string& path);
+    void loadInitialProjectScene();
     void buildAndRun();
     void exportGameBundle();
     void applySceneToWorld();

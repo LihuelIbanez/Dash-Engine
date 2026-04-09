@@ -29,11 +29,58 @@
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
+#include <spawn.h>
 #include <sstream>
 #include <nlohmann/json.hpp>
 
 namespace fs = std::filesystem;
 using json = nlohmann::json;
+
+extern char** environ;
+
+namespace {
+
+fs::path resolveBuiltGameExecutable(const fs::path& buildDir)
+{
+    std::error_code ec;
+    const std::array<fs::path, 3> candidates = {
+        buildDir / "IsometricRPG",
+        buildDir / "src" / "game" / "IsometricRPG",
+        buildDir / "Debug" / "IsometricRPG",
+    };
+
+    for (const auto& candidate : candidates) {
+        if (fs::exists(candidate, ec) && fs::is_regular_file(candidate, ec)) {
+            return candidate;
+        }
+        ec.clear();
+    }
+
+    return {};
+}
+
+bool launchDetachedProcess(const fs::path& executable,
+                           const std::vector<std::string>& args,
+                           std::string& error)
+{
+    std::vector<char*> argv;
+    argv.reserve(args.size() + 2);
+    argv.push_back(const_cast<char*>(executable.c_str()));
+    for (const auto& arg : args)
+        argv.push_back(const_cast<char*>(arg.c_str()));
+    argv.push_back(nullptr);
+
+    pid_t pid = 0;
+    const int rc = posix_spawn(&pid, executable.c_str(), nullptr, nullptr, argv.data(), environ);
+    if (rc != 0) {
+        error = std::strerror(rc);
+        return false;
+    }
+
+    return true;
+}
+
+} // namespace
 
 // ═════════════════════════════════════════════════════════════════════════════
 // Initialisation
@@ -172,11 +219,20 @@ bool EditorApp::init(const std::string& projectPath)
     spriteEditor_.importManager    = &importManager_;
     spriteEditor_.assetsRoot       = &assetsRoot_;
     spriteEditor_.libraryRoot      = &libraryRoot_;
-    newScene();
+
+    if (projectManager_.hasActiveProject()) {
+        refreshSceneFiles();
+        loadInitialProjectScene();
+    } else {
+        newScene();
+    }
+
     running_ = true;
     addLog("Editor ready.");
     if (!projectManager_.hasActiveProject())
         addLog("No active project - Welcome panel opened.");
+        // Panel is shown at startup only when no project was preloaded
+        welcomePanel_.isOpen = !projectManager_.hasActiveProject();
 
     // ── Cursors ──────────────────────────────────────────────────────────────
     cursorArrow_     = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_ARROW);
@@ -277,6 +333,8 @@ bool EditorApp::openProject(const std::string& manifestPath)
     addLog("Opened project: " + projectManager_.manifest().name
            + "  (" + projectManager_.manifest().projectRoot + ")");
     refreshProjectPaths();
+    refreshSceneFiles();
+    loadInitialProjectScene();
     reinitAssetPipeline();
     projectManager_.saveRecents();
     return true;
@@ -290,6 +348,8 @@ bool EditorApp::createProject(const std::string& dirPath, const std::string& nam
     }
     addLog("Created project: " + name + "  (" + dirPath + ")");
     refreshProjectPaths();
+    refreshSceneFiles();
+    loadInitialProjectScene();
     reinitAssetPipeline();
     projectManager_.saveRecents();
     return true;
@@ -376,6 +436,7 @@ void EditorApp::buildDefaultLayout(ImGuiID dockspaceId)
     // Dock each window into its slot
     ImGui::DockBuilderDockWindow("Toolbar",          dockToolbar);
     ImGui::DockBuilderDockWindow("Scene Hierarchy",  dockHierarchy);
+    ImGui::DockBuilderDockWindow("Scene Selector",   dockHierarchy);
     ImGui::DockBuilderDockWindow("Tile Palette",     dockPalette);
     ImGui::DockBuilderDockWindow("Viewport",         dockViewport);
     ImGui::DockBuilderDockWindow("File Editor",      dockViewport);
@@ -467,25 +528,36 @@ void EditorApp::run()
 
         ImGui::DockSpace(dockspaceId, {0, 0});
         drawMenuBar();
+            // Welcome panel must be drawn inside a window so OpenPopup is owned
+            // by this context and can be reliably reopened from the File menu.
+            welcomePanel_.draw(
+                projectManager_.recentProjects(),
+                [this](const std::string& p) { return openProject(p); },
+                [this](const std::string& dir, const std::string& name) { return createProject(dir, name); },
+                [this](const std::string& m) { addLog(m); }
+            );
         ImGui::End();
 
         // Panels — always drawn so they can be docked
-        drawToolbar();
-        drawSceneHierarchy();
-        drawPropertiesPanel();
-        drawTilePalette();
-        drawViewport();
-        drawBuildLog();
-        drawPerformancePanel();
-        drawFileBrowser();
-        drawFileEditor();
-        assetBrowserPanel_.draw(assetDb_, importManager_, assetsRoot_,
-                                libraryRoot_, assetDbPath_,
-                                [this](const std::string& m){ addLog(m); });
-        assetInspectorPanel_.draw(assetBrowserPanel_.selectedGuid(),
-                                  assetDb_, importManager_, assetsRoot_,
-                                  libraryRoot_, assetDbPath_,
-                                  [this](const std::string& m){ addLog(m); });
+        if (showToolbar_) drawToolbar();
+        if (showSceneHierarchy_) drawSceneHierarchy();
+        if (showPropertiesPanel_) drawPropertiesPanel();
+        if (showTilePalette_) drawTilePalette();
+        if (showSceneSelector_) drawSceneSelector();
+        if (showViewport_) drawViewport();
+        if (showBuildLog_) drawBuildLog();
+        if (showPerformancePanel_) drawPerformancePanel();
+        if (showFileBrowser_) drawFileBrowser();
+        if (showFileEditor_) drawFileEditor();
+        if (showAssetBrowser_)
+            assetBrowserPanel_.draw(assetDb_, importManager_, assetsRoot_,
+                                    libraryRoot_, assetDbPath_,
+                                    [this](const std::string& m){ addLog(m); });
+        if (showAssetInspector_)
+            assetInspectorPanel_.draw(assetBrowserPanel_.selectedGuid(),
+                                      assetDb_, importManager_, assetsRoot_,
+                                      libraryRoot_, assetDbPath_,
+                                      [this](const std::string& m){ addLog(m); });
         if (showValidationPanel_)
             validationPanel_.draw(validationIssues_, selectedEntityId_, camX_, camY_,
                 [this]() {
@@ -510,17 +582,14 @@ void EditorApp::run()
         }
         if (showOpenDialog_) drawOpenDialog();
         if (showSaveDialog_) drawSaveDialog();
+        if (showCreateSceneDialog_) drawCreateSceneDialog();
         if (showConfirmDialog_) drawConfirmDialog();
-        welcomePanel_.draw(
-            projectManager_.recentProjects(),
-            [this](const std::string& p) { return openProject(p); },
-            [this](const std::string& dir, const std::string& name) { return createProject(dir, name); },
-            [this](const std::string& m) { addLog(m); }
-        );
-
-        // Update window title with dirty indicator and mode
+            // Update window title with dirty indicator and mode
         {
-            std::string title = "Isometric RPG Editor - " + scene_.sceneName;
+            std::string projectTitle = projectManager_.hasActiveProject()
+                                     ? projectManager_.manifest().name
+                                     : std::string("No Project");
+            std::string title = "DashEngine - \"" + projectTitle + "\"";
             if (scene_.modified) title += " *";
             if (editorMode_ == EditorMode::Play) title += "  [PLAYING]";
             SDL_SetWindowTitle(window_, title.c_str());
@@ -544,6 +613,13 @@ void EditorApp::drawMenuBar()
     if (!ImGui::BeginMenuBar()) return;
 
     if (ImGui::BeginMenu("File")) {
+        // ── Project ──────────────────────────────────────────────────────────
+        if (ImGui::MenuItem("New Project...", "Ctrl+Shift+N"))
+            welcomePanel_.open();
+        if (ImGui::MenuItem("Open Project...", "Ctrl+Shift+O"))
+            welcomePanel_.open();
+        ImGui::Separator();
+        // ── Scene ─────────────────────────────────────────────────────────────
         if (ImGui::MenuItem(ICON_FA_FILE " New Scene",     "Ctrl+N"))
             requestAction(PendingAction::NewScene);
         if (ImGui::MenuItem(ICON_FA_FOLDER_OPEN " Open Scene...", "Ctrl+O"))
@@ -554,12 +630,29 @@ void EditorApp::drawMenuBar()
         }
         if (ImGui::MenuItem(ICON_FA_FLOPPY_DISK " Save As...")) showSaveDialog_ = true;
         ImGui::Separator();
+        // ── Build ─────────────────────────────────────────────────────────────
+        if (ImGui::MenuItem("Export Bundle",
+                            nullptr, false,
+                            projectManager_.hasActiveProject()))
+            exportGameBundle();
+        ImGui::Separator();
         if (ImGui::MenuItem(ICON_FA_DOOR_OPEN " Exit"))
             requestAction(PendingAction::Exit);
         ImGui::EndMenu();
     }
     if (ImGui::BeginMenu("View")) {
+        ImGui::MenuItem("Toolbar", nullptr, &showToolbar_);
+        ImGui::MenuItem("Scene Hierarchy", nullptr, &showSceneHierarchy_);
+        ImGui::MenuItem("Properties", nullptr, &showPropertiesPanel_);
+        ImGui::MenuItem("Tile Palette", nullptr, &showTilePalette_);
+        ImGui::MenuItem("Viewport", nullptr, &showViewport_);
         ImGui::MenuItem("Build Log", nullptr, &showBuildLog_);
+        ImGui::MenuItem("Performance", nullptr, &showPerformancePanel_);
+        ImGui::MenuItem("File Browser", nullptr, &showFileBrowser_);
+        ImGui::MenuItem("File Editor", nullptr, &showFileEditor_);
+        ImGui::MenuItem("Asset Browser", nullptr, &showAssetBrowser_);
+        ImGui::MenuItem("Asset Inspector", nullptr, &showAssetInspector_);
+        ImGui::MenuItem("Scene Selector", nullptr, &showSceneSelector_);
         ImGui::MenuItem("Validation Panel", nullptr, &showValidationPanel_);
         ImGui::Separator();
         ImGui::MenuItem("Auto-Reload Assets", nullptr, &autoReload_);
@@ -633,13 +726,6 @@ void EditorApp::drawToolbar()
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered,  {0.20f, 0.70f, 0.20f, 1.f});
     ImGui::PushStyleColor(ImGuiCol_ButtonActive,   {0.10f, 0.90f, 0.10f, 1.f});
     if (ImGui::Button(ICON_FA_HAMMER "  Build & Run  ", {170, 34})) buildAndRun();
-    ImGui::PopStyleColor(3);
-
-    ImGui::SameLine();
-    ImGui::PushStyleColor(ImGuiCol_Button,        {0.15f, 0.45f, 0.22f, 1.f});
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, {0.22f, 0.58f, 0.30f, 1.f});
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  {0.28f, 0.66f, 0.36f, 1.f});
-    if (ImGui::Button(ICON_FA_BOX_ARCHIVE "  Export Bundle  ", {185, 34})) exportGameBundle();
     ImGui::PopStyleColor(3);
 
     ImGui::SameLine();
@@ -739,6 +825,69 @@ void EditorApp::drawSceneHierarchy()
         }
     }
     if (editorMode_ == EditorMode::Play) ImGui::EndDisabled();
+
+    ImGui::End();
+}
+
+void EditorApp::drawSceneSelector()
+{
+    ImGui::Begin("Scene Selector");
+
+    if (!projectManager_.hasActiveProject()) {
+        ImGui::TextDisabled("Open a project to browse scenes.");
+        ImGui::End();
+        return;
+    }
+
+    ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.18f, 0.40f, 0.78f, 1.f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.24f, 0.50f, 0.92f, 1.f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.14f, 0.34f, 0.66f, 1.f));
+    if (ImGui::Button(ICON_FA_ARROWS_ROTATE " Refresh", {120, 0})) {
+        refreshSceneFiles();
+    }
+    ImGui::PopStyleColor(3);
+
+    ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.17f, 0.55f, 0.24f, 1.f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.24f, 0.68f, 0.31f, 1.f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.14f, 0.45f, 0.21f, 1.f));
+    if (ImGui::Button(ICON_FA_FILE " Create", {120, 0})) {
+        std::strncpy(createSceneFileName_, "new_scene.json", sizeof(createSceneFileName_));
+        createSceneFileName_[sizeof(createSceneFileName_) - 1] = '\0';
+        showCreateSceneDialog_ = true;
+    }
+    ImGui::PopStyleColor(3);
+
+    ImGui::SameLine();
+    ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.74f, 0.47f, 0.16f, 1.f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.86f, 0.56f, 0.20f, 1.f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.62f, 0.38f, 0.12f, 1.f));
+    if (ImGui::Button(ICON_FA_FOLDER_OPEN " Open", {120, 0})) {
+        if (!selectedSceneFile_.empty()) {
+            openScene((fs::path(scenesDir_) / selectedSceneFile_).string());
+        }
+    }
+    ImGui::PopStyleColor(3);
+
+    ImGui::Separator();
+    ImGui::TextDisabled(ICON_FA_FILE " Project scenes:");
+
+    if (ImGui::BeginListBox("##scene_selector_list", ImVec2(-FLT_MIN, -FLT_MIN))) {
+        if (sceneFiles_.empty()) {
+            ImGui::Selectable("(No scene files in scenes/)", false, ImGuiSelectableFlags_Disabled);
+        } else {
+            for (const auto& sceneFile : sceneFiles_) {
+                const bool isSelected = (sceneFile == selectedSceneFile_);
+                std::string label = std::string(ICON_FA_FILE " ") + sceneFile + "##" + sceneFile;
+                if (ImGui::Selectable(label.c_str(), isSelected, ImGuiSelectableFlags_AllowDoubleClick)) {
+                    selectedSceneFile_ = sceneFile;
+                    if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+                        openScene((fs::path(scenesDir_) / sceneFile).string());
+                    }
+                }
+            }
+        }
+        ImGui::EndListBox();
+    }
 
     ImGui::End();
 }
@@ -1586,9 +1735,25 @@ bool EditorApp::viewportScreenToWorld(float vx, float vy,
 void EditorApp::drawBuildLog()
 {
     ImGui::Begin("Build Log");
-    for (auto& msg : log_)
-        ImGui::TextWrapped("%s", msg.c_str());
-    if (ImGui::GetScrollY() >= ImGui::GetScrollMaxY())
+
+    std::string combinedLog;
+    size_t totalSize = 0;
+    for (const auto& msg : log_)
+        totalSize += msg.size() + 1;
+    combinedLog.reserve(totalSize);
+
+    for (const auto& msg : log_) {
+        combinedLog += msg;
+        combinedLog += '\n';
+    }
+
+    const bool wasAtBottom = ImGui::GetScrollY() >= ImGui::GetScrollMaxY();
+    ImGui::InputTextMultiline("##build_log_text",
+                              combinedLog.data(),
+                              combinedLog.size() + 1,
+                              ImVec2(-FLT_MIN, -FLT_MIN),
+                              ImGuiInputTextFlags_ReadOnly);
+    if (wasAtBottom)
         ImGui::SetScrollHereY(1.f);
     ImGui::End();
 }
@@ -1690,6 +1855,58 @@ void EditorApp::drawSaveDialog()
     }
 }
 
+void EditorApp::drawCreateSceneDialog()
+{
+    ImGui::OpenPopup("Create Scene");
+    if (ImGui::BeginPopupModal("Create Scene", &showCreateSceneDialog_,
+                               ImGuiWindowFlags_AlwaysAutoResize))
+    {
+        ImGui::Text("Create a new scene file in scenes/");
+        ImGui::Separator();
+
+        ImGui::InputText("File Name", createSceneFileName_, sizeof(createSceneFileName_));
+
+        ImGui::Separator();
+        ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.17f, 0.55f, 0.24f, 1.f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.24f, 0.68f, 0.31f, 1.f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.14f, 0.45f, 0.21f, 1.f));
+        if (ImGui::Button(ICON_FA_FILE " Create", {120, 0})) {
+            std::string fileName(createSceneFileName_);
+            if (fileName.empty()) {
+                addLog("ERROR: Scene file name cannot be empty.");
+            } else {
+                if (fs::path(fileName).extension() != ".json")
+                    fileName += ".json";
+
+                const fs::path scenePath = fs::path(scenesDir_) / fileName;
+                if (fs::exists(scenePath)) {
+                    addLog("ERROR: Scene already exists: " + scenePath.string());
+                } else {
+                    newScene();
+                    scene_.sceneName = fs::path(fileName).stem().string();
+                    saveScene(scenePath.string());
+                    openScene(scenePath.string());
+                    showCreateSceneDialog_ = false;
+                    ImGui::CloseCurrentPopup();
+                }
+            }
+        }
+        ImGui::PopStyleColor(3);
+
+        ImGui::SameLine();
+        ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.62f, 0.20f, 0.20f, 1.f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.76f, 0.25f, 0.25f, 1.f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.52f, 0.16f, 0.16f, 1.f));
+        if (ImGui::Button("Cancel", {120, 0})) {
+            showCreateSceneDialog_ = false;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::PopStyleColor(3);
+
+        ImGui::EndPopup();
+    }
+}
+
 // ═════════════════════════════════════════════════════════════════════════════
 // Actions
 // ═════════════════════════════════════════════════════════════════════════════
@@ -1706,6 +1923,7 @@ void EditorApp::newScene()
 
 void EditorApp::refreshSceneFiles()
 {
+    const std::string previousSelection = selectedSceneFile_;
     sceneFiles_.clear();
     if (!fs::exists(scenesDir_)) return;
     for (auto& entry : fs::directory_iterator(scenesDir_)) {
@@ -1713,6 +1931,44 @@ void EditorApp::refreshSceneFiles()
             sceneFiles_.push_back(entry.path().filename().string());
     }
     std::sort(sceneFiles_.begin(), sceneFiles_.end());
+
+    if (sceneFiles_.empty()) {
+        selectedSceneFile_.clear();
+        return;
+    }
+
+    if (std::find(sceneFiles_.begin(), sceneFiles_.end(), previousSelection) != sceneFiles_.end()) {
+        selectedSceneFile_ = previousSelection;
+    } else {
+        selectedSceneFile_ = sceneFiles_.front();
+    }
+}
+
+void EditorApp::loadInitialProjectScene()
+{
+    if (!projectManager_.hasActiveProject()) return;
+
+    const auto& manifest = projectManager_.manifest();
+    const fs::path defaultScenePath = manifest.absoluteDefaultScene();
+
+    if (fs::exists(defaultScenePath)) {
+        selectedSceneFile_ = defaultScenePath.filename().string();
+        openScene(defaultScenePath.string());
+        addLog("Auto-loaded default scene: " + defaultScenePath.string());
+        return;
+    }
+
+    refreshSceneFiles();
+    if (!sceneFiles_.empty()) {
+        const std::string scenePath = (fs::path(scenesDir_) / sceneFiles_.front()).string();
+        selectedSceneFile_ = sceneFiles_.front();
+        openScene(scenePath);
+        addLog("Auto-loaded first available scene: " + scenePath);
+        return;
+    }
+
+    newScene();
+    addLog("No project scenes found; started a new scene.");
 }
 
 void EditorApp::saveScene(const std::string& path)
@@ -1727,6 +1983,8 @@ void EditorApp::saveScene(const std::string& path)
 
     if (scene_.saveToFile(path)) {
         addLog("Saved: " + path + " (v" + std::to_string(SceneData::kCurrentVersion) + ")");
+        refreshSceneFiles();
+        selectedSceneFile_ = fs::path(path).filename().string();
     } else {
         addLog("ERROR: Could not write scene file: " + path);
     }
@@ -1745,6 +2003,7 @@ void EditorApp::openScene(const std::string& path)
         commandStack_.clear();
         camX_ = WORLD_W / 2.f;
         camY_ = WORLD_H / 2.f;
+        selectedSceneFile_ = fs::path(path).filename().string();
         addLog("Loaded: " + path + " (v" + std::to_string(scene_.sceneVersion) + ")");
     } else {
         addLog("ERROR: Could not load scene: " + path);
@@ -1928,18 +2187,28 @@ void EditorApp::buildAndRun()
             tempScene.clear();
         }
 
-        std::string runCmd = "\"" + std::string(BUILD_DIR)
-                           + "/IsometricRPG\"";
+        const fs::path executablePath = resolveBuiltGameExecutable(BUILD_DIR);
+        if (executablePath.empty()) {
+            addLog("ERROR: Built game executable not found under: " + std::string(BUILD_DIR));
+            return;
+        }
+
+        std::vector<std::string> runArgs;
         if (!tempScene.empty())
-            runCmd += " \"" + tempScene + "\"";
-        runCmd += " &";
-        std::system(runCmd.c_str());
+            runArgs.push_back(tempScene);
+
+        std::string launchError;
+        if (!launchDetachedProcess(executablePath, runArgs, launchError)) {
+            addLog("ERROR: Could not launch game: " + launchError);
+            return;
+        }
+
         // Bring the game window to front on macOS
         std::system("osascript -e 'delay 0.3' "
                     "-e 'tell application \"System Events\"' "
                     "-e '  set frontmost of (first process whose name is \"IsometricRPG\") to true' "
                     "-e 'end tell' &");
-        addLog("Game launched.");
+        addLog("Game launched: " + executablePath.string());
     } else {
         addLog("Build FAILED (exit " + std::to_string(ret) + ").");
     }

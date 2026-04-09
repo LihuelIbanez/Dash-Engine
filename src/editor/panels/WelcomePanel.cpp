@@ -1,8 +1,41 @@
 #include "WelcomePanel.h"
+#include "platform/NativeFileDialogs.h"
 #include "imgui.h"
+
+#include <cstring>
 #include <filesystem>
 
 namespace fs = std::filesystem;
+
+namespace {
+
+void copyToBuffer(char* dest, size_t size, const std::string& value)
+{
+    if (size == 0) return;
+    std::strncpy(dest, value.c_str(), size - 1);
+    dest[size - 1] = '\0';
+}
+
+}
+
+bool WelcomePanel::tryOpenSelectedProject(const std::function<bool(const std::string&)>& onOpenProject,
+                                          const std::function<void(const std::string&)>& logFn)
+{
+    std::string path(openPath_);
+    if (path.empty()) {
+        logFn("[Welcome] Select a project file or folder first.");
+        return false;
+    }
+
+    if (onOpenProject(path)) {
+        isOpen = false;
+        ImGui::CloseCurrentPopup();
+        return true;
+    }
+
+    logFn("[Welcome] Could not open project: " + path);
+    return false;
+}
 
 void WelcomePanel::draw(const std::vector<std::string>& recentProjects,
                         const std::function<bool(const std::string&)>& onOpenProject,
@@ -25,27 +58,35 @@ void WelcomePanel::draw(const std::vector<std::string>& recentProjects,
         ImGui::TextUnformatted("Create or open a project to start editing.");
         ImGui::Separator();
 
-        ImGui::TextUnformatted("Open Existing Project (.dashproject)");
-        ImGui::SetNextItemWidth(520.f);
+        ImGui::TextUnformatted("Open Existing Project");
+        ImGui::SetNextItemWidth(430.f);
         ImGui::InputText("##openpath", openPath_, sizeof(openPath_));
-        if (ImGui::Button("Open Project", ImVec2(150, 0))) {
-            std::string p(openPath_);
-            if (p.empty()) {
-                logFn("[Welcome] Enter a .dashproject path first.");
-            } else if (onOpenProject(p)) {
-                isOpen = false;
-                ImGui::CloseCurrentPopup();
-            } else {
-                logFn("[Welcome] Could not open project: " + p);
+        ImGui::SameLine();
+        if (ImGui::Button("Browse...", ImVec2(90, 0))) {
+            const std::string selectedPath = NativeFileDialogs::pickProjectPath(openPath_);
+            if (!selectedPath.empty()) {
+                copyToBuffer(openPath_, sizeof(openPath_), selectedPath);
+                tryOpenSelectedProject(onOpenProject, logFn);
             }
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Open", ImVec2(90, 0))) {
+            tryOpenSelectedProject(onOpenProject, logFn);
         }
 
         ImGui::Separator();
         ImGui::TextUnformatted("Create New Project");
         ImGui::SetNextItemWidth(260.f);
         ImGui::InputText("Project Name", createName_, sizeof(createName_));
-        ImGui::SetNextItemWidth(520.f);
+        ImGui::SetNextItemWidth(430.f);
         ImGui::InputText("Project Directory", createDir_, sizeof(createDir_));
+        ImGui::SameLine();
+        if (ImGui::Button("Choose...", ImVec2(90, 0))) {
+            const std::string selectedDir = NativeFileDialogs::pickProjectDirectory(createDir_);
+            if (!selectedDir.empty()) {
+                copyToBuffer(createDir_, sizeof(createDir_), selectedDir);
+            }
+        }
         if (ImGui::Button("Create Project", ImVec2(150, 0))) {
             std::string dir(createDir_);
             std::string name(createName_);

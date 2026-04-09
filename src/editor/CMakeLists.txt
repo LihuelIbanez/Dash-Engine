@@ -9,6 +9,17 @@ file(GLOB ASSET_SOURCES "${CMAKE_SOURCE_DIR}/src/assets/*.cpp")
 file(GLOB IMPORTER_SOURCES "${CMAKE_SOURCE_DIR}/src/assets/importers/*.cpp")
 file(GLOB PANEL_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/panels/*.cpp")
 
+set(EDITOR_PLATFORM_SOURCES)
+if(APPLE)
+    list(APPEND EDITOR_PLATFORM_SOURCES
+        "${CMAKE_CURRENT_SOURCE_DIR}/platform/NativeFileDialogs_mac.mm"
+    )
+else()
+    list(APPEND EDITOR_PLATFORM_SOURCES
+        "${CMAKE_CURRENT_SOURCE_DIR}/platform/NativeFileDialogs_stub.cpp"
+    )
+endif()
+
 add_executable(DashEngine
     ${EDITOR_SOURCES}
     ${EDITOR_CMD_SOURCES}
@@ -18,6 +29,7 @@ add_executable(DashEngine
     ${ASSET_SOURCES}
     ${IMPORTER_SOURCES}
     ${PANEL_SOURCES}
+    ${EDITOR_PLATFORM_SOURCES}
 )
 
 target_include_directories(DashEngine PRIVATE
@@ -59,7 +71,7 @@ target_compile_definitions(DashEngine PRIVATE
 )
 
 if(APPLE)
-    target_link_libraries(DashEngine PRIVATE "-framework Cocoa")
+    target_link_libraries(DashEngine PRIVATE "-framework Cocoa" "-framework UniformTypeIdentifiers")
 endif()
 
 target_compile_options(DashEngine PRIVATE -Wall -Wextra -O2)

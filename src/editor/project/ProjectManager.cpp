@@ -13,6 +13,48 @@ static std::string recentsFilePath()
     return (fs::path(AppPaths::getConfigDir()) / "recents.json").string();
 }
 
+static std::string resolveManifestPath(const std::string& projectPath)
+{
+    std::error_code ec;
+    fs::path inputPath = fs::path(projectPath);
+    fs::path resolvedPath = fs::weakly_canonical(inputPath, ec);
+    if (!ec) inputPath = resolvedPath;
+
+    if (fs::is_regular_file(inputPath, ec)) {
+        return inputPath.extension() == ".dashproject" ? inputPath.string() : std::string();
+    }
+
+    if (!fs::is_directory(inputPath, ec)) {
+        return {};
+    }
+
+    std::vector<fs::path> manifests;
+    for (const auto& entry : fs::directory_iterator(inputPath, ec)) {
+        if (ec) break;
+        if (!entry.is_regular_file()) continue;
+        if (entry.path().extension() == ".dashproject") {
+            manifests.push_back(entry.path());
+        }
+    }
+
+    if (manifests.empty()) {
+        return {};
+    }
+
+    if (manifests.size() == 1) {
+        return manifests.front().string();
+    }
+
+    const std::string preferredName = inputPath.filename().string() + ".dashproject";
+    for (const auto& manifest : manifests) {
+        if (manifest.filename() == preferredName) {
+            return manifest.string();
+        }
+    }
+
+    return {};
+}
+
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
 
 bool ProjectManager::createProject(const std::string& dirPath, const std::string& name)
@@ -53,8 +95,11 @@ bool ProjectManager::createProject(const std::string& dirPath, const std::string
 
 bool ProjectManager::openProject(const std::string& manifestPath)
 {
+    const std::string resolvedManifestPath = resolveManifestPath(manifestPath);
+    if (resolvedManifestPath.empty()) return false;
+
     ProjectManifest m;
-    if (!m.loadFromFile(manifestPath)) return false;
+    if (!m.loadFromFile(resolvedManifestPath)) return false;
 
     manifest_ = m;
     active_   = true;
@@ -63,7 +108,7 @@ bool ProjectManager::openProject(const std::string& manifestPath)
         manifest_.absoluteScenesDir(),
         manifest_.absoluteLibraryDir(),
         manifest_.absoluteBuildDir());
-    addRecent(manifestPath);
+    addRecent(resolvedManifestPath);
     return true;
 }
 
