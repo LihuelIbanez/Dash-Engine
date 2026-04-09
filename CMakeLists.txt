@@ -10,6 +10,8 @@ include(FetchContent)
 # ── SDL2 ─────────────────────────────────────────────────────────────────────
 find_package(SDL2 REQUIRED)
 find_package(SQLite3 REQUIRED)
+find_package(Vulkan QUIET)
+find_package(glfw3 QUIET)
 
 # ── Dear ImGui (downloaded on first build) ───────────────────────────────────
 FetchContent_Declare(
@@ -144,6 +146,80 @@ target_link_libraries(game_core PUBLIC SQLite3::SQLite3)
 
 add_subdirectory(src/game)
 add_subdirectory(src/editor)
+
+option(ENABLE_VULKAN_EXPERIMENTAL "Build experimental Vulkan bootstrap (D70-D74)" ON)
+
+if(ENABLE_VULKAN_EXPERIMENTAL)
+    set(GLFW_VK_TARGET "")
+    if(TARGET glfw)
+        set(GLFW_VK_TARGET glfw)
+    elseif(TARGET glfw3::glfw)
+        set(GLFW_VK_TARGET glfw3::glfw)
+    endif()
+
+    if(Vulkan_FOUND AND NOT "${GLFW_VK_TARGET}" STREQUAL "")
+        set(VULKAN_EXPERIMENTAL_SOURCES
+            ${CMAKE_SOURCE_DIR}/src/rendering/platform/WindowContext.cpp
+            ${CMAKE_SOURCE_DIR}/src/rendering/vulkan/VulkanDiagnostics.cpp
+            ${CMAKE_SOURCE_DIR}/src/rendering/vulkan/DeviceContext.cpp
+            ${CMAKE_SOURCE_DIR}/src/rendering/vulkan/SwapchainContext.cpp
+            ${CMAKE_SOURCE_DIR}/src/rendering/vulkan/PipelineBuilder.cpp
+        )
+
+        add_library(vulkan_experimental STATIC ${VULKAN_EXPERIMENTAL_SOURCES})
+        target_include_directories(vulkan_experimental PUBLIC
+            ${CMAKE_SOURCE_DIR}/src
+        )
+        target_link_libraries(vulkan_experimental PUBLIC Vulkan::Vulkan ${GLFW_VK_TARGET})
+        target_compile_options(vulkan_experimental PRIVATE -Wall -Wextra -O2)
+
+        set(VULKAN_SHADER_SRC_DIR "${CMAKE_SOURCE_DIR}/assets/shaders")
+        set(VULKAN_SHADER_BIN_DIR "${CMAKE_BINARY_DIR}/generated/shaders")
+        file(MAKE_DIRECTORY "${VULKAN_SHADER_BIN_DIR}")
+
+        find_program(GLSLC_EXECUTABLE glslc)
+        if(GLSLC_EXECUTABLE)
+            add_custom_command(
+                OUTPUT
+                    "${VULKAN_SHADER_BIN_DIR}/basic.vert.spv"
+                    "${VULKAN_SHADER_BIN_DIR}/basic.frag.spv"
+                COMMAND ${GLSLC_EXECUTABLE} "${VULKAN_SHADER_SRC_DIR}/basic.vert" -o "${VULKAN_SHADER_BIN_DIR}/basic.vert.spv"
+                COMMAND ${GLSLC_EXECUTABLE} "${VULKAN_SHADER_SRC_DIR}/basic.frag" -o "${VULKAN_SHADER_BIN_DIR}/basic.frag.spv"
+                DEPENDS
+                    "${VULKAN_SHADER_SRC_DIR}/basic.vert"
+                    "${VULKAN_SHADER_SRC_DIR}/basic.frag"
+                COMMENT "Compiling Vulkan shaders (GLSL -> SPIR-V)"
+                VERBATIM
+            )
+            add_custom_target(vulkan_shaders ALL
+                DEPENDS
+                    "${VULKAN_SHADER_BIN_DIR}/basic.vert.spv"
+                    "${VULKAN_SHADER_BIN_DIR}/basic.frag.spv"
+            )
+        else()
+            message(WARNING "glslc not found. VulkanBootstrap will build, but pipeline creation (D74) will fail at runtime.")
+        endif()
+
+        add_executable(VulkanBootstrap
+            ${CMAKE_SOURCE_DIR}/src/tools/vulkan_bootstrap_main.cpp
+        )
+        target_link_libraries(VulkanBootstrap PRIVATE vulkan_experimental)
+        target_compile_definitions(VulkanBootstrap PRIVATE
+            VULKAN_SHADER_DIR="${VULKAN_SHADER_BIN_DIR}"
+        )
+        target_compile_options(VulkanBootstrap PRIVATE -Wall -Wextra -O2)
+
+        if(TARGET vulkan_shaders)
+            add_dependencies(VulkanBootstrap vulkan_shaders)
+        endif()
+
+        if(APPLE)
+            target_link_libraries(VulkanBootstrap PRIVATE "-framework Cocoa")
+        endif()
+    else()
+        message(WARNING "ENABLE_VULKAN_EXPERIMENTAL is ON but Vulkan or glfw was not found. Skipping VulkanBootstrap target.")
+    endif()
+endif()
 
 # ── Compile flags ─────────────────────────────────────────────────────────────
 target_compile_options(game_core PRIVATE -Wall -Wextra -O2)

@@ -1,0 +1,42 @@
+#pragma once
+
+#include <vector>
+
+#include <vulkan/vulkan.h>
+
+#include "rendering/vulkan/DeviceContext.h"
+
+struct GLFWwindow;
+
+namespace dash::vkexp {
+
+class SwapchainContext {
+public:
+    SwapchainContext() = default;
+    ~SwapchainContext();
+
+    SwapchainContext(const SwapchainContext&) = delete;
+    SwapchainContext& operator=(const SwapchainContext&) = delete;
+
+    bool init(const DeviceContext& deviceContext, VkSurfaceKHR surface, GLFWwindow* window);
+    void shutdown(VkDevice device);
+
+    VkSwapchainKHR swapchain() const { return swapchain_; }
+    VkFormat imageFormat() const { return imageFormat_; }
+    VkExtent2D extent() const { return extent_; }
+    VkRenderPass renderPass() const { return renderPass_; }
+
+private:
+    VkSurfaceFormatKHR chooseSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& formats) const;
+    VkPresentModeKHR choosePresentMode(const std::vector<VkPresentModeKHR>& presentModes) const;
+    VkExtent2D chooseExtent(const VkSurfaceCapabilitiesKHR& capabilities, GLFWwindow* window) const;
+
+    VkSwapchainKHR swapchain_ = VK_NULL_HANDLE;
+    std::vector<VkImage> images_;
+    std::vector<VkImageView> imageViews_;
+    VkFormat imageFormat_ = VK_FORMAT_B8G8R8A8_UNORM;
+    VkExtent2D extent_{};
+    VkRenderPass renderPass_ = VK_NULL_HANDLE;
+};
+
+} // namespace dash::vkexp
