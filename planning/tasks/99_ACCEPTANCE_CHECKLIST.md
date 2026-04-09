@@ -55,13 +55,13 @@ Usa este archivo para control de cierre por fase.
 
 ## Sprint 5 — Project Bundles
 
-- [ ] `ProjectManifest` serializa/deserializa `.dashproject` sin perdida de datos. *(D46)*
-- [ ] `ProjectManager` crea y abre proyectos; los paths de assets siguen al proyecto activo. *(D47)*
-- [ ] `AppPaths` devuelve paths del proyecto activo cuando existe uno; backward compat con modo legacy. *(D48)*
-- [ ] CMake: `game_runtime` compila sin ninguna dependencia de `src/editor/`. *(D49)*
-- [ ] Build Game Pipeline: exportar directorio auto-contenido con ejecutable + assets del proyecto. *(D50)*
-- [ ] WelcomePanel / Launcher con New Project, Open Project y Recent Projects. *(D51)*
-- [ ] Aislamiento verificado: `check_isolation` target no detecta headers de editor en game_runtime. *(D52)*
+- [x] `ProjectManifest` serializa/deserializa `.dashproject` sin perdida de datos. *(D46)*
+- [x] `ProjectManager` crea y abre proyectos; los paths de assets siguen al proyecto activo. *(D47)*
+- [x] `AppPaths` devuelve paths del proyecto activo cuando existe uno; backward compat con modo legacy. *(D48)*
+- [x] CMake: `game_runtime` compila sin ninguna dependencia de `src/editor/`. *(D49)*
+- [x] Build Game Pipeline: exportar directorio auto-contenido con ejecutable + assets del proyecto. *(D50)*
+- [x] WelcomePanel / Launcher con New Project, Open Project y Recent Projects. *(D51)*
+- [x] Aislamiento verificado: `check_isolation` target no detecta headers de editor en game_runtime. *(D52)*
 - [ ] ≥ 18 tests (ctest 100% pass) incluyendo project_manifest, project_manager y build_pipeline. *(D53)*
 - [ ] README y checklists actualizados; tag `v5.0-alpha`. *(D54)*
 
@@ -75,6 +75,6 @@ Usa este archivo para control de cierre por fase.
 | D - Produccion y QA | 4 | 4 | 100% |
 | Sprint 3 - Polish | 0 | 4 | 0% |
 | Sprint 4 - Sprite Editor | 5 | 5 | 100% |
-| Sprint 5 - Project Bundles | 0 | 9 | 0% |
+| Sprint 5 - Project Bundles | 7 | 9 | 78% |
 | **Total S1+S2** | **16** | **16** | **100%** |
-| **Total incluyendo S3-S5** | **21** | **34** | **62%** |
+| **Total incluyendo S3-S5** | **28** | **34** | **82%** |

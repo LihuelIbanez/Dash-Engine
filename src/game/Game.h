@@ -13,6 +13,7 @@
 #include "GameplayDatabase.h"
 #include "SaveGame.h"
 #include "EventDispatcher.h"
+#include "rendering/SpriteRenderer.h"
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Game – owns the SDL window/renderer and the game loop
@@ -81,6 +82,7 @@ private:
         bool hasMtime = false;
     };
     std::unordered_map<std::string, SpritePivotMeta> spritePivotCache_;
+    SpriteRenderer spriteRenderer_;
     void getSpritePivot(const std::string& spriteName, float& outPivotX, float& outPivotY);
     bool drawSpriteAtWorld(float wx, float wy, const std::string& spriteName, bool visible,
                            float camX, float camY);

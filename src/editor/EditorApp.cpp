@@ -38,7 +38,7 @@ using json = nlohmann::json;
 // ═════════════════════════════════════════════════════════════════════════════
 // Initialisation
 // ═════════════════════════════════════════════════════════════════════════════
-bool EditorApp::init()
+bool EditorApp::init(const std::string& projectPath)
 {
     if (SDL_Init(SDL_INIT_VIDEO) != 0) {
         SDL_Log("SDL_Init failed: %s", SDL_GetError());
@@ -127,6 +127,11 @@ bool EditorApp::init()
     // ── Scenes directory ─────────────────────────────────────────────────────
     // ── Scenes / asset paths ─────────────────────────────────────────────────
     projectManager_.loadRecents();
+    if (!projectPath.empty()) {
+        if (!openProject(projectPath)) {
+            addLog("[WARN] Startup project could not be opened: " + projectPath);
+        }
+    }
     refreshProjectPaths();   // sets scenesDir_, assetsRoot_, libraryRoot_
 
     // ── File browser root ────────────────────────────────────────────────────
@@ -170,6 +175,8 @@ bool EditorApp::init()
     newScene();
     running_ = true;
     addLog("Editor ready.");
+    if (!projectManager_.hasActiveProject())
+        addLog("No active project - Welcome panel opened.");
 
     // ── Cursors ──────────────────────────────────────────────────────────────
     cursorArrow_     = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_ARROW);
@@ -504,6 +511,12 @@ void EditorApp::run()
         if (showOpenDialog_) drawOpenDialog();
         if (showSaveDialog_) drawSaveDialog();
         if (showConfirmDialog_) drawConfirmDialog();
+        welcomePanel_.draw(
+            projectManager_.recentProjects(),
+            [this](const std::string& p) { return openProject(p); },
+            [this](const std::string& dir, const std::string& name) { return createProject(dir, name); },
+            [this](const std::string& m) { addLog(m); }
+        );
 
         // Update window title with dirty indicator and mode
         {

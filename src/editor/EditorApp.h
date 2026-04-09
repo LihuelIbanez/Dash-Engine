@@ -16,6 +16,7 @@
 #include "ContentValidator.h"
 #include "ValidationPanel.h"
 #include "SpriteEditorPanel.h"
+#include "WelcomePanel.h"
 #include "project/ProjectManager.h"
 #include <string>
 #include <vector>
@@ -29,7 +30,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 class EditorApp {
 public:
-    bool init();
+    bool init(const std::string& projectPath = "");
     void run();
     ~EditorApp();
 
@@ -127,6 +128,7 @@ private:
     // ── Build / log ──────────────────────────────────────────────────────────
     std::vector<std::string> log_;
     bool showBuildLog_ = true;
+    WelcomePanel welcomePanel_;
 
     // ── Cursors ──────────────────────────────────────────────────────────────
     SDL_Cursor* cursorArrow_     = nullptr;

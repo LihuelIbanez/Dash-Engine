@@ -7,7 +7,6 @@
 #include "SaveGame.h"
 #include "Profiler.h"
 #include "AppPaths.h"
-#include "../editor/TextureCache.h"
 #include <nlohmann/json.hpp>
 #include <fstream>
 #include <filesystem>
@@ -292,24 +291,11 @@ bool Game::drawSpriteAtWorld(float wx, float wy, const std::string& spriteName, 
     if (!visible || spriteName.empty() || spriteName == "default") return false;
 
     Vec2f s = worldToScreen(wx, wy, camX, camY);
-    std::string texPath = AppPaths::getAssetsDir() + "/sprites/" + spriteName + ".png";
-    SDL_Texture* tex = TextureCache::instance().load(renderer_, texPath);
-    if (!tex) return false;
-
-    int tw = 0, th = 0;
-    SDL_QueryTexture(tex, nullptr, nullptr, &tw, &th);
     float pivotX = 0.5f;
     float pivotY = 1.0f;
     getSpritePivot(spriteName, pivotX, pivotY);
 
-    SDL_Rect dst = {
-        static_cast<int>(s.x - pivotX * tw),
-        static_cast<int>(s.y - pivotY * th),
-        tw,
-        th
-    };
-    SDL_RenderCopy(renderer_, tex, nullptr, &dst);
-    return true;
+    return spriteRenderer_.draw(spriteName, s.x, s.y, pivotX, pivotY);
 }
 
 void Game::drawSpriteOverlays(const Entity& entity, bool isAttacking,
@@ -457,6 +443,7 @@ void Game::loadGame(const std::string& path)
 
 Game::~Game()
 {
+    spriteRenderer_.clearCache();
     if (!embedded_) {
         if (renderer_) SDL_DestroyRenderer(renderer_);
         if (window_)   SDL_DestroyWindow(window_);
@@ -484,6 +471,7 @@ bool Game::init()
     if (!renderer_) return false;
 
     SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
+    spriteRenderer_.init(renderer_, AppPaths::getAssetsDir());
     running_ = true;
 
     // ── Saves directory ──────────────────────────────────────────────────────
@@ -548,6 +536,7 @@ bool Game::initEmbedded(SDL_Renderer* renderer)
     renderer_ = renderer;
     embedded_ = true;
     running_  = true;
+    spriteRenderer_.init(renderer_, AppPaths::getAssetsDir());
     gameState_ = GameState::Playing; // skip title screen when hosted by editor
 
     savesDir_ = AppPaths::getSavesDir();
