@@ -3,6 +3,7 @@ project(IsometricRPG VERSION 2.0.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+option(ENABLE_ISOLATION_CHECK "Enable game runtime isolation checks" OFF)
 
 include(FetchContent)
 
@@ -138,73 +139,10 @@ target_include_directories(game_core PUBLIC
 )
 target_link_libraries(game_core PUBLIC ${SDL2_LIBRARIES} nlohmann_json::nlohmann_json)
 
-# ── Game executable ──────────────────────────────────────────────────────────
-file(GLOB RUNTIME_SOURCES "src/game/runtime/*.cpp")
-file(GLOB SYSTEM_SOURCES  "src/game/systems/*.cpp")
-file(GLOB DATA_SOURCES    "src/game/data/*.cpp")
-file(GLOB SAVE_SOURCES    "src/game/save/*.cpp")
-file(GLOB NAV_SOURCES     "src/game/nav/*.cpp")
-add_executable(${PROJECT_NAME}
-    src/main.cpp
-    src/game/Game.cpp
-    src/editor/TextureCache.cpp
-    src/editor/stb_impl.cpp
-    ${RUNTIME_SOURCES}
-    ${SYSTEM_SOURCES}
-    ${DATA_SOURCES}
-    ${SAVE_SOURCES}
-)
-target_include_directories(${PROJECT_NAME} PRIVATE
-    src src/core src/entities src/world src/rendering src/game src/editor
-    src/game/runtime src/game/systems src/game/data src/game/nav
-    src/game/save
-    ${SDL2_INCLUDE_DIRS}
-)
-target_link_libraries(${PROJECT_NAME} PRIVATE game_core nlohmann_json::nlohmann_json ${SDL2_LIBRARIES})
-
-# ── Editor executable (DashEngine) ───────────────────────────────────────────
-file(GLOB EDITOR_SOURCES "src/editor/*.cpp")
-file(GLOB EDITOR_CMD_SOURCES "src/editor/commands/*.cpp")
-file(GLOB EDITOR_PLAYMODE_SOURCES "src/editor/playmode/*.cpp")
-file(GLOB EDITOR_VALIDATION_SOURCES "src/editor/validation/*.cpp")
-file(GLOB ASSET_SOURCES "src/assets/*.cpp")
-file(GLOB IMPORTER_SOURCES "src/assets/importers/*.cpp")
-file(GLOB PANEL_SOURCES "src/editor/panels/*.cpp")
-add_executable(DashEngine
-    ${EDITOR_SOURCES} ${EDITOR_CMD_SOURCES} ${EDITOR_PLAYMODE_SOURCES}
-    ${EDITOR_VALIDATION_SOURCES}
-    ${ASSET_SOURCES} ${IMPORTER_SOURCES} ${PANEL_SOURCES}
-    src/game/Game.cpp
-    ${RUNTIME_SOURCES} ${SYSTEM_SOURCES} ${DATA_SOURCES} ${SAVE_SOURCES}
-)
-target_include_directories(DashEngine PRIVATE
-    src src/core src/core/components src/entities src/world src/rendering src/editor
-    src/editor/commands src/editor/panels src/editor/playmode src/editor/validation
-    src/assets src/assets/importers
-    src/game src/game/runtime src/game/systems src/game/data src/game/save src/game/nav
-    "${CMAKE_BINARY_DIR}/generated"
-    ${SDL2_INCLUDE_DIRS}
-)
-target_link_libraries(DashEngine PRIVATE
-    game_core
-    imgui_lib
-    nlohmann_json::nlohmann_json
-)
-target_compile_definitions(DashEngine PRIVATE
-    PROJECT_DIR="${CMAKE_SOURCE_DIR}"
-    BUILD_DIR="${CMAKE_BINARY_DIR}"
-    DASH_VERSION="${PROJECT_VERSION}"
-)
-
-# ── macOS: Cocoa framework ───────────────────────────────────────────────────
-if(APPLE)
-    target_link_libraries(${PROJECT_NAME} PRIVATE "-framework Cocoa")
-    target_link_libraries(DashEngine PRIVATE "-framework Cocoa")
-endif()
+add_subdirectory(src/game)
+add_subdirectory(src/editor)
 
 # ── Compile flags ─────────────────────────────────────────────────────────────
-target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -O2)
-target_compile_options(DashEngine PRIVATE -Wall -Wextra -O2)
 target_compile_options(game_core PRIVATE -Wall -Wextra -O2)
 
 # ── Tests (opt-in via -DBUILD_TESTING=ON) ─────────────────────────────────────

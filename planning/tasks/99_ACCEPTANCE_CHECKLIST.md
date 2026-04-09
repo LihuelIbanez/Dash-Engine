@@ -53,6 +53,18 @@ Usa este archivo para control de cierre por fase.
 - [x] Preview isometrico con anchor/pivot y metadatos .sprite.json usados por runtime. *(D44)*
 - [x] Tests de logica de sprite editor y pulido UI final. *(D45, ctest 14/14)*
 
+## Sprint 5 — Project Bundles
+
+- [x] `ProjectManifest` serializa/deserializa `.dashproject` sin perdida de datos. *(D46)*
+- [x] `ProjectManager` crea y abre proyectos; los paths de assets siguen al proyecto activo. *(D47)*
+- [x] `AppPaths` devuelve paths del proyecto activo cuando existe uno; backward compat con modo legacy. *(D48)*
+- [x] CMake: `game_runtime` compila sin ninguna dependencia de `src/editor/`. *(D49)*
+- [x] Build Game Pipeline: exportar directorio auto-contenido con ejecutable + assets del proyecto. *(D50)*
+- [x] WelcomePanel / Launcher con New Project, Open Project y Recent Projects. *(D51)*
+- [x] Aislamiento verificado: `check_isolation` target no detecta headers de editor en game_runtime. *(D52)*
+- [x] ≥ 18 tests (ctest 100% pass) incluyendo project_manifest, project_manager y build_pipeline. *(D53)*
+- [x] README y checklists actualizados; tag `v5.0-alpha` pendiente de release. *(D54)*
+
 ## Resumen de avance
 
 | Fase | Completado | Total | % |
@@ -63,5 +75,6 @@ Usa este archivo para control de cierre por fase.
 | D - Produccion y QA | 4 | 4 | 100% |
 | Sprint 3 - Polish | 0 | 4 | 0% |
 | Sprint 4 - Sprite Editor | 5 | 5 | 100% |
+| Sprint 5 - Project Bundles | 9 | 9 | 100% |
 | **Total S1+S2** | **16** | **16** | **100%** |
-| **Total incluyendo S3+S4** | **21** | **25** | **84%** |
+| **Total incluyendo S3-S5** | **30** | **34** | **88%** |

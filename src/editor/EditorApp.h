@@ -16,6 +16,8 @@
 #include "ContentValidator.h"
 #include "ValidationPanel.h"
 #include "SpriteEditorPanel.h"
+#include "WelcomePanel.h"
+#include "project/ProjectManager.h"
 #include <string>
 #include <vector>
 #include <map>
@@ -28,7 +30,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 class EditorApp {
 public:
-    bool init();
+    bool init(const std::string& projectPath = "");
     void run();
     ~EditorApp();
 
@@ -55,6 +57,15 @@ private:
     EntityData* findEntityById(uint64_t id);
     void performUndo();
     void performRedo();
+
+    // ── Project ───────────────────────────────────────────────────────────────
+    ProjectManager projectManager_;
+    // Open a .dashproject file and refresh all dependent editor paths.
+    bool openProject(const std::string& manifestPath);
+    // Create a new project folder + .dashproject and open it.
+    bool createProject(const std::string& dirPath, const std::string& name);
+    // Re-sync assetsRoot_, libraryRoot_, scenesDir_ from active project (or AppPaths).
+    void refreshProjectPaths();
 
     // ── Asset Database ────────────────────────────────────────────────────────
     AssetDatabase  assetDb_;
@@ -102,9 +113,13 @@ private:
     // ── File dialogs ─────────────────────────────────────────────────────────
     std::string              scenesDir_;
     std::vector<std::string> sceneFiles_;
+    std::string              selectedSceneFile_;
+    bool                     showSceneSelector_ = true;
     bool  showOpenDialog_ = false;
     bool  showSaveDialog_ = false;
+    bool  showCreateSceneDialog_ = false;
     char  saveFileName_[256] = "scene.json";
+    char  createSceneFileName_[256] = "new_scene.json";
 
     // ── Unsaved-changes confirmation ─────────────────────────────────────────
     enum class PendingAction { None, NewScene, OpenScene, Exit };
@@ -116,7 +131,18 @@ private:
 
     // ── Build / log ──────────────────────────────────────────────────────────
     std::vector<std::string> log_;
+    bool showToolbar_ = true;
+    bool showSceneHierarchy_ = true;
+    bool showPropertiesPanel_ = true;
+    bool showTilePalette_ = true;
+    bool showViewport_ = true;
     bool showBuildLog_ = true;
+    bool showPerformancePanel_ = true;
+    bool showFileBrowser_ = true;
+    bool showFileEditor_ = true;
+    bool showAssetBrowser_ = true;
+    bool showAssetInspector_ = true;
+    WelcomePanel welcomePanel_;
 
     // ── Cursors ──────────────────────────────────────────────────────────────
     SDL_Cursor* cursorArrow_     = nullptr;
@@ -163,15 +189,19 @@ private:
     void drawPerformancePanel();
     void drawFileBrowser();
     void drawFileEditor();
+    void drawSceneSelector();
     void drawOpenDialog();
     void drawSaveDialog();
+    void drawCreateSceneDialog();
 
     // ── Actions ──────────────────────────────────────────────────────────────
     void newScene();
     void refreshSceneFiles();
     void saveScene(const std::string& path);
     void openScene(const std::string& path);
+    void loadInitialProjectScene();
     void buildAndRun();
+    void exportGameBundle();
     void applySceneToWorld();
 
     // ── Viewport helpers ─────────────────────────────────────────────────────
@@ -182,4 +212,7 @@ private:
     void paintTileAt(float wx, float wy);
 
     void addLog(const std::string& msg);
+
+    // Persist and restore asset DB, file watcher from current assetsRoot_/libraryRoot_.
+    void reinitAssetPipeline();
 };
