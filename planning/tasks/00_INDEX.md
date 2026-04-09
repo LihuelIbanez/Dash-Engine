@@ -16,6 +16,8 @@ Este directorio separa las tareas por semana para ejecutar el escalado del edito
 | Sprint 3 - Polish & Ship | 🔧 En progreso | D31-D35 pendientes |
 | Sprint 4 - Sprite Editor | ✅ Completada | D36-D45 completados |
 | Sprint 5 - Project Bundles | ✅ Completada | D46-D54 completados |
+| Sprint 6 - SQLite Foundation | 🧭 Planificado | D55-D61 (migracion base + coexistencia JSON) |
+| Sprint 7 - SQLite Cutover | 🧭 Planificado | D62-D68 (editor/runtime en DB + migracion datos) |
 
 **Proximo paso:** Retomar Sprint 3 (D31-D35) y consolidar release final post-bundles.
 
@@ -67,6 +69,9 @@ El proyecto ya cuenta con una base funcional significativa:
 
 ### Sprint 5 (D46-D54)
 - 11_SPRINT5_PROJECT_BUNDLES.md
+
+### Sprint 6-7 (D55-D68)
+- 12_SPRINT6_7_SQLITE_MIGRATION.md
 
 ### General
 - 99_ACCEPTANCE_CHECKLIST.md
