@@ -9,6 +9,7 @@ include(FetchContent)
 
 # ── SDL2 ─────────────────────────────────────────────────────────────────────
 find_package(SDL2 REQUIRED)
+find_package(SQLite3 REQUIRED)
 
 # ── Dear ImGui (downloaded on first build) ───────────────────────────────────
 FetchContent_Declare(
@@ -117,6 +118,7 @@ endif()
 # ── Core game library (shared between game & editor) ─────────────────────────
 file(GLOB CORE_SOURCES
     "src/core/*.cpp"
+    "src/core/db/*.cpp"
     "src/core/profiling/*.cpp"
     "src/core/components/*.cpp"
     "src/entities/*.cpp"
@@ -138,6 +140,7 @@ target_include_directories(game_core PUBLIC
     ${SDL2_INCLUDE_DIRS}
 )
 target_link_libraries(game_core PUBLIC ${SDL2_LIBRARIES} nlohmann_json::nlohmann_json)
+target_link_libraries(game_core PUBLIC SQLite3::SQLite3)
 
 add_subdirectory(src/game)
 add_subdirectory(src/editor)
