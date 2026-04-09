@@ -316,6 +316,8 @@ Criterio de aceptacion:
 
 ### D64 - SaveGame en SQLite
 
+Estado: ✅ Implementado
+
 Objetivo:
 - Persistir savegames en tabla savegames.
 
@@ -327,6 +329,8 @@ Criterio de aceptacion:
 - Fallback a JSON solo si flag legacy activo.
 
 ### D65 - Cutover por feature flags
+
+Estado: ✅ Implementado
 
 Objetivo:
 - Flags de backend:
@@ -340,6 +344,8 @@ Criterio de aceptacion:
 
 ### D66 - Performance tuning e indices
 
+Estado: ✅ Implementado
+
 Objetivo:
 - Medir y ajustar queries criticas (scene list, asset lookups, gameplay load).
 
@@ -347,6 +353,8 @@ Criterio de aceptacion:
 - Apertura de proyecto y carga de escena no empeoran vs baseline JSON.
 
 ### D67 - Hardening de integridad
+
+Estado: ✅ Implementado
 
 Objetivo:
 - PRAGMA foreign_keys=ON
@@ -356,6 +364,8 @@ Criterio de aceptacion:
 - Fallos simulados no dejan DB en estado parcial.
 
 ### D68 - QA final y documentacion operativa
+
+Estado: ✅ Implementado
 
 Objetivo:
 - Documentar operaciones de migracion/rollback.

@@ -1,7 +1,7 @@
 #include "AssetDatabase.h"
 #include "AssetRepositorySqlite.h"
+#include "db/DbMode.h"
 #include <nlohmann/json.hpp>
-#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <random>
@@ -31,12 +31,6 @@ std::string assetTypeToStringLocal(AssetType type)
         case AssetType::GameplayConfig: return "GameplayConfig";
         default: return "Unknown";
     }
-}
-
-bool sqliteAllowed()
-{
-    const char* mode = std::getenv("DASH_DB_MODE");
-    return !(mode && std::string(mode) == "json");
 }
 
 fs::path sqlitePathForAssetDbPath(const std::string& assetDbJsonPath)
@@ -168,13 +162,23 @@ bool AssetDatabase::load(const std::string& path)
     dbPath_ = path;
     records_.clear();
 
-    if (sqliteAllowed()) {
+    const DbMode::Mode mode = DbMode::current();
+
+    if (DbMode::usesSqliteRead(mode)) {
         const fs::path sqlitePath = sqlitePathForAssetDbPath(path);
         if (fs::exists(sqlitePath)) {
             std::string sqliteError;
             if (AssetRepositorySqlite::load(sqlitePath.string(), records_, &sqliteError)) {
                 return true;
             }
+
+            if (!DbMode::allowsJsonFallback(mode)) {
+                return false;
+            }
+        }
+
+        if (!DbMode::allowsJsonFallback(mode)) {
+            return false;
         }
     }
 
@@ -183,9 +187,10 @@ bool AssetDatabase::load(const std::string& path)
 
 bool AssetDatabase::save(const std::string& path) const
 {
-    const bool jsonSaved = saveJsonAssetDb(path, records_);
+    const DbMode::Mode mode = DbMode::current();
+    const bool jsonSaved = DbMode::writesJson(mode) ? saveJsonAssetDb(path, records_) : true;
 
-    if (!sqliteAllowed()) {
+    if (!DbMode::writesSqlite(mode)) {
         return jsonSaved;
     }
 
@@ -202,7 +207,7 @@ bool AssetDatabase::save(const std::string& path) const
         return true;
     }
 
-    return jsonSaved;
+    return DbMode::allowsJsonFallback(mode) ? jsonSaved : false;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

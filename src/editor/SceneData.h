@@ -60,6 +60,12 @@ struct SceneData {
 
     uint64_t allocateEntityId();
     void createDefault();
+    nlohmann::json toJson() const;
+    bool saveToJsonString(std::string& outJson) const;
+    bool loadFromJson(const nlohmann::json& j,
+                      const std::string& assetsRoot = "");
+    bool loadFromJsonString(const std::string& rawJson,
+                            const std::string& assetsRoot = "");
     bool saveToFile(const std::string& path);
     bool loadFromFile(const std::string& path,
                       const std::string& assetsRoot = "");

@@ -8,6 +8,7 @@
 class ProjectDataMigrator {
 public:
     struct Summary {
+        int scenes = 0;
         int playerClasses = 0;
         int enemies = 0;
         int lootTables = 0;

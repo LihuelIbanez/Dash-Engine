@@ -1,5 +1,6 @@
 #include "ProjectManager.h"
 #include "AppPaths.h"
+#include "db/DbMode.h"
 #include "ProjectDataMigrator.h"
 #include <fstream>
 #include <filesystem>
@@ -58,12 +59,6 @@ static std::string resolveManifestPath(const std::string& projectPath)
     return {};
 }
 
-static bool sqliteAllowed()
-{
-    const char* mode = std::getenv("DASH_DB_MODE");
-    return !(mode && std::string(mode) == "json");
-}
-
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
 
 bool ProjectManager::createProject(const std::string& dirPath, const std::string& name)
@@ -119,7 +114,7 @@ bool ProjectManager::openProject(const std::string& manifestPath)
         manifest_.absoluteBuildDir());
 
     lastMigrationStatus_ = MigrationStatus{};
-    if (sqliteAllowed()) {
+    if (DbMode::usesSqliteRead(DbMode::current())) {
         migrateProjectDataToSqlite(false);
     }
 

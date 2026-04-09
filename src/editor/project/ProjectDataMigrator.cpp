@@ -3,11 +3,13 @@
 #include "db/SchemaManager.h"
 #include "db/SqliteDb.h"
 #include "db/SqliteStatement.h"
+#include "SceneData.h"
 
 #include <nlohmann/json.hpp>
 #include <sqlite3.h>
 
 #include <chrono>
+#include <ctime>
 #include <filesystem>
 #include <fstream>
 
@@ -52,6 +54,11 @@ bool clearGameplayTables(SqliteDb& db, std::string* error)
         && db.exec("DELETE FROM loot_tables;", error)
         && db.exec("DELETE FROM enemies;", error)
         && db.exec("DELETE FROM player_classes;", error);
+}
+
+bool clearSceneTables(SqliteDb& db, std::string* error)
+{
+    return db.exec("DELETE FROM scenes;", error);
 }
 
 bool migratePlayerClasses(const fs::path& gameplayDir, SqliteDb& db, ProjectDataMigrator::Result& res)
@@ -297,6 +304,125 @@ bool migrateAssetDb(const fs::path& assetsDir, SqliteDb& db, ProjectDataMigrator
     return true;
 }
 
+bool migrateScenes(const fs::path& scenesDir,
+                   const fs::path& assetsDir,
+                   SqliteDb& db,
+                   ProjectDataMigrator::Result& res)
+{
+    std::error_code ec;
+    if (!fs::exists(scenesDir, ec) || !fs::is_directory(scenesDir, ec)) {
+        logLine(res, "[Migrator] scenes directory not found, skipping scenes migration");
+        return true;
+    }
+
+    std::string error;
+    auto insertScene = db.prepare(
+        "INSERT OR REPLACE INTO scenes("
+        "scene_id, file_name, scene_name, world_seed, next_entity_id, scene_version, raw_json, updated_at"
+        ") VALUES(?, ?, ?, ?, ?, ?, ?, strftime('%s','now'));",
+        &error);
+    if (!insertScene.isValid()) {
+        logError(res, "[Migrator] Could not prepare scenes insert statement: " + error);
+        return false;
+    }
+
+    int count = 0;
+    for (const auto& entry : fs::directory_iterator(scenesDir, ec)) {
+        if (ec) {
+            logError(res, "[Migrator] Error reading scenes directory");
+            return false;
+        }
+        if (!entry.is_regular_file()) continue;
+        if (entry.path().extension() != ".json") continue;
+
+        SceneData scene;
+        if (!scene.loadFromFile(entry.path().string(), assetsDir.string())) {
+            logError(res, "[Migrator] Failed loading scene for migration: " + entry.path().filename().string());
+            return false;
+        }
+
+        std::string rawJson;
+        if (!scene.saveToJsonString(rawJson)) {
+            logError(res, "[Migrator] Failed serializing scene json: " + entry.path().filename().string());
+            return false;
+        }
+
+        const std::string fileName = entry.path().filename().string();
+        const std::string sceneId = entry.path().stem().string();
+        const std::string sceneName = scene.sceneName.empty() ? sceneId : scene.sceneName;
+
+        if (!insertScene.reset() || !insertScene.clearBindings()
+            || !insertScene.bindText(1, sceneId)
+            || !insertScene.bindText(2, fileName)
+            || !insertScene.bindText(3, sceneName)
+            || !insertScene.bindInt64(4, static_cast<std::int64_t>(scene.worldSeed))
+            || !insertScene.bindInt64(5, static_cast<std::int64_t>(scene.nextEntityId))
+            || !insertScene.bindInt(6, scene.sceneVersion)
+            || !insertScene.bindText(7, rawJson)
+            || insertScene.step() != SQLITE_DONE) {
+            logError(res, "[Migrator] Failed inserting scene row: " + fileName);
+            return false;
+        }
+
+        ++count;
+    }
+
+    res.summary.scenes = count;
+    logLine(res, "[Migrator] Migrated scenes: " + std::to_string(count));
+    return true;
+}
+
+bool backupExistingDb(const fs::path& dbPath, ProjectDataMigrator::Result& res)
+{
+    std::error_code ec;
+    if (!fs::exists(dbPath, ec) || ec) {
+        return true;
+    }
+
+    const auto now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+    fs::path backupPath = dbPath;
+    backupPath += ".bak." + std::to_string(static_cast<long long>(now));
+
+    fs::copy_file(dbPath, backupPath, fs::copy_options::overwrite_existing, ec);
+    if (ec) {
+        logError(res, "[Migrator] Could not create DB backup: " + backupPath.string());
+        return false;
+    }
+
+    logLine(res, "[Migrator] DB backup created: " + backupPath.string());
+    return true;
+}
+
+bool runIntegrityChecks(SqliteDb& db, ProjectDataMigrator::Result& res)
+{
+    std::string error;
+
+    auto integrity = db.prepare("PRAGMA integrity_check;", &error);
+    if (!integrity.isValid()) {
+        logError(res, "[Migrator] Could not run integrity_check: " + error);
+        return false;
+    }
+    const int irc = integrity.step();
+    if (irc != SQLITE_ROW || integrity.columnText(0) != "ok") {
+        logError(res, "[Migrator] integrity_check failed");
+        return false;
+    }
+
+    auto fk = db.prepare("PRAGMA foreign_key_check;", &error);
+    if (!fk.isValid()) {
+        logError(res, "[Migrator] Could not run foreign_key_check: " + error);
+        return false;
+    }
+    const int fkRc = fk.step();
+    if (fkRc != SQLITE_DONE) {
+        logError(res, "[Migrator] foreign_key_check reported violations");
+        return false;
+    }
+
+    logLine(res, "[Migrator] Integrity checks passed.");
+    return true;
+}
+
 } // namespace
 
 ProjectDataMigrator::Result ProjectDataMigrator::migrateJsonToSqlite(const ProjectManifest& manifest)
@@ -312,6 +438,7 @@ ProjectDataMigrator::Result ProjectDataMigrator::migrateJsonToSqlite(const Proje
     const fs::path libraryDir = manifest.absoluteLibraryDir();
     const fs::path assetsDir = manifest.absoluteAssetsDir();
     const fs::path gameplayDir = assetsDir / "gameplay";
+    const fs::path scenesDir = manifest.absoluteScenesDir();
     const fs::path dbPath = libraryDir / "dash_engine.db";
 
     res.dbPath = dbPath.string();
@@ -321,6 +448,11 @@ ProjectDataMigrator::Result ProjectDataMigrator::migrateJsonToSqlite(const Proje
     fs::create_directories(libraryDir, ec);
     if (ec) {
         logError(res, "[Migrator] Could not create library directory: " + libraryDir.string());
+        finish();
+        return res;
+    }
+
+    if (!backupExistingDb(dbPath, res)) {
         finish();
         return res;
     }
@@ -347,9 +479,11 @@ ProjectDataMigrator::Result ProjectDataMigrator::migrateJsonToSqlite(const Proje
 
     if (!migrateAssetDb(assetsDir, db, res)
         || !clearGameplayTables(db, &error)
+        || !clearSceneTables(db, &error)
         || !migratePlayerClasses(gameplayDir, db, res)
         || !migrateEnemies(gameplayDir, db, res)
-        || !migrateLoot(gameplayDir, db, res)) {
+        || !migrateLoot(gameplayDir, db, res)
+        || !migrateScenes(scenesDir, assetsDir, db, res)) {
         db.rollback(nullptr);
         logError(res, "[Migrator] Migration failed. Transaction rolled back.");
         finish();
@@ -359,6 +493,11 @@ ProjectDataMigrator::Result ProjectDataMigrator::migrateJsonToSqlite(const Proje
     if (!db.commit(&error)) {
         db.rollback(nullptr);
         logError(res, "[Migrator] Could not commit transaction: " + error);
+        finish();
+        return res;
+    }
+
+    if (!runIntegrityChecks(db, res)) {
         finish();
         return res;
     }

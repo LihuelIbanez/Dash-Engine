@@ -20,8 +20,10 @@
 #include "AppPaths.h"
 #include "IconsFontAwesome6.h"
 #include "TextureCache.h"
+#include "db/DbMode.h"
 #include "project/GameBuildPipeline.h"
 #include "project/ProjectDataMigrator.h"
+#include "scene/SceneRepositorySqlite.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -79,6 +81,16 @@ bool launchDetachedProcess(const fs::path& executable,
     }
 
     return true;
+}
+
+bool sqliteModeEnabled()
+{
+    return DbMode::usesSqliteRead(DbMode::current());
+}
+
+fs::path projectSqlitePath(const ProjectManifest& manifest)
+{
+    return fs::path(manifest.absoluteLibraryDir()) / "dash_engine.db";
 }
 
 } // namespace
@@ -721,7 +733,7 @@ void EditorApp::drawMenuBar()
             showValidationPanel_ = true;
             addLog("Validation: " + std::to_string(validationIssues_.size()) + " issue(s) found.");
         }
-        if (ImGui::MenuItem(ICON_FA_DATABASE " Retry SQLite Migration",
+        if (ImGui::MenuItem(ICON_FA_DATABASE " Migrate Project Data to SQLite",
                             nullptr,
                             false,
                             projectManager_.hasActiveProject())) {
@@ -741,6 +753,7 @@ void EditorApp::drawMenuBar()
                 summary << "Database: " << migration.dbPath << "\n";
             summary << "Errors: " << migration.summary.errorCount << "\n";
             summary << "\nMigrated tables (rows):\n";
+            summary << "scenes: " << migration.summary.scenes << "\n";
             summary << "assets: " << migration.summary.assets << "\n";
             summary << "asset_dependencies: " << migration.summary.assetDependencies << "\n";
             summary << "player_classes: " << migration.summary.playerClasses << "\n";
@@ -760,6 +773,8 @@ void EditorApp::drawMenuBar()
 
             migrationLogText_ = os.str();
             showMigrationLogModal_ = true;
+
+            refreshSceneFiles();
         }
         ImGui::EndMenu();
     }
@@ -961,7 +976,7 @@ void EditorApp::drawSceneSelector()
     ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.62f, 0.38f, 0.12f, 1.f));
     if (ImGui::Button(ICON_FA_FOLDER_OPEN " Open", {120, 0})) {
         if (!selectedSceneFile_.empty()) {
-            openScene((fs::path(scenesDir_) / selectedSceneFile_).string());
+            openScene(selectedSceneFile_);
         }
     }
     ImGui::PopStyleColor(3);
@@ -979,7 +994,7 @@ void EditorApp::drawSceneSelector()
                 if (ImGui::Selectable(label.c_str(), isSelected, ImGuiSelectableFlags_AllowDoubleClick)) {
                     selectedSceneFile_ = sceneFile;
                     if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
-                        openScene((fs::path(scenesDir_) / sceneFile).string());
+                        openScene(sceneFile);
                     }
                 }
             }
@@ -1977,13 +1992,15 @@ void EditorApp::drawCreateSceneDialog()
                     fileName += ".json";
 
                 const fs::path scenePath = fs::path(scenesDir_) / fileName;
-                if (fs::exists(scenePath)) {
-                    addLog("ERROR: Scene already exists: " + scenePath.string());
+                const bool sqliteScenes = projectManager_.hasActiveProject() && sqliteModeEnabled();
+                const bool existsInSelection = std::find(sceneFiles_.begin(), sceneFiles_.end(), fileName) != sceneFiles_.end();
+                if ((sqliteScenes && existsInSelection) || (!sqliteScenes && fs::exists(scenePath))) {
+                    addLog("ERROR: Scene already exists: " + fileName);
                 } else {
                     newScene();
                     scene_.sceneName = fs::path(fileName).stem().string();
                     saveScene(scenePath.string());
-                    openScene(scenePath.string());
+                    openScene(fileName);
                     showCreateSceneDialog_ = false;
                     ImGui::CloseCurrentPopup();
                 }
@@ -2023,12 +2040,29 @@ void EditorApp::refreshSceneFiles()
 {
     const std::string previousSelection = selectedSceneFile_;
     sceneFiles_.clear();
-    if (!fs::exists(scenesDir_)) return;
-    for (auto& entry : fs::directory_iterator(scenesDir_)) {
-        if (entry.path().extension() == ".json")
-            sceneFiles_.push_back(entry.path().filename().string());
+
+    if (projectManager_.hasActiveProject() && sqliteModeEnabled()) {
+        const fs::path dbPath = projectSqlitePath(projectManager_.manifest());
+        if (fs::exists(dbPath)) {
+            SceneRepositorySqlite repo(dbPath.string());
+            std::string error;
+            if (repo.listSceneFiles(sceneFiles_, &error)) {
+                std::sort(sceneFiles_.begin(), sceneFiles_.end());
+            } else {
+                addLog("[SCENE] SQLite scene listing failed, fallback to files: " + error);
+                sceneFiles_.clear();
+            }
+        }
     }
-    std::sort(sceneFiles_.begin(), sceneFiles_.end());
+
+    if (sceneFiles_.empty()) {
+        if (!fs::exists(scenesDir_)) return;
+        for (auto& entry : fs::directory_iterator(scenesDir_)) {
+            if (entry.path().extension() == ".json")
+                sceneFiles_.push_back(entry.path().filename().string());
+        }
+        std::sort(sceneFiles_.begin(), sceneFiles_.end());
+    }
 
     if (sceneFiles_.empty()) {
         selectedSceneFile_.clear();
@@ -2048,20 +2082,27 @@ void EditorApp::loadInitialProjectScene()
 
     const auto& manifest = projectManager_.manifest();
     const fs::path defaultScenePath = manifest.absoluteDefaultScene();
-
-    if (fs::exists(defaultScenePath)) {
-        selectedSceneFile_ = defaultScenePath.filename().string();
-        openScene(defaultScenePath.string());
-        addLog("Auto-loaded default scene: " + defaultScenePath.string());
-        return;
-    }
+    const std::string defaultSceneFile = defaultScenePath.filename().string();
 
     refreshSceneFiles();
     if (!sceneFiles_.empty()) {
-        const std::string scenePath = (fs::path(scenesDir_) / sceneFiles_.front()).string();
+        if (std::find(sceneFiles_.begin(), sceneFiles_.end(), defaultSceneFile) != sceneFiles_.end()) {
+            selectedSceneFile_ = defaultSceneFile;
+            openScene(defaultSceneFile);
+            addLog("Auto-loaded default scene: " + defaultSceneFile);
+            return;
+        }
+
         selectedSceneFile_ = sceneFiles_.front();
-        openScene(scenePath);
-        addLog("Auto-loaded first available scene: " + scenePath);
+        openScene(selectedSceneFile_);
+        addLog("Auto-loaded first available scene: " + selectedSceneFile_);
+        return;
+    }
+
+    if (fs::exists(defaultScenePath)) {
+        selectedSceneFile_ = defaultSceneFile;
+        openScene(defaultScenePath.string());
+        addLog("Auto-loaded default scene: " + defaultScenePath.string());
         return;
     }
 
@@ -2079,10 +2120,28 @@ void EditorApp::saveScene(const std::string& path)
         addLog("WARNING: Scene has no Player entity. Saving anyway.");
     }
 
+    const std::string fileName = fs::path(path).filename().string();
+    const bool sqliteScenes = projectManager_.hasActiveProject() && sqliteModeEnabled();
+
+    if (sqliteScenes) {
+        const fs::path dbPath = projectSqlitePath(projectManager_.manifest());
+        SceneRepositorySqlite repo(dbPath.string());
+        std::string error;
+        if (repo.saveScene(fileName, scene_, &error)) {
+            scene_.filePath = (fs::path(scenesDir_) / fileName).string();
+            scene_.modified = false;
+            addLog("Saved (SQLite): " + fileName + " (v" + std::to_string(SceneData::kCurrentVersion) + ")");
+            refreshSceneFiles();
+            selectedSceneFile_ = fileName;
+            return;
+        }
+        addLog("[SCENE] SQLite save failed, fallback to JSON: " + error);
+    }
+
     if (scene_.saveToFile(path)) {
         addLog("Saved: " + path + " (v" + std::to_string(SceneData::kCurrentVersion) + ")");
         refreshSceneFiles();
-        selectedSceneFile_ = fs::path(path).filename().string();
+        selectedSceneFile_ = fileName;
     } else {
         addLog("ERROR: Could not write scene file: " + path);
     }
@@ -2090,6 +2149,34 @@ void EditorApp::saveScene(const std::string& path)
 
 void EditorApp::openScene(const std::string& path)
 {
+    const std::string fileName = fs::path(path).filename().string();
+    const bool sqliteScenes = projectManager_.hasActiveProject() && sqliteModeEnabled();
+
+    if (sqliteScenes) {
+        const fs::path dbPath = projectSqlitePath(projectManager_.manifest());
+        if (fs::exists(dbPath)) {
+            SceneRepositorySqlite repo(dbPath.string());
+            std::string error;
+            if (repo.loadScene(fileName, scene_, assetsRoot_, &error)) {
+                scene_.filePath = (fs::path(scenesDir_) / fileName).string();
+
+                for (auto& err : scene_.loadErrors)
+                    addLog("  [load] " + err);
+
+                world_.generate(scene_.worldSeed);
+                applySceneToWorld();
+                selectedEntityId_ = 0;
+                commandStack_.clear();
+                camX_ = WORLD_W / 2.f;
+                camY_ = WORLD_H / 2.f;
+                selectedSceneFile_ = fileName;
+                addLog("Loaded (SQLite): " + fileName + " (v" + std::to_string(scene_.sceneVersion) + ")");
+                return;
+            }
+            addLog("[SCENE] SQLite load failed, fallback to JSON: " + error);
+        }
+    }
+
     if (scene_.loadFromFile(path, assetsRoot_)) {
         // Report any warnings collected during load
         for (auto& err : scene_.loadErrors)
@@ -2101,7 +2188,7 @@ void EditorApp::openScene(const std::string& path)
         commandStack_.clear();
         camX_ = WORLD_W / 2.f;
         camY_ = WORLD_H / 2.f;
-        selectedSceneFile_ = fs::path(path).filename().string();
+        selectedSceneFile_ = fileName;
         addLog("Loaded: " + path + " (v" + std::to_string(scene_.sceneVersion) + ")");
     } else {
         addLog("ERROR: Could not load scene: " + path);

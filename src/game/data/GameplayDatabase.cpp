@@ -1,10 +1,10 @@
 #include "GameplayDatabase.h"
+#include "db/DbMode.h"
 #include "db/SchemaManager.h"
 #include "db/SqliteDb.h"
 #include "db/SqliteStatement.h"
 #include <nlohmann/json.hpp>
 #include <sqlite3.h>
-#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <cstdio>
@@ -23,12 +23,6 @@ std::string migrationsDirPath()
 #endif
 }
 
-bool sqliteAllowed()
-{
-    const char* mode = std::getenv("DASH_DB_MODE");
-    return !(mode && std::string(mode) == "json");
-}
-
 } // namespace
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -38,16 +32,22 @@ bool sqliteAllowed()
 bool GameplayDatabase::load(const std::string& assetsDir)
 {
     clearAll();
+    const DbMode::Mode mode = DbMode::current();
 
     std::string dir = assetsDir;
     if (!dir.empty() && dir.back() != '/') dir += '/';
     dir += "gameplay/";
 
-    if (sqliteAllowed()) {
+    if (DbMode::usesSqliteRead(mode)) {
         const fs::path dbPath = fs::path(assetsDir) / ".." / ".library" / "dash_engine.db";
         if (loadFromSqlite(dbPath.lexically_normal().string())) {
             return true;
         }
+
+        if (!DbMode::allowsJsonFallback(mode)) {
+            return false;
+        }
+
         clearAll();
     }
 

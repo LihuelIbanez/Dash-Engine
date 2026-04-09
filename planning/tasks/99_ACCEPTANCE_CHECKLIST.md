@@ -65,6 +65,19 @@ Usa este archivo para control de cierre por fase.
 - [x] ≥ 18 tests (ctest 100% pass) incluyendo project_manifest, project_manager y build_pipeline. *(D53)*
 - [x] README y checklists actualizados; tag `v5.0-alpha` pendiente de release. *(D54)*
 
+## Sprint 6-7 — SQLite Migration
+
+- [x] D55-D56: infraestructura SQLite + schema manager idempotente.
+- [x] D57-D59: assets/gameplay con SQLite-first y fallback controlado.
+- [x] D60: accion UI `Migrate Project Data to SQLite` con feedback detallado.
+- [x] D61: tests de fundacion SQLite (`schema`, `asset_db`, `gameplay_db`, `migrator`).
+- [x] D62-D63: repositorio de escenas SQLite + migracion de `scenes/*.json`.
+- [x] D64: SaveGame en SQLite (F5/F9) con modo legacy JSON via flag.
+- [x] D65: feature flags `DASH_DB_MODE=json|hybrid|sqlite` aplicados.
+- [x] D66: indices de performance agregados en migracion `002_performance_indexes.sql`.
+- [x] D67: hardening con backup previo, `foreign_keys=ON`, `integrity_check` y `foreign_key_check`.
+- [x] D68: runbook operativo SQLite documentado.
+
 ## Resumen de avance
 
 | Fase | Completado | Total | % |
@@ -76,5 +89,6 @@ Usa este archivo para control de cierre por fase.
 | Sprint 3 - Polish | 0 | 4 | 0% |
 | Sprint 4 - Sprite Editor | 5 | 5 | 100% |
 | Sprint 5 - Project Bundles | 9 | 9 | 100% |
+| Sprint 6-7 - SQLite Migration | 14 | 14 | 100% |
 | **Total S1+S2** | **16** | **16** | **100%** |
-| **Total incluyendo S3-S5** | **30** | **34** | **88%** |
+| **Total incluyendo S3-S7** | **44** | **48** | **92%** |
