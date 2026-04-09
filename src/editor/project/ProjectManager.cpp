@@ -1,8 +1,11 @@
 #include "ProjectManager.h"
 #include "AppPaths.h"
+#include "ProjectDataMigrator.h"
 #include <fstream>
 #include <filesystem>
 #include <algorithm>
+#include <cstdlib>
+#include <cstdio>
 #include <nlohmann/json.hpp>
 
 namespace fs = std::filesystem;
@@ -53,6 +56,12 @@ static std::string resolveManifestPath(const std::string& projectPath)
     }
 
     return {};
+}
+
+static bool sqliteAllowed()
+{
+    const char* mode = std::getenv("DASH_DB_MODE");
+    return !(mode && std::string(mode) == "json");
 }
 
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
@@ -108,8 +117,45 @@ bool ProjectManager::openProject(const std::string& manifestPath)
         manifest_.absoluteScenesDir(),
         manifest_.absoluteLibraryDir(),
         manifest_.absoluteBuildDir());
+
+    lastMigrationStatus_ = MigrationStatus{};
+    if (sqliteAllowed()) {
+        migrateProjectDataToSqlite(false);
+    }
+
     addRecent(resolvedManifestPath);
     return true;
+}
+
+bool ProjectManager::migrateProjectDataToSqlite(bool force)
+{
+    lastMigrationStatus_ = MigrationStatus{};
+    if (!active_) {
+        lastMigrationStatus_.log.push_back("[Migrator] No active project.");
+        return false;
+    }
+
+    const fs::path dbPath = fs::path(manifest_.absoluteLibraryDir()) / "dash_engine.db";
+    if (!force && fs::exists(dbPath)) {
+        lastMigrationStatus_.dbPath = dbPath.string();
+        lastMigrationStatus_.log.push_back("[Migrator] SQLite DB already exists, skipping migration.");
+        return true;
+    }
+
+    lastMigrationStatus_.attempted = true;
+    auto migration = ProjectDataMigrator::migrateJsonToSqlite(manifest_);
+    lastMigrationStatus_.success = migration.success;
+    lastMigrationStatus_.dbPath = migration.dbPath;
+    lastMigrationStatus_.log = std::move(migration.log);
+    lastMigrationStatus_.summary = migration.summary;
+
+    if (lastMigrationStatus_.success) {
+        std::fprintf(stdout, "[ProjectManager] SQLite migration completed: %s\n", lastMigrationStatus_.dbPath.c_str());
+    } else {
+        std::fprintf(stderr, "[ProjectManager] SQLite migration failed; using JSON fallback\n");
+    }
+
+    return lastMigrationStatus_.success;
 }
 
 void ProjectManager::closeProject()

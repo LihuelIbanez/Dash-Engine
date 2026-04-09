@@ -21,6 +21,7 @@
 #include "IconsFontAwesome6.h"
 #include "TextureCache.h"
 #include "project/GameBuildPipeline.h"
+#include "project/ProjectDataMigrator.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -333,6 +334,18 @@ bool EditorApp::openProject(const std::string& manifestPath)
     addLog("Opened project: " + projectManager_.manifest().name
            + "  (" + projectManager_.manifest().projectRoot + ")");
     refreshProjectPaths();
+
+    const auto& migration = projectManager_.lastMigrationStatus();
+    if (migration.attempted) {
+        if (migration.success) {
+            addLog("[MIGRATION] SQLite migration completed: " + migration.dbPath);
+        } else {
+            addLog("[MIGRATION] SQLite migration failed - using JSON fallback.");
+        }
+        for (const auto& line : migration.log)
+            addLog("[MIGRATION] " + line);
+    }
+
     refreshSceneFiles();
     loadInitialProjectScene();
     reinitAssetPipeline();
@@ -584,6 +597,7 @@ void EditorApp::run()
         if (showSaveDialog_) drawSaveDialog();
         if (showCreateSceneDialog_) drawCreateSceneDialog();
         if (showConfirmDialog_) drawConfirmDialog();
+        drawMigrationLogModal();
             // Update window title with dirty indicator and mode
         {
             std::string projectTitle = projectManager_.hasActiveProject()
@@ -707,6 +721,46 @@ void EditorApp::drawMenuBar()
             showValidationPanel_ = true;
             addLog("Validation: " + std::to_string(validationIssues_.size()) + " issue(s) found.");
         }
+        if (ImGui::MenuItem(ICON_FA_DATABASE " Retry SQLite Migration",
+                            nullptr,
+                            false,
+                            projectManager_.hasActiveProject())) {
+            const bool ok = projectManager_.migrateProjectDataToSqlite(true);
+            const auto& migration = projectManager_.lastMigrationStatus();
+            migrationLastSuccess_ = migration.success;
+            if (ok) {
+                addLog("[MIGRATION] Manual migration completed: " + migration.dbPath);
+            } else {
+                addLog("[MIGRATION] Manual migration failed; JSON fallback remains active.");
+            }
+
+            std::ostringstream summary;
+            summary << "Result: " << (migration.success ? "SUCCESS" : "FAILED") << "\n";
+            summary << "Duration: " << migration.summary.elapsedMs << " ms\n";
+            if (!migration.dbPath.empty())
+                summary << "Database: " << migration.dbPath << "\n";
+            summary << "Errors: " << migration.summary.errorCount << "\n";
+            summary << "\nMigrated tables (rows):\n";
+            summary << "assets: " << migration.summary.assets << "\n";
+            summary << "asset_dependencies: " << migration.summary.assetDependencies << "\n";
+            summary << "player_classes: " << migration.summary.playerClasses << "\n";
+            summary << "enemies: " << migration.summary.enemies << "\n";
+            summary << "loot_tables: " << migration.summary.lootTables << "\n";
+            summary << "loot_table_enemies: " << migration.summary.lootEnemyLinks << "\n";
+            summary << "loot_drops: " << migration.summary.lootDrops << "\n";
+            migrationSummaryText_ = summary.str();
+
+            std::ostringstream os;
+            os << "Result: " << (migration.success ? "SUCCESS" : "FAILED") << "\n";
+            if (!migration.dbPath.empty())
+                os << "Database: " << migration.dbPath << "\n";
+            os << "\nDetailed log:\n";
+            for (const auto& line : migration.log)
+                os << line << "\n";
+
+            migrationLogText_ = os.str();
+            showMigrationLogModal_ = true;
+        }
         ImGui::EndMenu();
     }
     if (ImGui::BeginMenu("Help")) {
@@ -715,6 +769,50 @@ void EditorApp::drawMenuBar()
         ImGui::EndMenu();
     }
     ImGui::EndMenuBar();
+}
+
+void EditorApp::drawMigrationLogModal()
+{
+    if (showMigrationLogModal_) {
+        ImGui::OpenPopup("SQLite Migration Log");
+        showMigrationLogModal_ = false;
+    }
+
+    if (ImGui::BeginPopupModal("SQLite Migration Log", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImVec4 statusColor = migrationLastSuccess_
+            ? ImVec4(0.22f, 0.75f, 0.22f, 1.0f)
+            : ImVec4(0.86f, 0.30f, 0.24f, 1.0f);
+        ImGui::TextWrapped("Manual migration output.");
+        ImGui::TextColored(statusColor, "%s", migrationLastSuccess_ ? "SUCCESS" : "FAILED");
+        ImGui::Separator();
+
+        std::vector<char> summaryBuffer(migrationSummaryText_.begin(), migrationSummaryText_.end());
+        summaryBuffer.push_back('\0');
+        ImGui::InputTextMultiline(
+            "##migration_summary",
+            summaryBuffer.data(),
+            summaryBuffer.size(),
+            ImVec2(760.0f, 180.0f),
+            ImGuiInputTextFlags_ReadOnly);
+
+        ImGui::Separator();
+        ImGui::TextWrapped("Detailed log (select and copy):");
+
+        ImVec2 size(760.0f, 340.0f);
+        std::vector<char> logBuffer(migrationLogText_.begin(), migrationLogText_.end());
+        logBuffer.push_back('\0');
+        ImGui::InputTextMultiline(
+            "##migration_log",
+            logBuffer.data(),
+            logBuffer.size(),
+            size,
+            ImGuiInputTextFlags_ReadOnly);
+
+        if (ImGui::Button("Close", ImVec2(120, 0))) {
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
 }
 // ═════════════════════════════════════════════════════════════════════════════
 void EditorApp::drawToolbar()

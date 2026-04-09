@@ -316,6 +316,10 @@ add_executable(test_project_manager
     test_project_manager.cpp
     ${CMAKE_SOURCE_DIR}/src/editor/project/ProjectManifest.cpp
     ${CMAKE_SOURCE_DIR}/src/editor/project/ProjectManager.cpp
+    ${CMAKE_SOURCE_DIR}/src/editor/project/ProjectDataMigrator.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/db/SqliteDb.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/db/SqliteStatement.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/db/SchemaManager.cpp
 )
 target_include_directories(test_project_manager PRIVATE
     ${CMAKE_SOURCE_DIR}/src
@@ -326,10 +330,41 @@ target_include_directories(test_project_manager PRIVATE
 )
 target_link_libraries(test_project_manager PRIVATE
     nlohmann_json::nlohmann_json
+    SQLite3::SQLite3
     ${SDL2_LIBRARIES}
+)
+target_compile_definitions(test_project_manager PRIVATE
+    PROJECT_DIR="${CMAKE_SOURCE_DIR}"
 )
 target_compile_options(test_project_manager PRIVATE -Wall -Wextra -O2)
 add_test(NAME test_project_manager COMMAND test_project_manager)
+
+# ── ProjectDataMigrator JSON->SQLite migration (D58) ───────────────────────
+add_executable(test_project_data_migrator
+    test_project_data_migrator.cpp
+    ${CMAKE_SOURCE_DIR}/src/editor/project/ProjectManifest.cpp
+    ${CMAKE_SOURCE_DIR}/src/editor/project/ProjectDataMigrator.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/db/SqliteDb.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/db/SqliteStatement.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/db/SchemaManager.cpp
+)
+target_include_directories(test_project_data_migrator PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/src/core
+    ${CMAKE_SOURCE_DIR}/src/editor
+    ${CMAKE_SOURCE_DIR}/src/editor/project
+    ${SDL2_INCLUDE_DIRS}
+)
+target_link_libraries(test_project_data_migrator PRIVATE
+    nlohmann_json::nlohmann_json
+    SQLite3::SQLite3
+    ${SDL2_LIBRARIES}
+)
+target_compile_definitions(test_project_data_migrator PRIVATE
+    PROJECT_DIR="${CMAKE_SOURCE_DIR}"
+)
+target_compile_options(test_project_data_migrator PRIVATE -Wall -Wextra -O2)
+add_test(NAME test_project_data_migrator COMMAND test_project_data_migrator)
 
 # ── GameBuildPipeline export bundle (D53) ────────────────────────────────────
 add_executable(test_game_build_pipeline
