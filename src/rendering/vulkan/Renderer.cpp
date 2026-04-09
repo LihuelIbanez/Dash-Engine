@@ -4,9 +4,11 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <fstream>
 #include <set>
 
 #include <GLFW/glfw3.h>
+#include <nlohmann/json.hpp>
 
 #include "game/physics/DebugPhysicsDraw.h"
 #include "rendering/vulkan/PipelineBuilder.h"
@@ -16,6 +18,8 @@
 #endif
 
 namespace dash::vkexp {
+
+using json = nlohmann::json;
 
 namespace {
 
@@ -197,6 +201,74 @@ static bool hasValidationLayer()
 Renderer::~Renderer()
 {
     shutdown();
+}
+
+void Renderer::setEditorStatePath(const std::string& statePath)
+{
+    editorStatePath_ = statePath;
+}
+
+void Renderer::setEmbeddedPreview(bool enabled)
+{
+    embeddedPreview_ = enabled;
+}
+
+void Renderer::applyEditorStateIfNeeded(GLFWwindow* window)
+{
+    if (editorStatePath_.empty()) return;
+
+    const auto now = std::chrono::steady_clock::now();
+    if (lastEditorStateRead_.time_since_epoch().count() != 0) {
+        const auto deltaMs = std::chrono::duration_cast<std::chrono::milliseconds>(now - lastEditorStateRead_).count();
+        if (deltaMs < 16) return;
+    }
+    lastEditorStateRead_ = now;
+
+    std::ifstream in(editorStatePath_);
+    if (!in.is_open()) return;
+
+    json j;
+    try {
+        in >> j;
+    } catch (...) {
+        return;
+    }
+
+    if (j.contains("camera") && j["camera"].is_object()) {
+        const auto& c = j["camera"];
+        cameraX_ = c.value("x", cameraX_);
+        cameraY_ = c.value("y", cameraY_);
+        yawDegrees_ = c.value("isoYawDeg", yawDegrees_);
+        pitchDegrees_ = c.value("isoPitchDeg", pitchDegrees_);
+        if (pitchDegrees_ > 89.0f) pitchDegrees_ = 89.0f;
+        if (pitchDegrees_ < -89.0f) pitchDegrees_ = -89.0f;
+    }
+
+    hasExternalSelection_ = false;
+    if (j.contains("selection") && j["selection"].is_object()) {
+        const auto& s = j["selection"];
+        const uint64_t entityId = s.value("entityId", static_cast<uint64_t>(0));
+        if (entityId != 0) {
+            cubeTransform_.position.x = s.value("x", cubeTransform_.position.x);
+            cubeTransform_.position.y = s.value("y", cubeTransform_.position.y);
+            cubeTransform_.position.z = s.value("z", cubeTransform_.position.z);
+            hasExternalSelection_ = true;
+        }
+    }
+
+    if (embeddedPreview_ && window && j.contains("viewport") && j["viewport"].is_object()) {
+        const auto& vp = j["viewport"];
+        const int sx = static_cast<int>(vp.value("screenX", 0.0f));
+        const int sy = static_cast<int>(vp.value("screenY", 0.0f));
+        const int sw = std::max(64, static_cast<int>(vp.value("screenW", 640.0f)));
+        const int sh = std::max(64, static_cast<int>(vp.value("screenH", 360.0f)));
+
+        glfwSetWindowAttrib(window, GLFW_DECORATED, GLFW_FALSE);
+        glfwSetWindowAttrib(window, GLFW_FLOATING, GLFW_TRUE);
+        glfwSetWindowAttrib(window, GLFW_RESIZABLE, GLFW_FALSE);
+        glfwSetWindowPos(window, sx, sy);
+        glfwSetWindowSize(window, sw, sh);
+    }
 }
 
 bool Renderer::createInstance(const std::vector<const char*>& requiredExtensions)
@@ -455,26 +527,34 @@ bool Renderer::runSmoke(WindowContext& window, uint32_t targetFrames)
 {
     if (!initialized_) return false;
 
+    const bool infiniteRun = (targetFrames == 0);
+
     uint32_t renderedFrames = 0;
     auto lastTime = std::chrono::steady_clock::now();
 
-    while (renderedFrames < targetFrames && !window.shouldClose()) {
+    while ((infiniteRun || renderedFrames < targetFrames) && !window.shouldClose()) {
         window.pollEvents();
+
+        if (infiniteRun) {
+            applyEditorStateIfNeeded(window.handle());
+        }
 
         const auto now = std::chrono::steady_clock::now();
         const float dt = std::chrono::duration<float>(now - lastTime).count();
         lastTime = now;
 
-        fixedAccumulator_ += dt;
-        static constexpr float kFixedDt = 1.0f / 60.0f;
-        static constexpr int kMaxSubsteps = 4;
-        int substeps = 0;
-        while (fixedAccumulator_ >= kFixedDt && substeps < kMaxSubsteps) {
-            physicsWorld_.step(kFixedDt);
-            fixedAccumulator_ -= kFixedDt;
-            ++substeps;
+        if (!(infiniteRun && hasExternalSelection_)) {
+            fixedAccumulator_ += dt;
+            static constexpr float kFixedDt = 1.0f / 60.0f;
+            static constexpr int kMaxSubsteps = 4;
+            int substeps = 0;
+            while (fixedAccumulator_ >= kFixedDt && substeps < kMaxSubsteps) {
+                physicsWorld_.step(kFixedDt);
+                fixedAccumulator_ -= kFixedDt;
+                ++substeps;
+            }
+            transformProxy_.syncFromPhysics(physicsWorld_, cubeBodyId_, cubeTransform_);
         }
-        transformProxy_.syncFromPhysics(physicsWorld_, cubeBodyId_, cubeTransform_);
 
         auto forwardFromAngles = [&]() -> Vec3 {
             const float yaw = yawDegrees_ * 0.0174532925f;
@@ -489,49 +569,51 @@ bool Renderer::runSmoke(WindowContext& window, uint32_t targetFrames)
         Vec3 forward = forwardFromAngles();
         Vec3 right = normalize(cross(forward, {0.0f, 1.0f, 0.0f}));
 
-        const float moveSpeed = 1.9f;
-        if (glfwGetKey(window.handle(), GLFW_KEY_W) == GLFW_PRESS) {
-            cameraX_ += forward.x * moveSpeed * dt;
-            cameraY_ += forward.y * moveSpeed * dt;
-            cameraZ_ += forward.z * moveSpeed * dt;
-        }
-        if (glfwGetKey(window.handle(), GLFW_KEY_S) == GLFW_PRESS) {
-            cameraX_ -= forward.x * moveSpeed * dt;
-            cameraY_ -= forward.y * moveSpeed * dt;
-            cameraZ_ -= forward.z * moveSpeed * dt;
-        }
-        if (glfwGetKey(window.handle(), GLFW_KEY_A) == GLFW_PRESS) {
-            cameraX_ -= right.x * moveSpeed * dt;
-            cameraY_ -= right.y * moveSpeed * dt;
-            cameraZ_ -= right.z * moveSpeed * dt;
-        }
-        if (glfwGetKey(window.handle(), GLFW_KEY_D) == GLFW_PRESS) {
-            cameraX_ += right.x * moveSpeed * dt;
-            cameraY_ += right.y * moveSpeed * dt;
-            cameraZ_ += right.z * moveSpeed * dt;
-        }
+        if (!infiniteRun) {
+            const float moveSpeed = 1.9f;
+            if (glfwGetKey(window.handle(), GLFW_KEY_W) == GLFW_PRESS) {
+                cameraX_ += forward.x * moveSpeed * dt;
+                cameraY_ += forward.y * moveSpeed * dt;
+                cameraZ_ += forward.z * moveSpeed * dt;
+            }
+            if (glfwGetKey(window.handle(), GLFW_KEY_S) == GLFW_PRESS) {
+                cameraX_ -= forward.x * moveSpeed * dt;
+                cameraY_ -= forward.y * moveSpeed * dt;
+                cameraZ_ -= forward.z * moveSpeed * dt;
+            }
+            if (glfwGetKey(window.handle(), GLFW_KEY_A) == GLFW_PRESS) {
+                cameraX_ -= right.x * moveSpeed * dt;
+                cameraY_ -= right.y * moveSpeed * dt;
+                cameraZ_ -= right.z * moveSpeed * dt;
+            }
+            if (glfwGetKey(window.handle(), GLFW_KEY_D) == GLFW_PRESS) {
+                cameraX_ += right.x * moveSpeed * dt;
+                cameraY_ += right.y * moveSpeed * dt;
+                cameraZ_ += right.z * moveSpeed * dt;
+            }
 
-        if (glfwGetMouseButton(window.handle(), GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS) {
-            double mouseX = 0.0;
-            double mouseY = 0.0;
-            glfwGetCursorPos(window.handle(), &mouseX, &mouseY);
-            if (!hadLookFrame_) {
-                hadLookFrame_ = true;
+            if (glfwGetMouseButton(window.handle(), GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS) {
+                double mouseX = 0.0;
+                double mouseY = 0.0;
+                glfwGetCursorPos(window.handle(), &mouseX, &mouseY);
+                if (!hadLookFrame_) {
+                    hadLookFrame_ = true;
+                    lastMouseX_ = mouseX;
+                    lastMouseY_ = mouseY;
+                }
+                const float dx = static_cast<float>(mouseX - lastMouseX_);
+                const float dy = static_cast<float>(mouseY - lastMouseY_);
                 lastMouseX_ = mouseX;
                 lastMouseY_ = mouseY;
-            }
-            const float dx = static_cast<float>(mouseX - lastMouseX_);
-            const float dy = static_cast<float>(mouseY - lastMouseY_);
-            lastMouseX_ = mouseX;
-            lastMouseY_ = mouseY;
 
-            const float sensitivity = 0.10f;
-            yawDegrees_ += dx * sensitivity;
-            pitchDegrees_ -= dy * sensitivity;
-            if (pitchDegrees_ > 89.0f) pitchDegrees_ = 89.0f;
-            if (pitchDegrees_ < -89.0f) pitchDegrees_ = -89.0f;
-        } else {
-            hadLookFrame_ = false;
+                const float sensitivity = 0.10f;
+                yawDegrees_ += dx * sensitivity;
+                pitchDegrees_ -= dy * sensitivity;
+                if (pitchDegrees_ > 89.0f) pitchDegrees_ = 89.0f;
+                if (pitchDegrees_ < -89.0f) pitchDegrees_ = -89.0f;
+            } else {
+                hadLookFrame_ = false;
+            }
         }
 
         uint32_t imageIndex = 0;
@@ -578,13 +660,18 @@ bool Renderer::runSmoke(WindowContext& window, uint32_t targetFrames)
         if (!frameGraph_.endFrame(imageIndex)) break;
         ++renderedFrames;
 
-        if (renderedFrames == targetFrames) {
+        if (!infiniteRun && renderedFrames == targetFrames) {
             const dash::physics::Vec3 p = physicsWorld_.position(cubeBodyId_);
             std::printf("[D83] Baseline settled cube position: (%.3f, %.3f, %.3f)\n", p.x, p.y, p.z);
         }
     }
 
     vkDeviceWaitIdle(deviceContext_.device());
+    if (infiniteRun) {
+        std::printf("[D76] Editor preview loop finished after %u frames.\n", renderedFrames);
+        return true;
+    }
+
     if (renderedFrames >= targetFrames) {
         std::printf("[D76] Smoke test: %u frames rendered successfully.\n", targetFrames);
         return true;

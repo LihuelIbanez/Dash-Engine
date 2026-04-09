@@ -17,6 +17,7 @@ void SceneData::createDefault()
 {
     sceneName = "Untitled";
     worldSeed = 12345;
+    render3d = Render3DSettings{};
     nextEntityId = 1;
     tileOverrides.clear();
     entities.clear();
@@ -29,7 +30,7 @@ void SceneData::createDefault()
     player.y         = WORLD_H / 2.f;
     player.charClass = "Warrior";
     player.components = {
-        TransformComponent{player.x, player.y},
+        TransformComponent{player.x, player.y, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f},
         HealthComponent{100, 100},
         StatsComponent{15, 10, 0, 3},   // Warrior defaults
         ManaComponent{50, 50},
@@ -48,6 +49,15 @@ nlohmann::json SceneData::toJson() const
     j["sceneVersion"] = kCurrentVersion;
     j["name"]         = sceneName;
     j["worldSeed"]    = worldSeed;
+    j["render3d"] = {
+        {"useVulkan3D", render3d.useVulkan3D},
+        {"embeddedPreview", render3d.embeddedPreview},
+        {"isoYawDeg", render3d.isoYawDeg},
+        {"isoPitchDeg", render3d.isoPitchDeg},
+        {"zoom", render3d.zoom},
+        {"heightScale", render3d.heightScale},
+        {"gridOpacity", render3d.gridOpacity}
+    };
     j["nextEntityId"] = nextEntityId;
 
     json tilesArr = json::array();
@@ -138,6 +148,19 @@ bool SceneData::loadFromJson(const nlohmann::json& j, const std::string& assetsR
     sceneName    = j.value("name", "Untitled");
     worldSeed    = j.value("worldSeed", 12345u);
     nextEntityId = j.value("nextEntityId", (uint64_t)1);
+
+    if (j.contains("render3d") && j["render3d"].is_object()) {
+        const auto& r3 = j["render3d"];
+        render3d.useVulkan3D = r3.value("useVulkan3D", true);
+        render3d.embeddedPreview = r3.value("embeddedPreview", false);
+        render3d.isoYawDeg = r3.value("isoYawDeg", 45.0f);
+        render3d.isoPitchDeg = r3.value("isoPitchDeg", 35.264f);
+        render3d.zoom = r3.value("zoom", 1.0f);
+        render3d.heightScale = r3.value("heightScale", 32.0f);
+        render3d.gridOpacity = r3.value("gridOpacity", 0.22f);
+    } else {
+        render3d = Render3DSettings{};
+    }
 
     // ── Tile overrides ───────────────────────────────────────────────────────
     tileOverrides.clear();
@@ -276,6 +299,23 @@ bool SceneData::loadFromJson(const nlohmann::json& j, const std::string& assetsR
 
     // Ensure nextEntityId is above all loaded IDs
     for (auto& ed : entities) {
+        for (auto& comp : ed.components) {
+            if (auto* tf = std::get_if<TransformComponent>(&comp)) {
+                tf->x = ed.x;
+                tf->y = ed.y;
+                if (sceneVersion < 3) {
+                    tf->z = 0.0f;
+                    tf->scale = 1.0f;
+                }
+            }
+            if (auto* rc = std::get_if<RenderComponent>(&comp)) {
+                if (sceneVersion < 3) {
+                    rc->renderMode = static_cast<int>(RenderMode::Mesh3D);
+                    if (rc->mesh.empty()) rc->mesh = "cube";
+                    if (rc->material.empty()) rc->material = "default";
+                }
+            }
+        }
         if (ed.id >= nextEntityId)
             nextEntityId = ed.id + 1;
     }

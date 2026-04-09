@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <string>
 #include <vector>
+#include <chrono>
 
 #include <vulkan/vulkan.h>
 
@@ -26,6 +27,8 @@ public:
 
     bool init(WindowContext& window);
     bool runSmoke(WindowContext& window, uint32_t targetFrames);
+    void setEditorStatePath(const std::string& statePath);
+    void setEmbeddedPreview(bool enabled);
     void shutdown();
 
 private:
@@ -34,6 +37,7 @@ private:
     bool createPipeline();
     bool createPerFrameUniformBuffers();
     bool updateCameraUbo(uint32_t imageIndex);
+    void applyEditorStateIfNeeded(GLFWwindow* window);
 
     VkInstance instance_ = VK_NULL_HANDLE;
     VkSurfaceKHR surface_ = VK_NULL_HANDLE;
@@ -69,6 +73,11 @@ private:
     bool hadLookFrame_ = false;
     double lastMouseX_ = 0.0;
     double lastMouseY_ = 0.0;
+
+    bool embeddedPreview_ = false;
+    std::string editorStatePath_;
+    std::chrono::steady_clock::time_point lastEditorStateRead_{};
+    bool hasExternalSelection_ = false;
 };
 
 } // namespace dash::vkexp

@@ -71,9 +71,17 @@ nlohmann::json componentToJson(const ComponentVariant& comp)
             j["type"] = "Transform";
             j["x"]    = c.x;
             j["y"]    = c.y;
+            j["z"]    = c.z;
+            j["yawDeg"] = c.yawDeg;
+            j["pitchDeg"] = c.pitchDeg;
+            j["rollDeg"] = c.rollDeg;
+            j["scale"] = c.scale;
         }
         else if constexpr (std::is_same_v<T, RenderComponent>) {
             j["type"]    = "Render";
+            j["renderMode"] = c.renderMode;
+            j["mesh"]    = c.mesh;
+            j["material"] = c.material;
             j["sprite"]  = c.sprite;
             j["layer"]   = c.layer;
             j["visible"] = c.visible;
@@ -130,10 +138,18 @@ ComponentVariant componentFromJson(const nlohmann::json& j)
             TransformComponent c;
             c.x = j.value("x", 0.f);
             c.y = j.value("y", 0.f);
+            c.z = j.value("z", 0.f);
+            c.yawDeg = j.value("yawDeg", 0.f);
+            c.pitchDeg = j.value("pitchDeg", 0.f);
+            c.rollDeg = j.value("rollDeg", 0.f);
+            c.scale = j.value("scale", 1.f);
             return c;
         }
         case ComponentType::Render: {
             RenderComponent c;
+            c.renderMode = j.value("renderMode", static_cast<int>(RenderMode::Mesh3D));
+            c.mesh    = j.value("mesh", "cube");
+            c.material = j.value("material", "default");
             c.sprite  = j.value("sprite", "default");
             c.layer   = j.value("layer", 0);
             c.visible = j.value("visible", true);

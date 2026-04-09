@@ -24,6 +24,7 @@
 #include <memory>
 #include <unordered_map>
 #include <filesystem>
+#include <sys/types.h>
 
 // ─────────────────────────────────────────────────────────────────────────────
 // EditorApp – Unreal-style level editor for the Isometric RPG
@@ -105,9 +106,26 @@ private:
     float camX_ = 12.f;
     float camY_ = 12.f;
 
+    struct Viewport3DState {
+        bool  useVulkan3D = true;
+        bool  embeddedPreview = false;
+        float isoYawDeg = 45.0f;
+        float isoPitchDeg = 35.264f;
+        float zoom = 1.0f;
+        float heightScale = 32.0f;
+        float gridOpacity = 0.22f;
+    } viewport3D_;
+
+    bool vulkanPreviewAvailable_ = false;
+    bool vulkanPreviewRunning_ = false;
+    pid_t vulkanPreviewPid_ = -1;
+    std::string vulkanViewportStatePath_;
+
     // Displayed size of the viewport image (for mouse coordinate mapping)
     float vpDisplayW_ = 1.f;
     float vpDisplayH_ = 1.f;
+    float vpScreenX_ = 0.f;
+    float vpScreenY_ = 0.f;
 
     // ── Tools ────────────────────────────────────────────────────────────────
     enum class Tool { Select, PaintTile, PlaceEnemy, Erase };
@@ -212,6 +230,15 @@ private:
     // ── Viewport helpers ─────────────────────────────────────────────────────
     void renderWorldToTexture();
     void getSpritePivot(const std::string& spriteName, float& outPivotX, float& outPivotY);
+    Vec2f worldToScreenIso3D(float wx, float wy, float wz) const;
+    float entityWorldZ(uint64_t entityId) const;
+    float tileHeight(TileType type) const;
+    bool syncSceneRender3DSettingsFromUI();
+    void syncUIRender3DSettingsFromScene();
+    bool startVulkanPreview();
+    void stopVulkanPreview();
+    void pollVulkanPreviewProcess();
+    void writeVulkanViewportStateFile() const;
     bool viewportScreenToWorld(float vx, float vy, float& wx, float& wy);
     void handleToolClick(float wx, float wy);
     void paintTileAt(float wx, float wy);

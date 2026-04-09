@@ -34,6 +34,8 @@
 #include <fstream>
 #include <spawn.h>
 #include <sstream>
+#include <sys/wait.h>
+#include <signal.h>
 #include <nlohmann/json.hpp>
 
 namespace fs = std::filesystem;
@@ -83,6 +85,29 @@ bool launchDetachedProcess(const fs::path& executable,
     return true;
 }
 
+bool spawnTrackedProcess(const fs::path& executable,
+                        const std::vector<std::string>& args,
+                        pid_t& outPid,
+                        std::string& error)
+{
+    std::vector<char*> argv;
+    argv.reserve(args.size() + 2);
+    argv.push_back(const_cast<char*>(executable.c_str()));
+    for (const auto& arg : args)
+        argv.push_back(const_cast<char*>(arg.c_str()));
+    argv.push_back(nullptr);
+
+    pid_t pid = 0;
+    const int rc = posix_spawn(&pid, executable.c_str(), nullptr, nullptr, argv.data(), environ);
+    if (rc != 0) {
+        error = std::strerror(rc);
+        return false;
+    }
+
+    outPid = pid;
+    return true;
+}
+
 bool sqliteModeEnabled()
 {
     return DbMode::usesSqliteRead(DbMode::current());
@@ -91,6 +116,63 @@ bool sqliteModeEnabled()
 fs::path projectSqlitePath(const ProjectManifest& manifest)
 {
     return fs::path(manifest.absoluteLibraryDir()) / "dash_engine.db";
+}
+
+SDL_Color clampColor(SDL_Color c)
+{
+    auto clamp = [](int v) -> Uint8 {
+        return static_cast<Uint8>(std::max(0, std::min(255, v)));
+    };
+    c.r = clamp(c.r);
+    c.g = clamp(c.g);
+    c.b = clamp(c.b);
+    return c;
+}
+
+SDL_Color darken(SDL_Color c, int amount)
+{
+    c.r = static_cast<Uint8>(std::max(0, c.r - amount));
+    c.g = static_cast<Uint8>(std::max(0, c.g - amount));
+    c.b = static_cast<Uint8>(std::max(0, c.b - amount));
+    return c;
+}
+
+void drawIsoDiamondScaled(SDL_Renderer* r, float cx, float cy, float hw, float hh, SDL_Color colTop)
+{
+    const SDL_Color colRight = darken(colTop, 18);
+    const SDL_Color colLeft = darken(colTop, 12);
+    SDL_Vertex verts[4] = {
+        {{cx,      cy - hh}, colTop,   {0, 0}},
+        {{cx + hw, cy     }, colRight, {0, 0}},
+        {{cx,      cy + hh}, colTop,   {0, 0}},
+        {{cx - hw, cy     }, colLeft,  {0, 0}},
+    };
+    const int idx[6] = {0, 1, 3, 1, 2, 3};
+    SDL_RenderGeometry(r, nullptr, verts, 4, idx, 6);
+}
+
+void drawIsoColumn(SDL_Renderer* r, float cx, float cyBase, float hw, float hh, float hPx, SDL_Color topColor)
+{
+    const float cyTop = cyBase - hPx;
+    const SDL_Color leftColor = darken(topColor, 45);
+    const SDL_Color rightColor = darken(topColor, 60);
+
+    SDL_Vertex leftFace[4] = {
+        {{cx - hw, cyTop}, leftColor, {0, 0}},
+        {{cx,      cyTop + hh}, leftColor, {0, 0}},
+        {{cx,      cyBase + hh}, leftColor, {0, 0}},
+        {{cx - hw, cyBase}, leftColor, {0, 0}},
+    };
+    SDL_Vertex rightFace[4] = {
+        {{cx,      cyTop + hh}, rightColor, {0, 0}},
+        {{cx + hw, cyTop}, rightColor, {0, 0}},
+        {{cx + hw, cyBase}, rightColor, {0, 0}},
+        {{cx,      cyBase + hh}, rightColor, {0, 0}},
+    };
+    const int idx[6] = {0, 1, 3, 1, 2, 3};
+    SDL_RenderGeometry(r, nullptr, leftFace, 4, idx, 6);
+    SDL_RenderGeometry(r, nullptr, rightFace, 4, idx, 6);
+    drawIsoDiamondScaled(r, cx, cyTop, hw, hh, topColor);
 }
 
 } // namespace
@@ -239,6 +321,32 @@ bool EditorApp::init(const std::string& projectPath)
     } else {
         newScene();
     }
+    syncUIRender3DSettingsFromScene();
+
+    {
+        const fs::path stateDir = fs::path(BUILD_DIR) / "generated";
+        std::error_code ec;
+        fs::create_directories(stateDir, ec);
+        vulkanViewportStatePath_ = (stateDir / "vulkan_viewport_state.json").string();
+    }
+
+    // Detect Vulkan preview executable availability.
+    {
+        const fs::path buildDir = fs::path(BUILD_DIR);
+        const std::array<fs::path, 3> previewCandidates = {
+            buildDir / "VulkanBootstrap",
+            buildDir / "src" / "tools" / "VulkanBootstrap",
+            buildDir / "Debug" / "VulkanBootstrap",
+        };
+        std::error_code ec;
+        for (const auto& p : previewCandidates) {
+            if (fs::exists(p, ec) && fs::is_regular_file(p, ec)) {
+                vulkanPreviewAvailable_ = true;
+                break;
+            }
+            ec.clear();
+        }
+    }
 
     running_ = true;
     addLog("Editor ready.");
@@ -258,6 +366,8 @@ bool EditorApp::init(const std::string& projectPath)
 
 EditorApp::~EditorApp()
 {
+    stopVulkanPreview();
+
     // Persist asset database on shutdown
     if (!assetDbPath_.empty())
         assetDb_.save(assetDbPath_);
@@ -481,6 +591,7 @@ void EditorApp::buildDefaultLayout(ImGuiID dockspaceId)
 void EditorApp::run()
 {
     while (running_) {
+        pollVulkanPreviewProcess();
         Profiler::instance().beginFrame();
         SDL_Event ev;
         while (SDL_PollEvent(&ev)) {
@@ -1029,6 +1140,56 @@ void EditorApp::drawPropertiesPanel()
             scene_.sceneName = nameBuf;
             scene_.modified  = true;
         }
+
+        ImGui::Separator();
+        ImGui::TextDisabled("3D Isometric (Vulkan migration)");
+        bool changed3D = false;
+        const bool prevUseVulkan3D = viewport3D_.useVulkan3D;
+        const bool prevEmbedded = viewport3D_.embeddedPreview;
+        changed3D |= ImGui::Checkbox("Vulkan 3D workflow", &viewport3D_.useVulkan3D);
+        if (viewport3D_.useVulkan3D) {
+            changed3D |= ImGui::Checkbox("Embedded Vulkan preview (experimental)", &viewport3D_.embeddedPreview);
+            ImGui::TextWrapped("Current editor backend uses SDLRenderer2 + ImGui SDL renderer. Embedded Vulkan texture interop is staged in experimental mode and currently falls back to synchronized external Vulkan preview.");
+        }
+        changed3D |= ImGui::SliderFloat("Iso Yaw", &viewport3D_.isoYawDeg, 30.0f, 60.0f, "%.1f deg");
+        changed3D |= ImGui::SliderFloat("Iso Pitch", &viewport3D_.isoPitchDeg, 20.0f, 45.0f, "%.1f deg");
+        changed3D |= ImGui::SliderFloat("Viewport Zoom", &viewport3D_.zoom, 0.5f, 2.5f, "%.2f");
+        changed3D |= ImGui::SliderFloat("Height Scale", &viewport3D_.heightScale, 12.0f, 72.0f, "%.1f px");
+        changed3D |= ImGui::SliderFloat("Grid Opacity", &viewport3D_.gridOpacity, 0.0f, 0.8f, "%.2f");
+        if (changed3D) {
+            syncSceneRender3DSettingsFromUI();
+            scene_.modified = true;
+
+            const bool wantsEmbedded = viewport3D_.useVulkan3D && viewport3D_.embeddedPreview;
+            const bool hadEmbedded = prevUseVulkan3D && prevEmbedded;
+            if (wantsEmbedded && !hadEmbedded && !vulkanPreviewRunning_) {
+                if (!startVulkanPreview()) {
+                    addLog("[Vulkan] Embedded preview auto-start failed.");
+                }
+            }
+            if (!wantsEmbedded && hadEmbedded && vulkanPreviewRunning_) {
+                stopVulkanPreview();
+            }
+        }
+
+        ImGui::Spacing();
+        ImGui::TextDisabled("Vulkan Preview");
+        if (!vulkanPreviewAvailable_) {
+            ImGui::TextWrapped("VulkanBootstrap executable not found in build/. Build target VulkanBootstrap to enable live Vulkan preview.");
+        } else {
+            ImGui::Text("Status: %s", vulkanPreviewRunning_ ? "Running" : "Stopped");
+            if (!vulkanPreviewRunning_) {
+                if (ImGui::Button("Start Vulkan Preview", ImVec2(180, 0))) {
+                    if (!startVulkanPreview()) {
+                        addLog("[Vulkan] Failed to start Vulkan preview.");
+                    }
+                }
+            } else {
+                if (ImGui::Button("Stop Vulkan Preview", ImVec2(180, 0))) {
+                    stopVulkanPreview();
+                }
+            }
+        }
     }
 
     ImGui::Separator();
@@ -1421,11 +1582,23 @@ void EditorApp::drawViewport()
     ImVec2 avail = ImGui::GetContentRegionAvail();
     if (avail.x < 1) avail.x = 1;
     if (avail.y < 1) avail.y = 1;
+    ImVec2 cursorPos = ImGui::GetCursorScreenPos();
     vpDisplayW_ = avail.x;
     vpDisplayH_ = avail.y;
-
-    ImVec2 cursorPos = ImGui::GetCursorScreenPos();
+    vpScreenX_ = cursorPos.x;
+    vpScreenY_ = cursorPos.y;
     ImGui::Image((ImTextureID)viewportTex_, avail);
+
+    if (viewport3D_.useVulkan3D) {
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        ImVec2 min = cursorPos;
+        ImVec2 max = {cursorPos.x + avail.x, cursorPos.y + avail.y};
+        dl->AddRectFilled({min.x + 8, min.y + 8}, {min.x + 280, min.y + 48}, IM_COL32(18, 24, 32, 180), 4.0f);
+        const char* status = vulkanPreviewRunning_
+            ? "Vulkan backend active (external preview)"
+            : "Vulkan mode ON (start preview from World Settings)";
+        dl->AddText({min.x + 16, min.y + 18}, IM_COL32(170, 220, 255, 255), status);
+    }
 
     // ── Prefab drag-drop target ──────────────────────────────────────────────
     if (editorMode_ == EditorMode::Edit && ImGui::BeginDragDropTarget()) {
@@ -1724,8 +1897,226 @@ void EditorApp::getSpritePivot(const std::string& spriteName, float& outPivotX, 
     outPivotY = meta.pivotY;
 }
 
+Vec2f EditorApp::worldToScreenIso3D(float wx, float wy, float wz) const
+{
+    const float rx = wx - camX_;
+    const float ry = wy - camY_;
+    const float zoom = std::max(0.1f, viewport3D_.zoom);
+    const float hw = (TILE_W * 0.5f) * zoom;
+    const float hh = (TILE_H * 0.5f) * zoom;
+    return {
+        (rx - ry) * hw + SCREEN_W * 0.5f,
+        (rx + ry) * hh - (wz * viewport3D_.heightScale * zoom) + SCREEN_H * 0.5f
+    };
+}
+
+float EditorApp::tileHeight(TileType type) const
+{
+    switch (type) {
+        case TileType::DeepWater: return -0.30f;
+        case TileType::Water:     return -0.16f;
+        case TileType::Sand:      return 0.00f;
+        case TileType::Grass:     return 0.05f;
+        case TileType::Forest:    return 0.14f;
+        case TileType::Dirt:      return 0.08f;
+        case TileType::Stone:     return 0.22f;
+        case TileType::Mountain:  return 0.42f;
+        case TileType::Snow:      return 0.50f;
+    }
+    return 0.0f;
+}
+
+float EditorApp::entityWorldZ(uint64_t entityId) const
+{
+    for (const auto& e : scene_.entities) {
+        if (e.id != entityId) continue;
+        for (const auto& c : e.components) {
+            if (const auto* tf = std::get_if<TransformComponent>(&c)) return tf->z;
+        }
+        return 0.0f;
+    }
+    return 0.0f;
+}
+
+bool EditorApp::syncSceneRender3DSettingsFromUI()
+{
+    scene_.render3d.useVulkan3D = viewport3D_.useVulkan3D;
+    scene_.render3d.embeddedPreview = viewport3D_.embeddedPreview;
+    scene_.render3d.isoYawDeg = viewport3D_.isoYawDeg;
+    scene_.render3d.isoPitchDeg = viewport3D_.isoPitchDeg;
+    scene_.render3d.zoom = viewport3D_.zoom;
+    scene_.render3d.heightScale = viewport3D_.heightScale;
+    scene_.render3d.gridOpacity = viewport3D_.gridOpacity;
+    return true;
+}
+
+void EditorApp::syncUIRender3DSettingsFromScene()
+{
+    viewport3D_.useVulkan3D = scene_.render3d.useVulkan3D;
+    viewport3D_.embeddedPreview = scene_.render3d.embeddedPreview;
+    viewport3D_.isoYawDeg = scene_.render3d.isoYawDeg;
+    viewport3D_.isoPitchDeg = scene_.render3d.isoPitchDeg;
+    viewport3D_.zoom = scene_.render3d.zoom;
+    viewport3D_.heightScale = scene_.render3d.heightScale;
+    viewport3D_.gridOpacity = scene_.render3d.gridOpacity;
+}
+
+bool EditorApp::startVulkanPreview()
+{
+    if (vulkanPreviewRunning_) return true;
+
+    const fs::path buildDir = fs::path(BUILD_DIR);
+
+    std::array<fs::path, 3> candidates = {
+        buildDir / "VulkanBootstrap",
+        buildDir / "src" / "tools" / "VulkanBootstrap",
+        buildDir / "Debug" / "VulkanBootstrap",
+    };
+
+    fs::path previewExe;
+    std::error_code ec;
+    for (const auto& c : candidates) {
+        if (fs::exists(c, ec) && fs::is_regular_file(c, ec)) {
+            previewExe = c;
+            break;
+        }
+        ec.clear();
+    }
+    if (previewExe.empty()) {
+        const fs::path outDir = AppPaths::getBuildOutputDir();
+        const std::array<fs::path, 2> outCandidates = {
+            outDir / "VulkanBootstrap",
+            outDir / "Debug" / "VulkanBootstrap",
+        };
+        for (const auto& c : outCandidates) {
+            if (fs::exists(c, ec) && fs::is_regular_file(c, ec)) {
+                previewExe = c;
+                break;
+            }
+            ec.clear();
+        }
+    }
+
+    if (previewExe.empty()) {
+        addLog("[Vulkan] VulkanBootstrap executable not found.");
+        vulkanPreviewAvailable_ = false;
+        return false;
+    }
+
+    std::string error;
+    pid_t pid = -1;
+    std::vector<std::string> args;
+    args.emplace_back("--editor-preview");
+    if (viewport3D_.embeddedPreview) {
+        args.emplace_back("--embedded-window");
+    }
+    if (!vulkanViewportStatePath_.empty()) {
+        args.emplace_back("--state");
+        args.emplace_back(vulkanViewportStatePath_);
+    }
+
+    if (!spawnTrackedProcess(previewExe, args, pid, error)) {
+        addLog("[Vulkan] Failed to launch VulkanBootstrap: " + error);
+        return false;
+    }
+
+    vulkanPreviewPid_ = pid;
+    vulkanPreviewRunning_ = true;
+    vulkanPreviewAvailable_ = true;
+    addLog("[Vulkan] Preview started (pid=" + std::to_string(static_cast<int>(pid)) + ").");
+    return true;
+}
+
+void EditorApp::stopVulkanPreview()
+{
+    if (!vulkanPreviewRunning_ || vulkanPreviewPid_ <= 0) {
+        vulkanPreviewRunning_ = false;
+        vulkanPreviewPid_ = -1;
+        return;
+    }
+
+    kill(vulkanPreviewPid_, SIGTERM);
+    int status = 0;
+    (void)waitpid(vulkanPreviewPid_, &status, WNOHANG);
+
+    addLog("[Vulkan] Preview stopped.");
+    vulkanPreviewRunning_ = false;
+    vulkanPreviewPid_ = -1;
+}
+
+void EditorApp::pollVulkanPreviewProcess()
+{
+    if (!vulkanPreviewRunning_ || vulkanPreviewPid_ <= 0) return;
+
+    int status = 0;
+    const pid_t res = waitpid(vulkanPreviewPid_, &status, WNOHANG);
+    if (res == 0) return;
+    if (res == vulkanPreviewPid_) {
+        vulkanPreviewRunning_ = false;
+        vulkanPreviewPid_ = -1;
+        addLog("[Vulkan] Preview process ended.");
+    }
+}
+
+void EditorApp::writeVulkanViewportStateFile() const
+{
+    if (vulkanViewportStatePath_.empty()) return;
+
+    float selectedX = 0.0f;
+    float selectedY = 0.0f;
+    float selectedZ = 0.0f;
+    if (selectedEntityId_ != 0) {
+        for (const auto& e : scene_.entities) {
+            if (e.id != selectedEntityId_) continue;
+            selectedX = e.x;
+            selectedY = e.y;
+            selectedZ = entityWorldZ(e.id);
+            break;
+        }
+    }
+
+    json j;
+    int winX = 0;
+    int winY = 0;
+    if (window_) {
+        SDL_GetWindowPosition(window_, &winX, &winY);
+    }
+    const float globalVpX = static_cast<float>(winX) + vpScreenX_;
+    const float globalVpY = static_cast<float>(winY) + vpScreenY_;
+
+    j["scene"] = scene_.sceneName;
+    j["worldSeed"] = scene_.worldSeed;
+    j["camera"] = {
+        {"x", camX_},
+        {"y", camY_},
+        {"isoYawDeg", viewport3D_.isoYawDeg},
+        {"isoPitchDeg", viewport3D_.isoPitchDeg},
+        {"zoom", viewport3D_.zoom}
+    };
+    j["viewport"] = {
+        {"width", SCREEN_W},
+        {"height", SCREEN_H},
+        {"heightScale", viewport3D_.heightScale},
+        {"gridOpacity", viewport3D_.gridOpacity},
+        {"screenX", globalVpX},
+        {"screenY", globalVpY},
+        {"screenW", vpDisplayW_},
+        {"screenH", vpDisplayH_}
+    };
+    j["selection"] = {
+        {"entityId", selectedEntityId_},
+        {"x", selectedX},
+        {"y", selectedY},
+        {"z", selectedZ}
+    };
+
+    std::ofstream out(vulkanViewportStatePath_);
+    if (!out.is_open()) return;
+    out << j.dump(2);
+}
+
 // ═════════════════════════════════════════════════════════════════════════════
-// Viewport rendering (render the isometric world into the texture)
+// Viewport rendering (migrated to 3D isometric workflow)
 // ═════════════════════════════════════════════════════════════════════════════
 void EditorApp::renderWorldToTexture()
 {
@@ -1740,86 +2131,100 @@ void EditorApp::renderWorldToTexture()
         return;
     }
 
-    // ── Edit mode: normal editor rendering ───────────────────────────────────
-    SDL_SetRenderDrawColor(renderer_, 15, 12, 10, 255);
+    if (viewport3D_.useVulkan3D && vulkanPreviewRunning_) {
+        writeVulkanViewportStateFile();
+    }
+
+    // ── Edit mode: 3D isometric rendering ───────────────────────────────────
+    SDL_SetRenderDrawColor(renderer_, 13, 15, 18, 255);
     SDL_RenderClear(renderer_);
 
-    // Draw world tiles
-    world_.draw(renderer_, camX_, camY_);
+    const float zoom = std::max(0.1f, viewport3D_.zoom);
+    const float hw = (TILE_W * 0.5f) * zoom;
+    const float hh = (TILE_H * 0.5f) * zoom;
 
-    // Draw entity markers
-    for (int i = 0; i < (int)scene_.entities.size(); ++i) {
-        auto& e = scene_.entities[i];
-        Vec2f s = worldToScreen(e.x, e.y, camX_, camY_);
+    for (int ty = 0; ty < WORLD_H; ++ty) {
+        for (int tx = 0; tx < WORLD_W; ++tx) {
+            const Tile& t = world_.grid[ty][tx];
+            const float h = tileHeight(t.type);
+            const Vec2f s = worldToScreenIso3D(tx + 0.5f, ty + 0.5f, h);
 
-        const int radius = 10;
+            if (s.x < -TILE_W || s.x > SCREEN_W + TILE_W) continue;
+            if (s.y < -TILE_H || s.y > SCREEN_H + TILE_H) continue;
 
-        // Try sprite first via TextureCache
-        bool drewSprite = false;
-        for (auto& comp : e.components) {
-            if (getVariantType(comp) != ComponentType::Render) continue;
-            const auto& rc = std::get<RenderComponent>(comp);
-            if (rc.visible && rc.sprite != "default") {
-                std::string texPath = assetsRoot_ + "/sprites/" + rc.sprite + ".png";
-                SDL_Texture* spriteTex = TextureCache::instance().load(renderer_, texPath);
-                if (spriteTex) {
-                    int tw = 0, th = 0;
-                    SDL_QueryTexture(spriteTex, nullptr, nullptr, &tw, &th);
-                    float pivotX = 0.5f;
-                    float pivotY = 1.0f;
-                    getSpritePivot(rc.sprite, pivotX, pivotY);
-                    SDL_Rect dst = {
-                        static_cast<int>(s.x - pivotX * tw),
-                        static_cast<int>(s.y - pivotY * th),
-                        tw,
-                        th
-                    };
-                    SDL_RenderCopy(renderer_, spriteTex, nullptr, &dst);
-                    drewSprite = true;
-                }
-            }
-            break;
-        }
-
-        if (!drewSprite) {
-            SDL_Color col;
-            if (e.type == EntityData::Type::Player)
-                col = {60, 140, 255, 255};
-            else
-                col = {220, 60, 60, 255};
-
-            // Filled circle
-            SDL_SetRenderDrawColor(renderer_, col.r, col.g, col.b, col.a);
-            for (int dy = -radius; dy <= radius; ++dy) {
-                int half = (int)std::sqrt((float)(radius * radius - dy * dy));
-                SDL_RenderDrawLine(renderer_,
-                    (int)s.x - half, (int)s.y + dy,
-                    (int)s.x + half, (int)s.y + dy);
-            }
-        }
-
-        // Selection ring
-        if (selectedEntityId_ == e.id) {
-            SDL_SetRenderDrawColor(renderer_, 255, 255, 0, 255);
-            int r2 = radius + 3;
-            for (int dy = -r2; dy <= r2; ++dy) {
-                int half = (int)std::sqrt((float)(r2 * r2 - dy * dy));
-                SDL_RenderDrawPoint(renderer_, (int)s.x - half, (int)s.y + dy);
-                SDL_RenderDrawPoint(renderer_, (int)s.x + half, (int)s.y + dy);
+            SDL_Color top = clampColor(t.topColor());
+            const float columnPx = std::max(0.0f, h * viewport3D_.heightScale * zoom);
+            if (columnPx > 1.0f) {
+                drawIsoColumn(renderer_, s.x, s.y, hw, hh, columnPx, top);
+            } else {
+                drawIsoDiamondScaled(renderer_, s.x, s.y, hw, hh, top);
             }
         }
     }
 
-    // Subtle grid overlay when painting tiles
+    // Draw entity markers as 3D proxies (mesh-first workflow)
+    for (int i = 0; i < (int)scene_.entities.size(); ++i) {
+        auto& e = scene_.entities[i];
+
+        float wz = 0.0f;
+        int renderMode = static_cast<int>(RenderMode::Mesh3D);
+        std::string spriteName;
+        bool visible = true;
+        for (auto& comp : e.components) {
+            if (auto* tf = std::get_if<TransformComponent>(&comp)) {
+                wz = tf->z;
+            }
+            if (auto* rc = std::get_if<RenderComponent>(&comp)) {
+                renderMode = rc->renderMode;
+                spriteName = rc->sprite;
+                visible = rc->visible;
+            }
+        }
+        if (!visible) continue;
+
+        const Vec2f s = worldToScreenIso3D(e.x, e.y, wz);
+        const float bodyHeight = 22.0f * zoom;
+
+        if (renderMode == static_cast<int>(RenderMode::BillboardSprite) && !spriteName.empty() && spriteName != "default") {
+            std::string texPath = assetsRoot_ + "/sprites/" + spriteName + ".png";
+            SDL_Texture* spriteTex = TextureCache::instance().load(renderer_, texPath);
+            if (spriteTex) {
+                int tw = 0, th = 0;
+                SDL_QueryTexture(spriteTex, nullptr, nullptr, &tw, &th);
+                float pivotX = 0.5f;
+                float pivotY = 1.0f;
+                getSpritePivot(spriteName, pivotX, pivotY);
+                SDL_Rect dst = {
+                    static_cast<int>(s.x - pivotX * tw * zoom),
+                    static_cast<int>(s.y - pivotY * th * zoom),
+                    static_cast<int>(tw * zoom),
+                    static_cast<int>(th * zoom)
+                };
+                SDL_RenderCopy(renderer_, spriteTex, nullptr, &dst);
+            }
+        } else {
+            SDL_Color top = (e.type == EntityData::Type::Player)
+                ? SDL_Color{70, 145, 255, 255}
+                : SDL_Color{220, 80, 80, 255};
+            drawIsoColumn(renderer_, s.x, s.y, hw * 0.40f, hh * 0.40f, bodyHeight, top);
+        }
+
+        if (selectedEntityId_ == e.id) {
+            const Uint8 alpha = static_cast<Uint8>(std::max(20.0f, std::min(255.0f, viewport3D_.gridOpacity * 255.0f)));
+            drawDiamondOutline(renderer_, s.x, s.y + hh * 0.25f, 255, 220, 65, alpha);
+        }
+    }
+
     if (currentTool_ == Tool::PaintTile) {
-        SDL_SetRenderDrawColor(renderer_, 255, 255, 255, 25);
+        const Uint8 alpha = static_cast<Uint8>(std::max(0.0f, std::min(255.0f, viewport3D_.gridOpacity * 255.0f)));
+        SDL_SetRenderDrawColor(renderer_, 255, 255, 255, alpha);
         for (int ty = 0; ty < WORLD_H; ++ty) {
             for (int tx = 0; tx < WORLD_W; ++tx) {
-                Vec2f s = worldToScreen(tx + 0.5f, ty + 0.5f, camX_, camY_);
-                // Skip off-screen tiles
+                const float h = tileHeight(world_.grid[ty][tx].type);
+                const Vec2f s = worldToScreenIso3D(tx + 0.5f, ty + 0.5f, h);
                 if (s.x < -TILE_W || s.x > SCREEN_W + TILE_W) continue;
                 if (s.y < -TILE_H || s.y > SCREEN_H + TILE_H) continue;
-                drawDiamondOutline(renderer_, s.x, s.y, 255, 255, 255, 25);
+                drawDiamondOutline(renderer_, s.x, s.y, 255, 255, 255, alpha);
             }
         }
     }
@@ -1827,15 +2232,17 @@ void EditorApp::renderWorldToTexture()
     SDL_SetRenderTarget(renderer_, nullptr);
 }
 
-bool EditorApp::viewportScreenToWorld(float vx, float vy,
-                                       float& wx, float& wy)
+bool EditorApp::viewportScreenToWorld(float vx, float vy, float& wx, float& wy)
 {
-    // Map from the ImGui displayed image size to texture coordinates
-    float sx = vx * (float)SCREEN_W / vpDisplayW_;
-    float sy = vy * (float)SCREEN_H / vpDisplayH_;
+    const float sx = vx * static_cast<float>(SCREEN_W) / vpDisplayW_;
+    const float sy = vy * static_cast<float>(SCREEN_H) / vpDisplayH_;
 
-    float u = (sx - SCREEN_W * 0.5f) * 2.f / TILE_W;
-    float v = (sy - SCREEN_H * 0.5f) * 2.f / TILE_H;
+    const float zoom = std::max(0.1f, viewport3D_.zoom);
+    const float hw = (TILE_W * 0.5f) * zoom;
+    const float hh = (TILE_H * 0.5f) * zoom;
+
+    const float u = (sx - SCREEN_W * 0.5f) / hw;
+    const float v = (sy - SCREEN_H * 0.5f) / hh;
 
     wx = (u + v) * 0.5f + camX_;
     wy = (v - u) * 0.5f + camY_;
@@ -2028,6 +2435,7 @@ void EditorApp::drawCreateSceneDialog()
 void EditorApp::newScene()
 {
     scene_.createDefault();
+    syncUIRender3DSettingsFromScene();
     world_.generate(scene_.worldSeed);
     selectedEntityId_ = 0;
     commandStack_.clear();
@@ -2159,6 +2567,7 @@ void EditorApp::openScene(const std::string& path)
             std::string error;
             if (repo.loadScene(fileName, scene_, assetsRoot_, &error)) {
                 scene_.filePath = (fs::path(scenesDir_) / fileName).string();
+                syncUIRender3DSettingsFromScene();
 
                 for (auto& err : scene_.loadErrors)
                     addLog("  [load] " + err);
@@ -2178,6 +2587,7 @@ void EditorApp::openScene(const std::string& path)
     }
 
     if (scene_.loadFromFile(path, assetsRoot_)) {
+        syncUIRender3DSettingsFromScene();
         // Report any warnings collected during load
         for (auto& err : scene_.loadErrors)
             addLog("  [load] " + err);

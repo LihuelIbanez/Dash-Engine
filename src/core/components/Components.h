@@ -22,9 +22,22 @@ enum class ComponentType : int {
 struct TransformComponent {
     float x = 0.f;
     float y = 0.f;
+    float z = 0.f;
+    float yawDeg = 0.f;
+    float pitchDeg = 0.f;
+    float rollDeg = 0.f;
+    float scale = 1.f;
+};
+
+enum class RenderMode : int {
+    Mesh3D = 0,
+    BillboardSprite = 1,
 };
 
 struct RenderComponent {
+    int         renderMode = static_cast<int>(RenderMode::Mesh3D);
+    std::string mesh       = "cube";
+    std::string material   = "default";
     std::string sprite  = "default";
     int         layer   = 0;
     bool        visible = true;

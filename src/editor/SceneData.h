@@ -41,11 +41,22 @@ struct TileOverride {
 // SceneData – everything needed to describe one scenario / level
 // ─────────────────────────────────────────────────────────────────────────────
 struct SceneData {
-    static constexpr int kCurrentVersion = 2;
+    static constexpr int kCurrentVersion = 3;
+
+    struct Render3DSettings {
+        bool  useVulkan3D = true;
+        bool  embeddedPreview = false;
+        float isoYawDeg = 45.0f;
+        float isoPitchDeg = 35.264f;
+        float zoom = 1.0f;
+        float heightScale = 32.0f;
+        float gridOpacity = 0.22f;
+    };
 
     std::string  sceneName    = "Untitled";
     unsigned int worldSeed    = 12345;
     int          sceneVersion = kCurrentVersion;
+    Render3DSettings render3d;
 
     std::vector<TileOverride> tileOverrides;
     std::vector<EntityData>   entities;

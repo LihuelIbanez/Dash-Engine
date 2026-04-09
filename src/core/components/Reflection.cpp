@@ -13,8 +13,16 @@ const ComponentMeta& getComponentMeta(ComponentType type)
         ComponentMeta{"Transform", ComponentType::Transform, {
             {"x", PropertyType::Float, offsetof(TransformComponent, x), {}},
             {"y", PropertyType::Float, offsetof(TransformComponent, y), {}},
+            {"z", PropertyType::Float, offsetof(TransformComponent, z), {}},
+            {"yawDeg", PropertyType::Float, offsetof(TransformComponent, yawDeg), {}},
+            {"pitchDeg", PropertyType::Float, offsetof(TransformComponent, pitchDeg), {}},
+            {"rollDeg", PropertyType::Float, offsetof(TransformComponent, rollDeg), {}},
+            {"scale", PropertyType::Float, offsetof(TransformComponent, scale), {}},
         }},
         ComponentMeta{"Render", ComponentType::Render, {
+            {"renderMode", PropertyType::Enum, offsetof(RenderComponent, renderMode), {"Mesh3D","BillboardSprite"}},
+            {"mesh",    PropertyType::String, offsetof(RenderComponent, mesh), {}},
+            {"material",PropertyType::String, offsetof(RenderComponent, material), {}},
             {"sprite",  PropertyType::String, offsetof(RenderComponent, sprite),  {}},
             {"layer",   PropertyType::Int,    offsetof(RenderComponent, layer),   {}},
             {"visible", PropertyType::Bool,   offsetof(RenderComponent, visible), {}},
