@@ -12,6 +12,7 @@ public:
         VkDevice device,
         VkExtent2D extent,
         VkRenderPass renderPass,
+        VkDescriptorSetLayout descriptorSetLayout,
         const std::string& vertSpvPath,
         const std::string& fragSpvPath,
         VkPipelineLayout& outPipelineLayout,

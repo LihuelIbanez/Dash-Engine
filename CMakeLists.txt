@@ -160,9 +160,12 @@ if(ENABLE_VULKAN_EXPERIMENTAL)
     if(Vulkan_FOUND AND NOT "${GLFW_VK_TARGET}" STREQUAL "")
         set(VULKAN_EXPERIMENTAL_SOURCES
             ${CMAKE_SOURCE_DIR}/src/rendering/platform/WindowContext.cpp
+            ${CMAKE_SOURCE_DIR}/src/rendering/mesh/MeshBuffers.cpp
             ${CMAKE_SOURCE_DIR}/src/rendering/vulkan/VulkanDiagnostics.cpp
             ${CMAKE_SOURCE_DIR}/src/rendering/vulkan/DeviceContext.cpp
             ${CMAKE_SOURCE_DIR}/src/rendering/vulkan/SwapchainContext.cpp
+            ${CMAKE_SOURCE_DIR}/src/rendering/vulkan/FrameGraphLite.cpp
+            ${CMAKE_SOURCE_DIR}/src/rendering/vulkan/Renderer.cpp
             ${CMAKE_SOURCE_DIR}/src/rendering/vulkan/PipelineBuilder.cpp
         )
 
@@ -176,6 +179,10 @@ if(ENABLE_VULKAN_EXPERIMENTAL)
         set(VULKAN_SHADER_SRC_DIR "${CMAKE_SOURCE_DIR}/assets/shaders")
         set(VULKAN_SHADER_BIN_DIR "${CMAKE_BINARY_DIR}/generated/shaders")
         file(MAKE_DIRECTORY "${VULKAN_SHADER_BIN_DIR}")
+
+        target_compile_definitions(vulkan_experimental PUBLIC
+            VULKAN_SHADER_DIR="${VULKAN_SHADER_BIN_DIR}"
+        )
 
         find_program(GLSLC_EXECUTABLE glslc)
         if(GLSLC_EXECUTABLE)
@@ -204,9 +211,6 @@ if(ENABLE_VULKAN_EXPERIMENTAL)
             ${CMAKE_SOURCE_DIR}/src/tools/vulkan_bootstrap_main.cpp
         )
         target_link_libraries(VulkanBootstrap PRIVATE vulkan_experimental)
-        target_compile_definitions(VulkanBootstrap PRIVATE
-            VULKAN_SHADER_DIR="${VULKAN_SHADER_BIN_DIR}"
-        )
         target_compile_options(VulkanBootstrap PRIVATE -Wall -Wextra -O2)
 
         if(TARGET vulkan_shaders)

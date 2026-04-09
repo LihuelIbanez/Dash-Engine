@@ -25,6 +25,8 @@ public:
     VkFormat imageFormat() const { return imageFormat_; }
     VkExtent2D extent() const { return extent_; }
     VkRenderPass renderPass() const { return renderPass_; }
+    const std::vector<VkImageView>& imageViews() const { return imageViews_; }
+    uint32_t imageCount() const { return static_cast<uint32_t>(images_.size()); }
 
 private:
     VkSurfaceFormatKHR chooseSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& formats) const;

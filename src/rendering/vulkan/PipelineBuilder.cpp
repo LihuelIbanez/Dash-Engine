@@ -2,7 +2,10 @@
 
 #include <cstdio>
 #include <fstream>
+#include <array>
 #include <vector>
+
+#include "rendering/mesh/Vertex.h"
 
 namespace dash::vkexp {
 
@@ -36,6 +39,7 @@ bool PipelineBuilder::createBasicPipeline(
     VkDevice device,
     VkExtent2D extent,
     VkRenderPass renderPass,
+    VkDescriptorSetLayout descriptorSetLayout,
     const std::string& vertSpvPath,
     const std::string& fragSpvPath,
     VkPipelineLayout& outPipelineLayout,
@@ -80,6 +84,26 @@ bool PipelineBuilder::createBasicPipeline(
 
     VkPipelineVertexInputStateCreateInfo vertexInput{};
     vertexInput.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+
+    const VkVertexInputBindingDescription bindingDesc{
+        0,
+        static_cast<uint32_t>(sizeof(Vertex)),
+        VK_VERTEX_INPUT_RATE_VERTEX
+    };
+
+    const std::array<VkVertexInputAttributeDescription, 1> attrDescs = {{
+        {
+            0,
+            0,
+            VK_FORMAT_R32G32B32_SFLOAT,
+            static_cast<uint32_t>(offsetof(Vertex, position))
+        }
+    }};
+
+    vertexInput.vertexBindingDescriptionCount = 1;
+    vertexInput.pVertexBindingDescriptions = &bindingDesc;
+    vertexInput.vertexAttributeDescriptionCount = static_cast<uint32_t>(attrDescs.size());
+    vertexInput.pVertexAttributeDescriptions = attrDescs.data();
 
     VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
     inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
@@ -135,6 +159,10 @@ bool PipelineBuilder::createBasicPipeline(
 
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
     pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    if (descriptorSetLayout != VK_NULL_HANDLE) {
+        pipelineLayoutInfo.setLayoutCount = 1;
+        pipelineLayoutInfo.pSetLayouts = &descriptorSetLayout;
+    }
 
     if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &outPipelineLayout) != VK_SUCCESS) {
         outError = "vkCreatePipelineLayout failed";
