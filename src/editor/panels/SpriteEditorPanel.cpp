@@ -144,7 +144,7 @@ void SpriteEditorPanel::initDefaultPalette()
 
 void SpriteEditorPanel::loadPaletteFromDisk()
 {
-    const fs::path path = fs::path(AppPaths::getResourcesDir()) / "assets" / "sprites" / "default_palette.json";
+    const fs::path path = fs::path(AppPaths::getAssetsDir()) / "sprites" / "default_palette.json";
     std::ifstream in(path);
     if (!in) return;
 
@@ -191,7 +191,7 @@ void SpriteEditorPanel::loadPaletteFromDisk()
 
 void SpriteEditorPanel::savePaletteToDisk() const
 {
-    const fs::path path = fs::path(AppPaths::getResourcesDir()) / "assets" / "sprites" / "default_palette.json";
+    const fs::path path = fs::path(AppPaths::getAssetsDir()) / "sprites" / "default_palette.json";
     std::error_code ec;
     fs::create_directories(path.parent_path(), ec);
 
@@ -874,8 +874,8 @@ void SpriteEditorPanel::drawSaveModal()
         ImGui::SetNextItemWidth(220);
         ImGui::InputText("##sname", saveNameBuf_, sizeof(saveNameBuf_));
         if (ImGui::Button("Save", {80,0})) {
-            std::string outPath = AppPaths::getResourcesDir()
-                + "/assets/sprites/" + saveNameBuf_ + ".png";
+            std::string outPath = AppPaths::getAssetsDir()
+                + "/sprites/" + saveNameBuf_ + ".png";
             if (saveAsPNG(outPath)) {
                 currentPath = outPath;
                 TextureCache::instance().invalidate(renderer_, outPath);
@@ -1147,7 +1147,7 @@ void SpriteEditorPanel::drawOpenModal()
         if (assetsRoot)
             spritesDir = *assetsRoot + "/sprites";
         else
-            spritesDir = AppPaths::getResourcesDir() + "/assets/sprites";
+            spritesDir = AppPaths::getAssetsDir() + "/sprites";
 
         std::error_code ec;
         for (auto& entry : fs::directory_iterator(spritesDir, ec)) {

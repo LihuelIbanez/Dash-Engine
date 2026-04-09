@@ -37,11 +37,16 @@ bool ProjectManager::createProject(const std::string& dirPath, const std::string
     }
 
     // Write the .dashproject file.
-    std::string manifestPath = (fs::path(m.projectRoot) / (name + ".dashproject")).string();
+    std::string manifestPath = (fs::path(m.projectRoot) / (m.name + ".dashproject")).string();
     if (!m.saveToFile(manifestPath)) return false;
 
     manifest_ = m;
     active_   = true;
+    AppPaths::setActiveProjectPaths(
+        manifest_.absoluteAssetsDir(),
+        manifest_.absoluteScenesDir(),
+        manifest_.absoluteLibraryDir(),
+        manifest_.absoluteBuildDir());
     addRecent(manifestPath);
     return true;
 }
@@ -53,6 +58,11 @@ bool ProjectManager::openProject(const std::string& manifestPath)
 
     manifest_ = m;
     active_   = true;
+    AppPaths::setActiveProjectPaths(
+        manifest_.absoluteAssetsDir(),
+        manifest_.absoluteScenesDir(),
+        manifest_.absoluteLibraryDir(),
+        manifest_.absoluteBuildDir());
     addRecent(manifestPath);
     return true;
 }
@@ -61,6 +71,7 @@ void ProjectManager::closeProject()
 {
     manifest_ = ProjectManifest{};
     active_   = false;
+    AppPaths::clearActiveProjectPaths();
 }
 
 // ── Recent projects ───────────────────────────────────────────────────────────

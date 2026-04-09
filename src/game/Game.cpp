@@ -245,8 +245,8 @@ void Game::getSpritePivot(const std::string& spriteName, float& outPivotX, float
     outPivotX = 0.5f;
     outPivotY = 1.0f;
 
-    std::filesystem::path metaPath = std::filesystem::path(AppPaths::getResourcesDir())
-        / "assets" / "sprites" / (spriteName + ".sprite.json");
+    std::filesystem::path metaPath = std::filesystem::path(AppPaths::getAssetsDir())
+                                   / "sprites" / (spriteName + ".sprite.json");
     std::error_code ec;
     if (!std::filesystem::exists(metaPath, ec) || ec) return;
 
@@ -292,7 +292,7 @@ bool Game::drawSpriteAtWorld(float wx, float wy, const std::string& spriteName, 
     if (!visible || spriteName.empty() || spriteName == "default") return false;
 
     Vec2f s = worldToScreen(wx, wy, camX, camY);
-    std::string texPath = AppPaths::getResourcesDir() + "/assets/sprites/" + spriteName + ".png";
+    std::string texPath = AppPaths::getAssetsDir() + "/sprites/" + spriteName + ".png";
     SDL_Texture* tex = TextureCache::instance().load(renderer_, texPath);
     if (!tex) return false;
 
@@ -494,7 +494,7 @@ bool Game::init()
     worldSeed_ = 12345;
     std::srand(worldSeed_);
     world_.generate(worldSeed_);
-    gameDb_.load(AppPaths::getResourcesDir() + "/assets");
+    gameDb_.load(AppPaths::getAssetsDir());
 
     if (!sceneFile_.empty() && loadSceneFile()) {
         std::printf("[Game] Loaded scene: %s\n", sceneFile_.c_str());
@@ -556,7 +556,7 @@ bool Game::initEmbedded(SDL_Renderer* renderer)
     worldSeed_ = 12345;
     std::srand(worldSeed_);
     world_.generate(worldSeed_);
-    gameDb_.load(AppPaths::getResourcesDir() + "/assets");
+    gameDb_.load(AppPaths::getAssetsDir());
 
     if (!sceneFile_.empty() && loadSceneFile()) {
         std::printf("[Game] Embedded: loaded scene %s\n", sceneFile_.c_str());

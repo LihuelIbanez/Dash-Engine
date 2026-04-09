@@ -8,8 +8,58 @@
 // ─────────────────────────────────────────────────────────────────────────────
 #include <string>
 #include <filesystem>
+#include <cstdlib>
 
 namespace AppPaths {
+
+inline std::string& activeAssetsDirStorage()
+{
+    static std::string v;
+    return v;
+}
+
+inline std::string& activeScenesDirStorage()
+{
+    static std::string v;
+    return v;
+}
+
+inline std::string& activeLibraryDirStorage()
+{
+    static std::string v;
+    return v;
+}
+
+inline std::string& activeBuildOutputDirStorage()
+{
+    static std::string v;
+    return v;
+}
+
+// Inject active project paths from the editor project system.
+// Passing empty strings clears the active project override.
+inline void setActiveProjectPaths(const std::string& assetsDir,
+                                  const std::string& scenesDir,
+                                  const std::string& libraryDir,
+                                  const std::string& buildOutputDir)
+{
+    activeAssetsDirStorage()      = assetsDir;
+    activeScenesDirStorage()      = scenesDir;
+    activeLibraryDirStorage()     = libraryDir;
+    activeBuildOutputDirStorage() = buildOutputDir;
+}
+
+inline void clearActiveProjectPaths()
+{
+    setActiveProjectPaths("", "", "", "");
+}
+
+inline bool hasActiveProjectPaths()
+{
+    return !activeAssetsDirStorage().empty()
+        && !activeScenesDirStorage().empty()
+        && !activeLibraryDirStorage().empty();
+}
 
 // Returns the base directory that contains assets/, scenes/, library/, saves/.
 // In a .app bundle: <bundle>/Contents/Resources
@@ -172,6 +222,42 @@ inline std::string getConfigDir()
         return "config";
     }();
     return cached;
+}
+
+// Returns assets directory for the active project when set.
+// Legacy fallback: <resources>/assets
+inline std::string getAssetsDir()
+{
+    if (!activeAssetsDirStorage().empty())
+        return activeAssetsDirStorage();
+    return (std::filesystem::path(getResourcesDir()) / "assets").string();
+}
+
+// Returns scenes directory for the active project when set.
+// Legacy fallback: <resources>/scenes
+inline std::string getScenesDir()
+{
+    if (!activeScenesDirStorage().empty())
+        return activeScenesDirStorage();
+    return (std::filesystem::path(getResourcesDir()) / "scenes").string();
+}
+
+// Returns library directory for the active project when set.
+// Legacy fallback: <resources>/library
+inline std::string getLibraryDir()
+{
+    if (!activeLibraryDirStorage().empty())
+        return activeLibraryDirStorage();
+    return (std::filesystem::path(getResourcesDir()) / "library").string();
+}
+
+// Returns build output directory for the active project when set.
+// Legacy fallback: <resources>/build_output
+inline std::string getBuildOutputDir()
+{
+    if (!activeBuildOutputDirStorage().empty())
+        return activeBuildOutputDirStorage();
+    return (std::filesystem::path(getResourcesDir()) / "build_output").string();
 }
 
 } // namespace AppPaths

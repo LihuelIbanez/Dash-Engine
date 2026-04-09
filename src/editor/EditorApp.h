@@ -182,6 +182,7 @@ private:
     void saveScene(const std::string& path);
     void openScene(const std::string& path);
     void buildAndRun();
+    void exportGameBundle();
     void applySceneToWorld();
 
     // ── Viewport helpers ─────────────────────────────────────────────────────

@@ -20,6 +20,7 @@
 #include "AppPaths.h"
 #include "IconsFontAwesome6.h"
 #include "TextureCache.h"
+#include "project/GameBuildPipeline.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -87,7 +88,7 @@ bool EditorApp::init()
     }
 
     // Merge Font Awesome 6 solid icons into the same font atlas
-    std::string faPath = AppPaths::getResourcesDir() + "/assets/fonts/fa-solid-900.ttf";
+    std::string faPath = AppPaths::getAssetsDir() + "/fonts/fa-solid-900.ttf";
     if (FILE* fa = fopen(faPath.c_str(), "rb")) {
         fclose(fa);
         ImFontConfig cfg;
@@ -220,9 +221,9 @@ void EditorApp::refreshProjectPaths()
         scenesDir_   = m.absoluteScenesDir();
     } else {
         // Legacy mode: fall back to AppPaths-relative directories.
-        assetsRoot_  = AppPaths::getResourcesDir() + "/assets";
-        libraryRoot_ = AppPaths::getResourcesDir() + "/library";
-        scenesDir_   = AppPaths::getResourcesDir() + "/scenes";
+        assetsRoot_  = AppPaths::getAssetsDir();
+        libraryRoot_ = AppPaths::getLibraryDir();
+        scenesDir_   = AppPaths::getScenesDir();
     }
     fs::create_directories(scenesDir_);
 }
@@ -619,6 +620,13 @@ void EditorApp::drawToolbar()
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered,  {0.20f, 0.70f, 0.20f, 1.f});
     ImGui::PushStyleColor(ImGuiCol_ButtonActive,   {0.10f, 0.90f, 0.10f, 1.f});
     if (ImGui::Button(ICON_FA_HAMMER "  Build & Run  ", {170, 34})) buildAndRun();
+    ImGui::PopStyleColor(3);
+
+    ImGui::SameLine();
+    ImGui::PushStyleColor(ImGuiCol_Button,        {0.15f, 0.45f, 0.22f, 1.f});
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, {0.22f, 0.58f, 0.30f, 1.f});
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  {0.28f, 0.66f, 0.36f, 1.f});
+    if (ImGui::Button(ICON_FA_BOX_ARCHIVE "  Export Bundle  ", {185, 34})) exportGameBundle();
     ImGui::PopStyleColor(3);
 
     ImGui::SameLine();
@@ -1922,6 +1930,39 @@ void EditorApp::buildAndRun()
     } else {
         addLog("Build FAILED (exit " + std::to_string(ret) + ").");
     }
+}
+
+void EditorApp::exportGameBundle()
+{
+    showBuildLog_ = true;
+    addLog("--- Export Game Bundle ---");
+
+    if (!projectManager_.hasActiveProject()) {
+        addLog("[ERROR] No active project. Open a .dashproject before exporting.");
+        return;
+    }
+
+    // Preserve scene state and export current editor scene into project scenes dir.
+    if (!scene_.filePath.empty()) {
+        const std::string prevPath = scene_.filePath;
+        const bool prevModified = scene_.modified;
+        scene_.saveToFile(scene_.filePath);
+        scene_.filePath = prevPath;
+        scene_.modified = prevModified;
+    }
+
+    const auto& manifest = projectManager_.manifest();
+    std::string outDir = manifest.absoluteBuildDir();
+    if (outDir.empty()) outDir = AppPaths::getBuildOutputDir();
+
+    auto result = GameBuildPipeline::build(manifest, outDir, BUILD_DIR);
+    for (const auto& line : result.log)
+        addLog(line);
+
+    if (result.success)
+        addLog("Export OK: " + result.outputPath);
+    else
+        addLog("Export FAILED.");
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
