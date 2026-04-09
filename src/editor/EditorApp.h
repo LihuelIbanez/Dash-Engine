@@ -86,6 +86,10 @@ private:
     std::vector<ValidationIssue> validationIssues_;
     bool                         showValidationPanel_ = false;
     bool                         showAboutModal_      = false;
+    bool                         showMigrationLogModal_ = false;
+    bool                         migrationLastSuccess_ = false;
+    std::string                  migrationSummaryText_;
+    std::string                  migrationLogText_;
 
     // ── Sprite Editor ─────────────────────────────────────────────────────
     SpriteEditorPanel spriteEditor_;
@@ -193,6 +197,7 @@ private:
     void drawOpenDialog();
     void drawSaveDialog();
     void drawCreateSceneDialog();
+    void drawMigrationLogModal();
 
     // ── Actions ──────────────────────────────────────────────────────────────
     void newScene();

@@ -1,5 +1,6 @@
 #pragma once
 #include "ProjectManifest.h"
+#include "ProjectDataMigrator.h"
 #include <string>
 #include <vector>
 
@@ -15,6 +16,14 @@
 // ─────────────────────────────────────────────────────────────────────────────
 class ProjectManager {
 public:
+    struct MigrationStatus {
+        bool attempted = false;
+        bool success = false;
+        std::string dbPath;
+        std::vector<std::string> log;
+        ProjectDataMigrator::Summary summary;
+    };
+
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
     // Create a new project directory at `dirPath` with the given name and
@@ -26,6 +35,12 @@ public:
     // On success the project becomes the active one and the path is added to
     // the recent-projects list.
     bool openProject(const std::string& manifestPath);
+
+    // Run JSON -> SQLite migration for the active project.
+    // If force is false, migration only runs when DB does not exist.
+    bool migrateProjectDataToSqlite(bool force = false);
+
+    const MigrationStatus& lastMigrationStatus() const { return lastMigrationStatus_; }
 
     // Close the active project (clears state; does not delete files).
     void closeProject();
@@ -53,4 +68,5 @@ private:
     ProjectManifest          manifest_;
     bool                     active_ = false;
     std::vector<std::string> recentPaths_;
+    MigrationStatus          lastMigrationStatus_;
 };

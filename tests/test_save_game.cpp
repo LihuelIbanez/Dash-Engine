@@ -3,8 +3,10 @@
 // ═════════════════════════════════════════════════════════════════════════════
 #include "SaveGame.h"
 #include "SaveVersioning.h"
+#include "AppPaths.h"
 #include <nlohmann/json.hpp>
 #include <cstdio>
+#include <cstdlib>
 #include <filesystem>
 #include <string>
 
@@ -165,16 +167,57 @@ static void test_score_and_seed()
     fs::remove(path);
 }
 
+// ── Test: sqlite mode round-trip by slot name (D64) ────────────────────────
+static void test_sqlite_mode_roundtrip()
+{
+    std::printf("  test_sqlite_mode_roundtrip\n");
+
+    const fs::path root = fs::temp_directory_path() / "dash_test_save_sqlite_mode";
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    fs::create_directories(root / "assets", ec);
+    fs::create_directories(root / "scenes", ec);
+    fs::create_directories(root / ".library", ec);
+    fs::create_directories(root / "build_output", ec);
+
+    AppPaths::setActiveProjectPaths(
+        (root / "assets").string(),
+        (root / "scenes").string(),
+        (root / ".library").string(),
+        (root / "build_output").string());
+
+    setenv("DASH_DB_MODE", "sqlite", 1);
+
+    SaveData orig = makeSave();
+    const std::string slotPath = (root / "saves" / "quicksave.json").string();
+
+    ASSERT(SaveGame::save(orig, slotPath), "sqlite save succeeds");
+
+    SaveData loaded;
+    ASSERT(SaveGame::load(slotPath, loaded), "sqlite load succeeds");
+    ASSERT(loaded.worldSeed == orig.worldSeed, "sqlite round-trip worldSeed");
+    ASSERT(loaded.player.level == orig.player.level, "sqlite round-trip player level");
+
+    AppPaths::clearActiveProjectPaths();
+    unsetenv("DASH_DB_MODE");
+    fs::remove_all(root, ec);
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 int main()
 {
     std::printf("=== test_save_game ===\n");
+
+    setenv("DASH_DB_MODE", "json", 1);
     test_save_load_round_trip();
     test_player_data_preserved();
     test_enemies_preserved();
     test_load_missing_file();
     test_versioning_no_change_at_current();
     test_score_and_seed();
+    unsetenv("DASH_DB_MODE");
+
+    test_sqlite_mode_roundtrip();
 
     std::printf("Result: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail == 0 ? 0 : 1;

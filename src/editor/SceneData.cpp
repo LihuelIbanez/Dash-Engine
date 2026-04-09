@@ -42,7 +42,7 @@ void SceneData::createDefault()
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-bool SceneData::saveToFile(const std::string& path)
+nlohmann::json SceneData::toJson() const
 {
     json j;
     j["sceneVersion"] = kCurrentVersion;
@@ -85,35 +85,38 @@ bool SceneData::saveToFile(const std::string& path)
     }
     j["entities"] = entsArr;
 
+    return j;
+}
+
+bool SceneData::saveToJsonString(std::string& outJson) const
+{
+    try {
+        outJson = toJson().dump(2);
+    } catch (...) {
+        return false;
+    }
+    return true;
+}
+
+bool SceneData::saveToFile(const std::string& path)
+{
+    std::string rawJson;
+    if (!saveToJsonString(rawJson)) {
+        return false;
+    }
+
     std::ofstream file(path);
     if (!file.is_open()) return false;
-    file << j.dump(2);
+    file << rawJson;
     filePath = path;
     modified = false;
     return true;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-bool SceneData::loadFromFile(const std::string& path, const std::string& assetsRoot)
+bool SceneData::loadFromJson(const nlohmann::json& j, const std::string& assetsRoot)
 {
     loadErrors.clear();
-
-    std::ifstream file(path);
-    if (!file.is_open()) {
-        loadErrors.push_back("Cannot open file: " + path);
-        return false;
-    }
-
-    json j;
-    try { file >> j; }
-    catch (const json::parse_error& e) {
-        loadErrors.push_back("JSON parse error: " + std::string(e.what()));
-        return false;
-    }
-    catch (...) {
-        loadErrors.push_back("Unknown error parsing JSON");
-        return false;
-    }
 
     if (!j.is_object()) {
         loadErrors.push_back("Root is not a JSON object");
@@ -277,7 +280,54 @@ bool SceneData::loadFromFile(const std::string& path, const std::string& assetsR
             nextEntityId = ed.id + 1;
     }
 
-    filePath = path;
     modified = false;
+    return true;
+}
+
+bool SceneData::loadFromJsonString(const std::string& rawJson, const std::string& assetsRoot)
+{
+    json j;
+    try {
+        j = json::parse(rawJson);
+    } catch (const json::parse_error& e) {
+        loadErrors.clear();
+        loadErrors.push_back("JSON parse error: " + std::string(e.what()));
+        return false;
+    } catch (...) {
+        loadErrors.clear();
+        loadErrors.push_back("Unknown error parsing JSON");
+        return false;
+    }
+
+    return loadFromJson(j, assetsRoot);
+}
+
+bool SceneData::loadFromFile(const std::string& path, const std::string& assetsRoot)
+{
+    std::ifstream file(path);
+    if (!file.is_open()) {
+        loadErrors.clear();
+        loadErrors.push_back("Cannot open file: " + path);
+        return false;
+    }
+
+    json j;
+    try { file >> j; }
+    catch (const json::parse_error& e) {
+        loadErrors.clear();
+        loadErrors.push_back("JSON parse error: " + std::string(e.what()));
+        return false;
+    }
+    catch (...) {
+        loadErrors.clear();
+        loadErrors.push_back("Unknown error parsing JSON");
+        return false;
+    }
+
+    if (!loadFromJson(j, assetsRoot)) {
+        return false;
+    }
+
+    filePath = path;
     return true;
 }

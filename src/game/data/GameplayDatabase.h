@@ -78,4 +78,13 @@ private:
     bool loadPlayerClasses(const std::string& path);
     bool loadEnemies(const std::string& path);
     bool loadLootTables(const std::string& path);
+
+    bool loadFromSqlite(const std::string& dbPath);
+    bool loadPlayerClassesFromSqlite();
+    bool loadEnemiesFromSqlite();
+    bool loadLootTablesFromSqlite();
+
+    void clearAll();
+
+    std::string sqlitePath_;
 };
