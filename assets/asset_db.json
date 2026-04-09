@@ -66,6 +66,33 @@
     {
       "assetType": "Unknown",
       "dependencies": [],
+      "guid": "cfc6551e-0a67-46a8-9600-8806e5198aaa",
+      "hash": "c77c6b364b08a68a",
+      "importPath": "sprites/sprite_32x32.png",
+      "lastImportTime": 1775686321,
+      "sourcePath": "sprites/sprite_32x32.png"
+    },
+    {
+      "assetType": "Unknown",
+      "dependencies": [],
+      "guid": "5229689c-8179-49a7-ae98-7fe803a1bdf0",
+      "hash": "5e9c87c0d22a1a0d",
+      "importPath": "",
+      "lastImportTime": 1775663757,
+      "sourcePath": "fonts/fa-solid-900.ttf"
+    },
+    {
+      "assetType": "GameplayConfig",
+      "dependencies": [],
+      "guid": "9700277c-7cba-45ed-aa10-9e0f58d9ac74",
+      "hash": "c341d2f619a5c6db",
+      "importPath": "sprites/sprite_32x32.sprite.json",
+      "lastImportTime": 1775686321,
+      "sourcePath": "sprites/sprite_32x32.sprite.json"
+    },
+    {
+      "assetType": "Unknown",
+      "dependencies": [],
       "guid": "5ccb041f-e0d4-44ff-bd85-66a110633979",
       "hash": "9e759d19cffb066d",
       "importPath": "sprites/sprite_16x16.png",
@@ -80,33 +107,6 @@
       "importPath": "sprites/default_palette.json",
       "lastImportTime": 1775667384,
       "sourcePath": "sprites/default_palette.json"
-    },
-    {
-      "assetType": "GameplayConfig",
-      "dependencies": [],
-      "guid": "9700277c-7cba-45ed-aa10-9e0f58d9ac74",
-      "hash": "c341d2f619a5c6db",
-      "importPath": "sprites/sprite_32x32.sprite.json",
-      "lastImportTime": 1775686321,
-      "sourcePath": "sprites/sprite_32x32.sprite.json"
-    },
-    {
-      "assetType": "Unknown",
-      "dependencies": [],
-      "guid": "5229689c-8179-49a7-ae98-7fe803a1bdf0",
-      "hash": "5e9c87c0d22a1a0d",
-      "importPath": "",
-      "lastImportTime": 1775663757,
-      "sourcePath": "fonts/fa-solid-900.ttf"
-    },
-    {
-      "assetType": "Unknown",
-      "dependencies": [],
-      "guid": "cfc6551e-0a67-46a8-9600-8806e5198aaa",
-      "hash": "c77c6b364b08a68a",
-      "importPath": "sprites/sprite_32x32.png",
-      "lastImportTime": 1775686321,
-      "sourcePath": "sprites/sprite_32x32.png"
     }
   ]
 }

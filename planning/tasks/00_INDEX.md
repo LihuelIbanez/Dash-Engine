@@ -18,6 +18,11 @@ Este directorio separa las tareas por semana para ejecutar el escalado del edito
 | Sprint 5 - Project Bundles | ✅ Completada | D46-D54 completados |
 | Sprint 6 - SQLite Foundation | ✅ Completada | D55-D61 (migracion base + coexistencia JSON) |
 | Sprint 7 - SQLite Cutover | ✅ Completada | D62-D68 (editor/runtime en DB + migracion datos) |
+| Sprint 8 - Vulkan Base | 🧭 Planificado | D70-D76 (render bootstrap) |
+| Sprint 9 - Mundo Fisico | 🧭 Planificado | D80-D84 (fisicas y colisiones) |
+| Sprint 10 - Audio e Interfaz | 🧭 Planificado | D89-D93 (audio, input, persistencia) |
+| Sprint 11 - Importacion 3D | 🧭 Planificado | D97-D101 (assets y cache) |
+| Sprint 12 - Portabilidad Windows | 🧭 Planificado | D106-D110 (cross-platform y CI) |
 
 **Proximo paso:** Retomar Sprint 3 (D31-D35) y consolidar release final post-bundles.
 
@@ -73,6 +78,16 @@ El proyecto ya cuenta con una base funcional significativa:
 ### Sprint 6-7 (D55-D68)
 - 12_SPRINT6_7_SQLITE_MIGRATION.md
 - 13_SQLITE_RUNBOOK.md
+
+### Sprint 8-12 (D70-D110)
+- 14_SPRINT8_12_VULKAN_3D_ENGINE.md
+
+### Plan Motor Grafico 3D (Sprints 8-12 por archivo)
+- 15_SPRINT8_BASE_RENDER_VULKAN.md
+- 16_SPRINT9_DINAMICA_MUNDO_FISICO.md
+- 17_SPRINT10_AUDIO_INTERFAZ_PERSISTENCIA.md
+- 18_SPRINT11_IMPORTACION_ACTIVOS_3D.md
+- 19_SPRINT12_PORTABILIDAD_WINDOWS_BINARIOS.md
 
 ### General
 - 99_ACCEPTANCE_CHECKLIST.md

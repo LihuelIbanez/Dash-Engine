@@ -7,13 +7,15 @@
 ## Estado del Proyecto
 
 ```
-Overall  [██████████████████████████████]  100%  v5.0-alpha (Sprint 5)
+Overall  [██████████████████████████████]  100%  v7.0-alpha (Sprint 7)
 
 Core Engine Foundation  [██████████████████████████████]  100%
 Level Editor (DashEngine)  [██████████████████████████████]  100%
 Asset Pipeline  [██████████████████████████████]  100%
 Game Runtime    [██████████████████████████████]  100%
 Production / QA [██████████████████████████████]  100%
+SQLite Persistence [██████████████████████████████]  100%
+Vulkan 3D Roadmap [..............................]    0%  (Sprint 8-12 planificado)
 ```
 
 | Módulo | Estado | Detalle |
@@ -22,9 +24,11 @@ Production / QA [█████████████████████
 | Level Editor (DashEngine) | ✅ Completo | 10+ paneles dockables, Undo/Redo por comandos, Play Mode embebido en viewport, Asset Browser/Inspector, dirty state, ValidationPanel, About modal |
 | Asset Pipeline | ✅ Completo | AssetDatabase con GUID v4, ImportManager con hash incremental, 5 importers (Scene, TileSet, GameplayConfig, Prefab, PrefabImporter), FileWatcher hot-reload |
 | Game Runtime | ✅ Completo | 4 sistemas independientes, data-driven desde JSON, A* pathfinding, save/load versionado, EventDispatcher integrado |
-| Production / QA | ✅ Completo | 18 tests automatizados (ctest), ContentValidator, Packaging cmake, VersionInfo embebida |
+| Production / QA | ✅ Completo | Suite ctest automatizada, ContentValidator, Packaging cmake, VersionInfo embebida |
+| SQLite Persistence | ✅ Completo | Migraciones versionadas, repositorios de assets/scenes/savegame en SQLite, fallback JSON/hybrid/sqlite |
+| Vulkan 3D Roadmap | 🧭 Planificado | Sprints 8-12 definidos (D70-D110) para render 3D, fisicas, audio, import y portabilidad |
 
-**Sprint 5 completado:** separación Game Bundle / Editor Bundle, proyectos `.dashproject`, exportación de bundle y aislamiento de runtime.
+**Sprint 7 completado:** migracion SQLite consolidada (foundation + cutover), migrador de datos, runbook y pruebas de integridad.
 
 ---
 
@@ -50,6 +54,7 @@ Dash-Engine/
 ├── src/
 │   ├── core/               # Entity base, Character + Stats RPG, sistema de clases
 │   │   └── profiling/      # Profiler singleton, ScopeTimer RAII, EMA smoothing
+│   │   └── db/             # SqliteDb, SqliteStatement, SchemaManager, migraciones
 │   ├── entities/           # Player (click-to-move Diablo), Enemy (FSM AI + A*)
 │   ├── world/              # World: grid 64×64 tiles, generación procedural Perlin
 │   ├── rendering/          # IsoRenderer (world→screen iso), drawDiamond, Font5x7
@@ -59,10 +64,10 @@ Dash-Engine/
 │   │   ├── systems/        # MovementSystem, AISystem, CombatSystem, SpawnRewardSystem
 │   │   ├── data/           # GameplayDatabase (player_classes, enemies, loot_tables JSON)
 │   │   ├── nav/            # GridNav: A* 8-dir con costo por terreno
-│   │   └── save/           # SaveGame JSON + SaveVersioning (migración por versión)
+│   │   └── save/           # SaveGame JSON/SQLite + SaveVersioning (migración por versión)
 │   ├── editor/
 │   │   ├── EditorApp.cpp   # ImGui docking layout, 10+ paneles, Play Mode embebido
-│   │   ├── SceneData.cpp   # Modelo de escena versionado (JSON)
+│   │   ├── SceneData.cpp   # Modelo de escena versionado (JSON + SQLite)
 │   │   ├── commands/       # ICommand, CommandStack, PaintTile/PlaceEnemy/Erase
 │   │   ├── playmode/       # PlaySession: snapshot & rollback de escena + world
 │   │   └── panels/         # AssetBrowserPanel, AssetInspectorPanel
@@ -73,9 +78,9 @@ Dash-Engine/
 ├── assets/                 # Archivos fuente de gameplay (JSON configs)
 │   └── gameplay/           # player_classes.json, enemies.json, loot_tables.json
 ├── library/                # Cache de assets importados
-├── saves/                  # Savegames (.json)
-├── scenes/                 # Escenas .json (entities + tile overrides)
-├── tests/                  # 18 tests automatizados (ctest)
+├── saves/                  # Savegames (.json / .db)
+├── scenes/                 # Escenas JSON y/o persistencia SQLite
+├── tests/                  # Suite automatizada ctest (editor/runtime/db)
 └── planning/               # Roadmap por semanas y sprint diario
 ```
 
@@ -86,6 +91,7 @@ Dash-Engine/
 | SDL2 | sistema | Ventana, renderer 2D, input |
 | Dear ImGui | docking branch | UI del editor (panels, dockspace) |
 | nlohmann/json | v3.11.3 | Serialización de escenas, assets, savegames, gameplay data |
+| SQLite3 | sistema | Persistencia de proyecto, assets, escenas, savegames y metadatos |
 
 ---
 
@@ -179,12 +185,12 @@ Dash-Engine/
 - Instrumentado: Game::update(), Game::render()
 
 ### Testing Automatizado
-- 18 tests automatizados en `ctest` (100% pass al cierre de Sprint 5).
+- Suite automatizada en `ctest` (editor, runtime y capa SQLite).
 - Incluye cobertura para:
   - Serialización de escenas y comandos undo/redo.
   - Sistemas runtime (pathfinding, save/load, gameplay database).
   - Pipeline de assets (hot-reload, validación de contenido).
-  - Sprint 5: `test_project_manifest`, `test_project_manager`, `test_game_build_pipeline`, `test_runtime_isolation`.
+  - Migración SQLite (schema, repositorios, migrador, fallback y rendimiento).
 - Integrados en CMake (`-DBUILD_TESTING=ON` + `ctest`).
 
 ### Formato de Escena (JSON)
@@ -206,14 +212,11 @@ Dash-Engine/
 
 ## Backlog Futuro
 
-- [ ] Sistema de prefabs/arquetipos con overrides por instancia
-- [ ] Hot-reload de assets sin reiniciar editor
-- [ ] Inspector genérico con reflection
-- [ ] Sistema de eventos desacoplado (`OnDamage`, `OnDeath`, etc.)
-- [ ] Herramientas de validación de contenido (map checks)
-- [ ] Paquete de build reproducible para editor y juego
-- [ ] Estructuras base de componentes (`Transform`, `Render`, `Combat`)
-- [ ] Comando de mover/editar propiedades de entidad
+- [ ] Sprint 8 (D70-D76): bootstrap Vulkan en macOS (MoltenVK), swapchain, pipeline y cubo base.
+- [ ] Sprint 9 (D80-D84): integración de físicas 3D y pruebas deterministas.
+- [ ] Sprint 10 (D89-D93): audio espacial, triggers por eventos, input mapping y persistencia.
+- [ ] Sprint 11 (D97-D101): importación 3D (.obj/.gltf), texturas y cache de assets.
+- [ ] Sprint 12 (D106-D110): portabilidad Windows, CI dual y empaquetado final.
 
 ---
 
@@ -239,6 +242,10 @@ ctest --output-on-failure
 ---
 
 ## Versión Actual
+
+**v7.0-alpha** — Sprint 7 completado (SQLite Cutover). Incluye base de datos SQLite como backend principal para proyecto/editor/runtime, migraciones versionadas, migrador de datos con fallback y validaciones de integridad.
+
+**v6.0-alpha** — Sprint 6 completado (SQLite Foundation). Incluye wrapper SQLite, statements, schema manager, repositorios iniciales y coexistencia JSON/hybrid/sqlite.
 
 **v5.0-alpha** — Sprint 5 completado (Project Bundles). Incluye `ProjectManifest`, `ProjectManager`, rutas por proyecto activo, separación CMake por bundles (`src/game` / `src/editor`), `GameBuildPipeline` para exportar bundles y aislamiento de runtime con `SpriteRenderer` sin dependencia de `src/editor`.
 
