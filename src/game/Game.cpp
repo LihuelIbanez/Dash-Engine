@@ -7,6 +7,7 @@
 #include "SaveGame.h"
 #include "Profiler.h"
 #include "AppPaths.h"
+#include "../editor/TextureCache.h"
 #include <nlohmann/json.hpp>
 #include <fstream>
 #include <filesystem>
@@ -15,6 +16,28 @@
 #include <algorithm>
 #include <cstdio>
 #include "Font5x7.h"
+
+namespace {
+struct RenderRuntimeInfo {
+    std::string sprite = "default";
+    bool visible = true;
+};
+
+RenderRuntimeInfo extractRenderInfo(const nlohmann::json& entityJson)
+{
+    RenderRuntimeInfo out;
+    if (!entityJson.contains("components") || !entityJson["components"].is_array()) return out;
+
+    for (const auto& c : entityJson["components"]) {
+        if (!c.is_object()) continue;
+        if (c.value("type", std::string{}) != "Render") continue;
+        out.sprite = c.value("sprite", std::string("default"));
+        out.visible = c.value("visible", true);
+        break;
+    }
+    return out;
+}
+} // namespace
 
 // ═════════════════════════════════════════════════════════════════════════════
 // initSystems — register all gameplay systems in execution order
@@ -131,17 +154,25 @@ bool Game::loadSceneFile()
     }
 
     // ── Entities ─────────────────────────────────────────────────────────────
+    playerSprite_ = "default";
+    playerSpriteVisible_ = true;
+    enemySprites_.clear();
+    enemySpriteVisible_.clear();
+
     if (j.contains("entities") && j["entities"].is_array()) {
         for (auto& ej : j["entities"]) {
             std::string type = ej.value("type", "Enemy");
             std::string name = ej.value("name", "Unknown");
             float ex = ej.value("x", 0.f);
             float ey = ej.value("y", 0.f);
+            RenderRuntimeInfo rr = extractRenderInfo(ej);
 
             if (type == "Player") {
                 // Reposition player
                 player_.x = ex;
                 player_.y = ey;
+                playerSprite_ = rr.sprite;
+                playerSpriteVisible_ = rr.visible;
 
                 // Apply class from scene
                 std::string cls = ej.value("class", "Warrior");
@@ -171,6 +202,8 @@ bool Game::loadSceneFile()
                 } else {
                     enemies_.push_back(std::make_unique<Enemy>(ex, ey, name));
                 }
+                enemySprites_.push_back(rr.sprite);
+                enemySpriteVisible_.push_back(rr.visible);
             }
         }
     }
@@ -202,6 +235,105 @@ void Game::spawnEnemiesFromData()
             enemies_.push_back(
                 std::make_unique<Enemy>(cx + s.ox, cy + s.oy, std::string(s.type)));
         }
+        enemySprites_.push_back("default");
+        enemySpriteVisible_.push_back(true);
+    }
+}
+
+void Game::getSpritePivot(const std::string& spriteName, float& outPivotX, float& outPivotY)
+{
+    outPivotX = 0.5f;
+    outPivotY = 1.0f;
+
+    std::filesystem::path metaPath = std::filesystem::path(AppPaths::getResourcesDir())
+        / "assets" / "sprites" / (spriteName + ".sprite.json");
+    std::error_code ec;
+    if (!std::filesystem::exists(metaPath, ec) || ec) return;
+
+    auto nowMtime = std::filesystem::last_write_time(metaPath, ec);
+    if (ec) return;
+
+    const std::string key = metaPath.string();
+    auto it = spritePivotCache_.find(key);
+    if (it != spritePivotCache_.end() && it->second.hasMtime && it->second.mtime == nowMtime) {
+        outPivotX = it->second.pivotX;
+        outPivotY = it->second.pivotY;
+        return;
+    }
+
+    SpritePivotMeta meta;
+    meta.hasMtime = true;
+    meta.mtime = nowMtime;
+
+    std::ifstream in(metaPath);
+    if (in) {
+        try {
+            nlohmann::json j;
+            in >> j;
+            if (j.contains("pivotX") && j["pivotX"].is_number())
+                meta.pivotX = j["pivotX"].get<float>();
+            if (j.contains("pivotY") && j["pivotY"].is_number())
+                meta.pivotY = j["pivotY"].get<float>();
+        } catch (...) {
+            // Keep defaults if metadata cannot be parsed.
+        }
+    }
+
+    meta.pivotX = std::clamp(meta.pivotX, 0.f, 1.f);
+    meta.pivotY = std::clamp(meta.pivotY, 0.f, 1.f);
+    spritePivotCache_[key] = meta;
+    outPivotX = meta.pivotX;
+    outPivotY = meta.pivotY;
+}
+
+bool Game::drawSpriteAtWorld(float wx, float wy, const std::string& spriteName, bool visible,
+                             float camX, float camY)
+{
+    if (!visible || spriteName.empty() || spriteName == "default") return false;
+
+    Vec2f s = worldToScreen(wx, wy, camX, camY);
+    std::string texPath = AppPaths::getResourcesDir() + "/assets/sprites/" + spriteName + ".png";
+    SDL_Texture* tex = TextureCache::instance().load(renderer_, texPath);
+    if (!tex) return false;
+
+    int tw = 0, th = 0;
+    SDL_QueryTexture(tex, nullptr, nullptr, &tw, &th);
+    float pivotX = 0.5f;
+    float pivotY = 1.0f;
+    getSpritePivot(spriteName, pivotX, pivotY);
+
+    SDL_Rect dst = {
+        static_cast<int>(s.x - pivotX * tw),
+        static_cast<int>(s.y - pivotY * th),
+        tw,
+        th
+    };
+    SDL_RenderCopy(renderer_, tex, nullptr, &dst);
+    return true;
+}
+
+void Game::drawSpriteOverlays(const Entity& entity, bool isAttacking,
+                              bool showMoveTarget, float targetX, float targetY,
+                              float camX, float camY)
+{
+    Vec2f s = worldToScreen(entity.x, entity.y, camX, camY);
+    entity.drawHealthBar(renderer_, s.x, s.y);
+
+    if (isAttacking) {
+        SDL_SetRenderDrawColor(renderer_, 255, 220, 80, 200);
+        for (int ring = 16; ring <= 24; ring += 4) {
+            SDL_FRect r { s.x - ring, s.y - ring, ring * 2.f, ring * 2.f };
+            SDL_RenderDrawRectF(renderer_, &r);
+        }
+    }
+
+    if (showMoveTarget) {
+        Vec2f ts = worldToScreen(targetX, targetY, camX, camY);
+        SDL_SetRenderDrawColor(renderer_, 255, 255, 100, 120);
+        SDL_FRect cross1 { ts.x - 6.f, ts.y - 1.f, 12.f, 2.f };
+        SDL_FRect cross2 { ts.x - 1.f, ts.y - 6.f, 2.f, 12.f };
+        SDL_RenderFillRectF(renderer_, &cross1);
+        SDL_RenderFillRectF(renderer_, &cross2);
     }
 }
 
@@ -464,10 +596,25 @@ void Game::tickRender()
 
     world_.draw(renderer_, camX, camY);
 
-    for (auto& e : enemies_)
-        if (e->isAlive()) e->draw(renderer_, camX, camY);
+    for (std::size_t i = 0; i < enemies_.size(); ++i) {
+        auto& e = enemies_[i];
+        if (!e->isAlive()) continue;
+        bool visible = i < enemySpriteVisible_.size() ? enemySpriteVisible_[i] : true;
+        std::string sprite = i < enemySprites_.size() ? enemySprites_[i] : "default";
+        if (!drawSpriteAtWorld(e->x, e->y, sprite, visible, camX, camY)) {
+            e->draw(renderer_, camX, camY);
+        } else {
+            drawSpriteOverlays(*e, e->isAttacking, false, 0.f, 0.f, camX, camY);
+        }
+    }
 
-    player_.draw(renderer_, camX, camY);
+    if (!drawSpriteAtWorld(player_.x, player_.y, playerSprite_, playerSpriteVisible_, camX, camY)) {
+        player_.draw(renderer_, camX, camY);
+    } else {
+        drawSpriteOverlays(player_, player_.isAttacking,
+                           player_.hasTarget, player_.targetX, player_.targetY,
+                           camX, camY);
+    }
 
     renderHUD();
     // No SDL_RenderPresent — caller (editor) handles presentation
@@ -619,10 +766,25 @@ void Game::render()
 
     world_.draw(renderer_, camX, camY);
 
-    for (auto& e : enemies_)
-        if (e->isAlive()) e->draw(renderer_, camX, camY);
+    for (std::size_t i = 0; i < enemies_.size(); ++i) {
+        auto& e = enemies_[i];
+        if (!e->isAlive()) continue;
+        bool visible = i < enemySpriteVisible_.size() ? enemySpriteVisible_[i] : true;
+        std::string sprite = i < enemySprites_.size() ? enemySprites_[i] : "default";
+        if (!drawSpriteAtWorld(e->x, e->y, sprite, visible, camX, camY)) {
+            e->draw(renderer_, camX, camY);
+        } else {
+            drawSpriteOverlays(*e, e->isAttacking, false, 0.f, 0.f, camX, camY);
+        }
+    }
 
-    player_.draw(renderer_, camX, camY);
+    if (!drawSpriteAtWorld(player_.x, player_.y, playerSprite_, playerSpriteVisible_, camX, camY)) {
+        player_.draw(renderer_, camX, camY);
+    } else {
+        drawSpriteOverlays(player_, player_.isAttacking,
+                           player_.hasTarget, player_.targetX, player_.targetY,
+                           camX, camY);
+    }
 
     renderHUD();
 
@@ -673,6 +835,10 @@ void Game::restartGame()
     world_.generate(worldSeed_);
 
     enemies_.clear();
+    enemySprites_.clear();
+    enemySpriteVisible_.clear();
+    playerSprite_ = "default";
+    playerSpriteVisible_ = true;
     applySelectedClass();
     spawnEnemiesFromData();
 }

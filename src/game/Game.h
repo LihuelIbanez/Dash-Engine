@@ -3,6 +3,8 @@
 #include <vector>
 #include <memory>
 #include <string>
+#include <unordered_map>
+#include <filesystem>
 #include "World.h"
 #include "Player.h"
 #include "Enemy.h"
@@ -65,6 +67,26 @@ private:
     bool loadSceneFile();           // apply scene JSON if sceneFile_ is set
 
     std::string sceneFile_;         // optional: editor scene to play
+
+    // Runtime sprite rendering loaded from scene Render components.
+    std::string              playerSprite_ = "default";
+    bool                     playerSpriteVisible_ = true;
+    std::vector<std::string> enemySprites_;
+    std::vector<bool>        enemySpriteVisible_;
+
+    struct SpritePivotMeta {
+        float pivotX = 0.5f;
+        float pivotY = 1.0f;
+        std::filesystem::file_time_type mtime{};
+        bool hasMtime = false;
+    };
+    std::unordered_map<std::string, SpritePivotMeta> spritePivotCache_;
+    void getSpritePivot(const std::string& spriteName, float& outPivotX, float& outPivotY);
+    bool drawSpriteAtWorld(float wx, float wy, const std::string& spriteName, bool visible,
+                           float camX, float camY);
+    void drawSpriteOverlays(const Entity& entity, bool isAttacking,
+                            bool showMoveTarget, float targetX, float targetY,
+                            float camX, float camY);
 
     // ── Game state machine ───────────────────────────────────────────────────
     enum class GameState { Title, Playing, GameOver };

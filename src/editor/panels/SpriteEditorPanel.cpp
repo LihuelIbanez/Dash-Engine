@@ -542,8 +542,8 @@ void SpriteEditorPanel::drawColorSection()
     // Keyboard shortcuts for colors
     if (ImGui::IsWindowFocused(ImGuiFocusedFlags_ChildWindows)) {
         if (!ImGui::GetIO().WantTextInput) {
-            if (ImGui::IsKeyDown(ImGuiKey_X)) std::swap(fgColor_, bgColor_);
-            if (ImGui::IsKeyDown(ImGuiKey_D)) {
+            if (ImGui::IsKeyPressed(ImGuiKey_X, false)) std::swap(fgColor_, bgColor_);
+            if (ImGui::IsKeyPressed(ImGuiKey_D, false)) {
                 fgColor_ = 0xFF000000u;
                 bgColor_ = 0x00000000u;
             }
@@ -628,12 +628,24 @@ void SpriteEditorPanel::drawCanvasArea()
 
     ImVec2 origin = ImGui::GetCursorScreenPos();
 
-    // Draw checkerboard under the sprite
-    if (checkerTex_) {
+    // Draw checkerboard under the sprite (procedural; robust on all backends)
+    {
         ImDrawList* dl = ImGui::GetWindowDrawList();
-        dl->AddImage(reinterpret_cast<ImTextureID>(checkerTex_),
-            origin, {origin.x + cw, origin.y + ch},
-            {0, 0}, {cw / 16.f, ch / 16.f});   // tile the 16×16 checker
+        const float tile = 8.f;
+        const ImU32 c0 = IM_COL32(210, 210, 210, 255);
+        const ImU32 c1 = IM_COL32(160, 160, 160, 255);
+        for (float y = 0.f; y < ch; y += tile) {
+            for (float x = 0.f; x < cw; x += tile) {
+                int tx = static_cast<int>(x / tile);
+                int ty = static_cast<int>(y / tile);
+                ImU32 c = ((tx + ty) & 1) ? c1 : c0;
+                ImVec2 p0 = {origin.x + x, origin.y + y};
+                ImVec2 p1 = {std::min(origin.x + x + tile, origin.x + cw),
+                             std::min(origin.y + y + tile, origin.y + ch)};
+                dl->AddRectFilled(p0, p1, c);
+            }
+        }
+        dl->AddRect(origin, {origin.x + cw, origin.y + ch}, IM_COL32(40, 40, 40, 220), 0.f, 0, 1.0f);
     }
 
     // Sprite image
@@ -699,23 +711,23 @@ void SpriteEditorPanel::drawCanvasArea()
     if (hovered) {
         // Keyboard shortcuts for tools (only when canvas is focused)
         if (!ImGui::GetIO().WantTextInput) {
-            if (ImGui::IsKeyDown(ImGuiKey_P)) currentTool_ = SpriteTool::Pencil;
-            if (ImGui::IsKeyDown(ImGuiKey_E)) currentTool_ = SpriteTool::Eraser;
-            if (ImGui::IsKeyDown(ImGuiKey_G)) currentTool_ = SpriteTool::Fill;
-            if (ImGui::IsKeyDown(ImGuiKey_I)) currentTool_ = SpriteTool::Eyedropper;
-            if (ImGui::IsKeyDown(ImGuiKey_L)) currentTool_ = SpriteTool::Line;
-            if (ImGui::IsKeyDown(ImGuiKey_R)) currentTool_ = SpriteTool::Rect;
-            if (ImGui::IsKeyDown(ImGuiKey_S) && !ImGui::GetIO().KeyCtrl) currentTool_ = SpriteTool::Select;
+            if (ImGui::IsKeyPressed(ImGuiKey_P, false)) currentTool_ = SpriteTool::Pencil;
+            if (ImGui::IsKeyPressed(ImGuiKey_E, false)) currentTool_ = SpriteTool::Eraser;
+            if (ImGui::IsKeyPressed(ImGuiKey_G, false)) currentTool_ = SpriteTool::Fill;
+            if (ImGui::IsKeyPressed(ImGuiKey_I, false)) currentTool_ = SpriteTool::Eyedropper;
+            if (ImGui::IsKeyPressed(ImGuiKey_L, false)) currentTool_ = SpriteTool::Line;
+            if (ImGui::IsKeyPressed(ImGuiKey_R, false)) currentTool_ = SpriteTool::Rect;
+            if (ImGui::IsKeyPressed(ImGuiKey_S, false) && !ImGui::GetIO().KeyCtrl) currentTool_ = SpriteTool::Select;
 
             // Ctrl+C / Ctrl+V on selection
-            if (ImGui::GetIO().KeyCtrl && ImGui::IsKeyDown(ImGuiKey_C) && selX_ >= 0) {
+            if (ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_C, false) && selX_ >= 0) {
                 clipW_ = selW_; clipH_ = selH_;
                 clipboard_.resize(static_cast<size_t>(clipW_ * clipH_));
                 for (int y = 0; y < clipH_; ++y)
                     for (int x = 0; x < clipW_; ++x)
                         clipboard_[static_cast<size_t>(y * clipW_ + x)] = getPixel(selX_ + x, selY_ + y);
             }
-            if (ImGui::GetIO().KeyCtrl && ImGui::IsKeyDown(ImGuiKey_V) && !clipboard_.empty()) {
+            if (ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_V, false) && !clipboard_.empty()) {
                 for (int y = 0; y < clipH_; ++y)
                     for (int x = 0; x < clipW_; ++x)
                         setPixel(pixX + x, pixY + y,
@@ -723,14 +735,14 @@ void SpriteEditorPanel::drawCanvasArea()
                 dirty_ = true;
             }
             // Delete selection
-            if ((ImGui::IsKeyDown(ImGuiKey_Delete) || ImGui::IsKeyDown(ImGuiKey_Backspace)) && selX_ >= 0) {
+            if ((ImGui::IsKeyPressed(ImGuiKey_Delete, false) || ImGui::IsKeyPressed(ImGuiKey_Backspace, false)) && selX_ >= 0) {
                 for (int y = selY_; y < selY_ + selH_; ++y)
                     for (int x = selX_; x < selX_ + selW_; ++x)
                         setPixel(x, y, 0u);
                 dirty_ = true;
             }
             // Escape = deselect
-            if (ImGui::IsKeyDown(ImGuiKey_Escape)) { selX_ = selY_ = -1; selW_ = selH_ = 0; }
+            if (ImGui::IsKeyPressed(ImGuiKey_Escape, false)) { selX_ = selY_ = -1; selW_ = selH_ = 0; }
         }
 
         // Zoom with scroll
@@ -791,19 +803,20 @@ void SpriteEditorPanel::drawCanvasArea()
             }
         }
 
-        // Mouse released
-        if (ImGui::IsMouseReleased(0)) {
-            if (dragging_) {
-                bakeGeometryDrag(pixX, pixY);
-                dragging_ = false;
-            }
-            prevPixX_ = prevPixY_ = -1;
-        }
     } else {
         // Mouse left canvas — reset drag tracking
         if (!ImGui::IsMouseDown(0)) {
             prevPixX_ = prevPixY_ = -1;
         }
+    }
+
+    // Finalize geometry drags on release even if mouse exits the canvas area.
+    if (ImGui::IsMouseReleased(0)) {
+        if (dragging_) {
+            bakeGeometryDrag(pixX, pixY);
+            dragging_ = false;
+        }
+        prevPixX_ = prevPixY_ = -1;
     }
 
     ImGui::EndChild();
@@ -1286,10 +1299,8 @@ void SpriteEditorPanel::drawAssignPanel()
 // ─── Layers panel (D41) ───────────────────────────────────────────────────────
 void SpriteEditorPanel::drawLayersPanel()
 {
-    ImGui::SetNextWindowSize({240, 300}, ImGuiCond_FirstUseEver);
-    if (!ImGui::Begin(ICON_FA_LAYER_GROUP " Layers##layers", nullptr, ImGuiWindowFlags_None)) {
-        ImGui::End(); return;
-    }
+    if (!ImGui::CollapsingHeader(ICON_FA_LAYER_GROUP " Layers", ImGuiTreeNodeFlags_DefaultOpen)) return;
+    ImGui::BeginChild("##layers_inline", {0, 220}, true, ImGuiWindowFlags_NoScrollbar);
     // Action buttons
     bool canAdd    = static_cast<int>(layers_.size()) < 8;
     bool canDelete = layers_.size() > 1;
@@ -1369,7 +1380,7 @@ void SpriteEditorPanel::drawLayersPanel()
         }
         ImGui::PopID();
     }
-    ImGui::End();
+    ImGui::EndChild();
 }
 
 // ─── Main draw ────────────────────────────────────────────────────────────────

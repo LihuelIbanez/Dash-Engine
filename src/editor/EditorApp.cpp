@@ -75,6 +75,7 @@ bool EditorApp::init()
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO(); (void)io;
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+    io.ConfigWindowsMoveFromTitleBarOnly = true;
 
     // Load SF Pro (SFNS) — falls back to ImGui default if not found
     const char* sfProPath = "/System/Library/Fonts/SFNS.ttf";
@@ -743,6 +744,24 @@ void EditorApp::drawPropertiesPanel()
     ComponentType pendingRemove    = ComponentType::Transform;
     bool          hasPendingRemove = false;
 
+    // Available sprite names from assets/sprites/*.png (without extension).
+    std::vector<std::string> availableSprites;
+    availableSprites.push_back("default");
+    {
+        std::error_code ec;
+        fs::path spritesDir = fs::path(assetsRoot_) / "sprites";
+        if (fs::exists(spritesDir, ec) && fs::is_directory(spritesDir, ec)) {
+            for (const auto& entry : fs::directory_iterator(spritesDir, ec)) {
+                if (!entry.is_regular_file()) continue;
+                if (entry.path().extension() != ".png") continue;
+                availableSprites.push_back(entry.path().stem().string());
+            }
+        }
+    }
+    std::sort(availableSprites.begin(), availableSprites.end());
+    availableSprites.erase(std::unique(availableSprites.begin(), availableSprites.end()),
+                           availableSprites.end());
+
     for (std::size_t ci = 0; ci < e.components.size(); ++ci) {
         auto& comp = e.components[ci];
         ComponentType ct = getVariantType(comp);
@@ -811,19 +830,64 @@ void EditorApp::drawPropertiesPanel()
                 }
                 case PropertyType::String: {
                     std::string* sptr = static_cast<std::string*>(ptr);
-                    std::strncpy(strBuf, sptr->c_str(), 255);
-                    strBuf[255] = '\0';
-                    ImGui::InputText(prop.name.c_str(), strBuf, sizeof(strBuf));
-                    if (ImGui::IsItemActivated())
-                        strSnap = *sptr;
-                    if (ImGui::IsItemDeactivatedAfterEdit()) {
-                        std::string nv(strBuf);
-                        if (nv != strSnap)
-                            commandStack_.execute(
-                                std::make_unique<EditComponentFieldCommand>(
-                                    e.id, ct, prop.offset, prop.type,
-                                    PropertyValue{strSnap}, PropertyValue{nv}, prop.name),
-                                scene_, world_);
+                    bool handledWithSpritePicker = false;
+
+                    // Render.sprite: pick from discovered sprites for faster workflows.
+                    if (ct == ComponentType::Render && prop.name == "sprite") {
+                        handledWithSpritePicker = true;
+
+                        std::vector<std::string> pickerItems = availableSprites;
+                        if (std::find(pickerItems.begin(), pickerItems.end(), *sptr) == pickerItems.end())
+                            pickerItems.insert(pickerItems.begin(), *sptr);
+
+                        std::string comboLabel = prop.name + "##picker";
+                        if (ImGui::BeginCombo(comboLabel.c_str(), sptr->c_str())) {
+                            for (const auto& item : pickerItems) {
+                                bool selected = (*sptr == item);
+                                if (ImGui::Selectable(item.c_str(), selected) && item != *sptr) {
+                                    commandStack_.execute(
+                                        std::make_unique<EditComponentFieldCommand>(
+                                            e.id, ct, prop.offset, prop.type,
+                                            PropertyValue{*sptr}, PropertyValue{item}, prop.name),
+                                        scene_, world_);
+                                }
+                                if (selected) ImGui::SetItemDefaultFocus();
+                            }
+                            ImGui::EndCombo();
+                        }
+
+                        std::string manualLabel = "Manual##" + prop.name;
+                        std::strncpy(strBuf, sptr->c_str(), 255);
+                        strBuf[255] = '\0';
+                        ImGui::InputText(manualLabel.c_str(), strBuf, sizeof(strBuf));
+                        if (ImGui::IsItemActivated())
+                            strSnap = *sptr;
+                        if (ImGui::IsItemDeactivatedAfterEdit()) {
+                            std::string nv(strBuf);
+                            if (nv != strSnap)
+                                commandStack_.execute(
+                                    std::make_unique<EditComponentFieldCommand>(
+                                        e.id, ct, prop.offset, prop.type,
+                                        PropertyValue{strSnap}, PropertyValue{nv}, prop.name),
+                                    scene_, world_);
+                        }
+                    }
+
+                    if (!handledWithSpritePicker) {
+                        std::strncpy(strBuf, sptr->c_str(), 255);
+                        strBuf[255] = '\0';
+                        ImGui::InputText(prop.name.c_str(), strBuf, sizeof(strBuf));
+                        if (ImGui::IsItemActivated())
+                            strSnap = *sptr;
+                        if (ImGui::IsItemDeactivatedAfterEdit()) {
+                            std::string nv(strBuf);
+                            if (nv != strSnap)
+                                commandStack_.execute(
+                                    std::make_unique<EditComponentFieldCommand>(
+                                        e.id, ct, prop.offset, prop.type,
+                                        PropertyValue{strSnap}, PropertyValue{nv}, prop.name),
+                                    scene_, world_);
+                        }
                     }
                     break;
                 }

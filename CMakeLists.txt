@@ -147,13 +147,15 @@ file(GLOB NAV_SOURCES     "src/game/nav/*.cpp")
 add_executable(${PROJECT_NAME}
     src/main.cpp
     src/game/Game.cpp
+    src/editor/TextureCache.cpp
+    src/editor/stb_impl.cpp
     ${RUNTIME_SOURCES}
     ${SYSTEM_SOURCES}
     ${DATA_SOURCES}
     ${SAVE_SOURCES}
 )
 target_include_directories(${PROJECT_NAME} PRIVATE
-    src src/core src/entities src/world src/rendering src/game
+    src src/core src/entities src/world src/rendering src/game src/editor
     src/game/runtime src/game/systems src/game/data src/game/nav
     src/game/save
     ${SDL2_INCLUDE_DIRS}
