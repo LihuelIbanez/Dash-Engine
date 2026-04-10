@@ -1,0 +1,14 @@
+{
+  "formatVersion": 1,
+  "name": "Dash-Engine",
+  "defaultScene": "scenes/default.json",
+  "assetsDir": "assets",
+  "scenesDir": "scenes",
+  "libraryDir": ".library",
+  "buildOutputDir": "build_output",
+  "gameConfig": {
+    "screenWidth": 1280,
+    "screenHeight": 720,
+    "targetFps": 60
+  }
+}

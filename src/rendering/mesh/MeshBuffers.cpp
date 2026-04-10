@@ -69,14 +69,14 @@ bool MeshBuffers::createBuffer(
 bool MeshBuffers::initCube(VkPhysicalDevice physicalDevice, VkDevice device)
 {
     const std::array<Vertex, 8> vertices = {{
-        {{-0.45f, -0.45f, -0.45f}},
-        {{ 0.45f, -0.45f, -0.45f}},
-        {{ 0.45f,  0.45f, -0.45f}},
-        {{-0.45f,  0.45f, -0.45f}},
-        {{-0.45f, -0.45f,  0.45f}},
-        {{ 0.45f, -0.45f,  0.45f}},
-        {{ 0.45f,  0.45f,  0.45f}},
-        {{-0.45f,  0.45f,  0.45f}},
+        {{-1.00f, -1.00f, -1.00f}},
+        {{ 1.00f, -1.00f, -1.00f}},
+        {{ 1.00f,  1.00f, -1.00f}},
+        {{-1.00f,  1.00f, -1.00f}},
+        {{-1.00f, -1.00f,  1.00f}},
+        {{ 1.00f, -1.00f,  1.00f}},
+        {{ 1.00f,  1.00f,  1.00f}},
+        {{-1.00f,  1.00f,  1.00f}},
     }};
 
     const std::array<uint16_t, 36> indices = {{

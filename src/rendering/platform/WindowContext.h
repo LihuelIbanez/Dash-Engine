@@ -16,7 +16,7 @@ public:
     WindowContext(const WindowContext&) = delete;
     WindowContext& operator=(const WindowContext&) = delete;
 
-    bool init(uint32_t width, uint32_t height, const char* title);
+    bool init(uint32_t width, uint32_t height, const char* title, bool embeddedMode = false);
     void shutdown();
 
     GLFWwindow* handle() const { return window_; }

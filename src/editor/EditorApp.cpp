@@ -29,13 +29,18 @@
 #include <cstdlib>
 #include <cstring>
 #include <cmath>
+#include <chrono>
+#include <ctime>
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
+#include <iomanip>
 #include <spawn.h>
 #include <sstream>
 #include <sys/wait.h>
 #include <signal.h>
+#include <fcntl.h>
+#include <unistd.h>
 #include <nlohmann/json.hpp>
 
 namespace fs = std::filesystem;
@@ -45,50 +50,11 @@ extern char** environ;
 
 namespace {
 
-fs::path resolveBuiltGameExecutable(const fs::path& buildDir)
-{
-    std::error_code ec;
-    const std::array<fs::path, 3> candidates = {
-        buildDir / "IsometricRPG",
-        buildDir / "src" / "game" / "IsometricRPG",
-        buildDir / "Debug" / "IsometricRPG",
-    };
-
-    for (const auto& candidate : candidates) {
-        if (fs::exists(candidate, ec) && fs::is_regular_file(candidate, ec)) {
-            return candidate;
-        }
-        ec.clear();
-    }
-
-    return {};
-}
-
-bool launchDetachedProcess(const fs::path& executable,
-                           const std::vector<std::string>& args,
-                           std::string& error)
-{
-    std::vector<char*> argv;
-    argv.reserve(args.size() + 2);
-    argv.push_back(const_cast<char*>(executable.c_str()));
-    for (const auto& arg : args)
-        argv.push_back(const_cast<char*>(arg.c_str()));
-    argv.push_back(nullptr);
-
-    pid_t pid = 0;
-    const int rc = posix_spawn(&pid, executable.c_str(), nullptr, nullptr, argv.data(), environ);
-    if (rc != 0) {
-        error = std::strerror(rc);
-        return false;
-    }
-
-    return true;
-}
-
 bool spawnTrackedProcess(const fs::path& executable,
                         const std::vector<std::string>& args,
                         pid_t& outPid,
-                        std::string& error)
+                        std::string& error,
+                        const std::string& logPath = "")
 {
     std::vector<char*> argv;
     argv.reserve(args.size() + 2);
@@ -98,7 +64,31 @@ bool spawnTrackedProcess(const fs::path& executable,
     argv.push_back(nullptr);
 
     pid_t pid = 0;
-    const int rc = posix_spawn(&pid, executable.c_str(), nullptr, nullptr, argv.data(), environ);
+    posix_spawn_file_actions_t fileActions;
+    posix_spawn_file_actions_t* fileActionsPtr = nullptr;
+
+    if (!logPath.empty()) {
+        if (posix_spawn_file_actions_init(&fileActions) != 0) {
+            error = "posix_spawn_file_actions_init failed";
+            return false;
+        }
+        fileActionsPtr = &fileActions;
+
+        (void)posix_spawn_file_actions_addopen(
+            fileActionsPtr,
+            STDOUT_FILENO,
+            logPath.c_str(),
+            O_CREAT | O_WRONLY | O_TRUNC,
+            0644);
+        (void)posix_spawn_file_actions_adddup2(fileActionsPtr, STDOUT_FILENO, STDERR_FILENO);
+    }
+
+    const int rc = posix_spawn(&pid, executable.c_str(), fileActionsPtr, nullptr, argv.data(), environ);
+
+    if (fileActionsPtr) {
+        posix_spawn_file_actions_destroy(fileActionsPtr);
+    }
+
     if (rc != 0) {
         error = std::strerror(rc);
         return false;
@@ -116,6 +106,22 @@ bool sqliteModeEnabled()
 fs::path projectSqlitePath(const ProjectManifest& manifest)
 {
     return fs::path(manifest.absoluteLibraryDir()) / "dash_engine.db";
+}
+
+std::string nowIso8601Local()
+{
+    const auto now = std::chrono::system_clock::now();
+    const std::time_t t = std::chrono::system_clock::to_time_t(now);
+    std::tm tmLocal{};
+#if defined(_WIN32)
+    localtime_s(&tmLocal, &t);
+#else
+    localtime_r(&t, &tmLocal);
+#endif
+
+    std::ostringstream oss;
+    oss << std::put_time(&tmLocal, "%Y-%m-%dT%H:%M:%S");
+    return oss.str();
 }
 
 SDL_Color clampColor(SDL_Color c)
@@ -366,6 +372,10 @@ bool EditorApp::init(const std::string& projectPath)
 
 EditorApp::~EditorApp()
 {
+    if (playAuditActive_) {
+        flushPlayAuditSessionToFile("editor_shutdown");
+    }
+
     stopVulkanPreview();
 
     // Persist asset database on shutdown
@@ -392,6 +402,78 @@ void EditorApp::addLog(const std::string& msg)
 {
     log_.push_back(msg);
     if (log_.size() > 500) log_.erase(log_.begin());
+
+    if (playAuditActive_) {
+        playAuditCurrentSessionLogs_.push_back(msg);
+    }
+}
+
+std::string EditorApp::playAuditFilePath() const
+{
+    fs::path root;
+    if (projectManager_.hasActiveProject() && !projectManager_.manifest().projectRoot.empty()) {
+        root = projectManager_.manifest().projectRoot;
+    } else {
+        root = fs::path(BUILD_DIR).parent_path();
+    }
+
+    return (root / "audit" / "play_sessions_audit.json").string();
+}
+
+void EditorApp::beginPlayAuditSession()
+{
+    playAuditActive_ = true;
+    playAuditSessionStartedAt_ = nowIso8601Local();
+    playAuditCurrentSessionLogs_.clear();
+    playAuditCurrentSessionLogs_.push_back("[AUDIT] Play session started at " + playAuditSessionStartedAt_);
+}
+
+void EditorApp::flushPlayAuditSessionToFile(const std::string& reason)
+{
+    if (!playAuditActive_) return;
+
+    const std::string endedAt = nowIso8601Local();
+    if (!reason.empty()) {
+        playAuditCurrentSessionLogs_.push_back("[AUDIT] Session end reason: " + reason);
+    }
+
+    const std::string auditPath = playAuditFilePath();
+    fs::create_directories(fs::path(auditPath).parent_path());
+
+    json root;
+    root["sessions"] = json::array();
+
+    std::ifstream in(auditPath);
+    if (in.is_open()) {
+        try {
+            in >> root;
+        } catch (...) {
+            root = json{};
+            root["sessions"] = json::array();
+        }
+    }
+
+    if (!root.contains("sessions") || !root["sessions"].is_array()) {
+        root["sessions"] = json::array();
+    }
+
+    json session;
+    session["startedAt"] = playAuditSessionStartedAt_;
+    session["endedAt"] = endedAt;
+    session["reason"] = reason;
+    session["logs"] = playAuditCurrentSessionLogs_;
+
+    root["sessions"].push_back(session);
+    while (root["sessions"].size() > 2) {
+        root["sessions"].erase(root["sessions"].begin());
+    }
+
+    std::ofstream out(auditPath);
+    out << root.dump(2);
+
+    playAuditActive_ = false;
+    playAuditSessionStartedAt_.clear();
+    playAuditCurrentSessionLogs_.clear();
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -449,26 +531,52 @@ void EditorApp::reinitAssetPipeline()
 
 bool EditorApp::openProject(const std::string& manifestPath)
 {
+    addLog("[PROJ] openProject called with: " + manifestPath);
+    if (manifestPath.empty()) {
+        addLog("[PROJ] manifestPath is empty, skipping");
+        return false;
+    }
+    
+    std::fprintf(stdout, "[EditorApp::openProject] Starting migration and project load...\n");
+    
     if (!projectManager_.openProject(manifestPath)) {
         addLog("[ERROR] Failed to open project: " + manifestPath);
         return false;
     }
-    addLog("Opened project: " + projectManager_.manifest().name
-           + "  (" + projectManager_.manifest().projectRoot + ")");
-    refreshProjectPaths();
-
+    addLog("[PROJ] Project opened: " + projectManager_.manifest().name);
+    addLog("[PROJ] Project root: " + projectManager_.manifest().projectRoot);
+    addLog("[PROJ] Default scene: " + projectManager_.manifest().defaultScene);
+    addLog("[PROJ] Absolute default scene: " + projectManager_.manifest().absoluteDefaultScene());
+    
+    // Log migration status
     const auto& migration = projectManager_.lastMigrationStatus();
     if (migration.attempted) {
         if (migration.success) {
-            addLog("[MIGRATION] SQLite migration completed: " + migration.dbPath);
+            addLog("[PROJ:MIGRATION] SQLite migration succeeded: " + migration.dbPath);
+        } else {
+            addLog("[PROJ:MIGRATION] SQLite migration attempted but failed");
+        }
+    }
+    
+    refreshProjectPaths();
+
+    const auto& migrationAgain = projectManager_.lastMigrationStatus();
+    if (migrationAgain.attempted) {
+        if (migrationAgain.success) {
+            addLog("[MIGRATION] SQLite migration completed: " + migrationAgain.dbPath);
         } else {
             addLog("[MIGRATION] SQLite migration failed - using JSON fallback.");
         }
-        for (const auto& line : migration.log)
+        for (const auto& line : migrationAgain.log)
             addLog("[MIGRATION] " + line);
     }
 
     refreshSceneFiles();
+    addLog("[PROJ] Available scenes after refresh: " + std::to_string(sceneFiles_.size()));
+    for (const auto& f : sceneFiles_) {
+        addLog("[PROJ]   Scene: " + f);
+    }
+    
     loadInitialProjectScene();
     reinitAssetPipeline();
     projectManager_.saveRecents();
@@ -1151,8 +1259,37 @@ void EditorApp::drawPropertiesPanel()
             changed3D |= ImGui::Checkbox("Embedded Vulkan preview (experimental)", &viewport3D_.embeddedPreview);
             ImGui::TextWrapped("Current editor backend uses SDLRenderer2 + ImGui SDL renderer. Embedded Vulkan texture interop is staged in experimental mode and currently falls back to synchronized external Vulkan preview.");
         }
+
+        auto applyCameraPreset = [&](float yaw, float pitch, float distance, float height, float zoom) {
+            viewport3D_.isoYawDeg = yaw;
+            viewport3D_.isoPitchDeg = pitch;
+            viewport3D_.cameraDistance = distance;
+            viewport3D_.cameraHeight = height;
+            viewport3D_.zoom = zoom;
+            changed3D = true;
+        };
+
+        ImGui::TextDisabled("Camera Presets");
+        if (ImGui::Button("Diablo", ImVec2(90, 0))) {
+            applyCameraPreset(45.0f, 35.264f, 10.0f, 2.5f, 1.0f);
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("RTS", ImVec2(90, 0))) {
+            applyCameraPreset(45.0f, 42.0f, 16.0f, 4.0f, 0.85f);
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Close Follow", ImVec2(110, 0))) {
+            applyCameraPreset(45.0f, 28.0f, 6.5f, 1.8f, 1.2f);
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Reset", ImVec2(80, 0))) {
+            applyCameraPreset(45.0f, 35.264f, 8.0f, 2.5f, 1.0f);
+        }
+
         changed3D |= ImGui::SliderFloat("Iso Yaw", &viewport3D_.isoYawDeg, 30.0f, 60.0f, "%.1f deg");
         changed3D |= ImGui::SliderFloat("Iso Pitch", &viewport3D_.isoPitchDeg, 20.0f, 45.0f, "%.1f deg");
+        changed3D |= ImGui::SliderFloat("Camera Distance", &viewport3D_.cameraDistance, 4.0f, 24.0f, "%.2f");
+        changed3D |= ImGui::SliderFloat("Camera Height", &viewport3D_.cameraHeight, 0.0f, 12.0f, "%.2f");
         changed3D |= ImGui::SliderFloat("Viewport Zoom", &viewport3D_.zoom, 0.5f, 2.5f, "%.2f");
         changed3D |= ImGui::SliderFloat("Height Scale", &viewport3D_.heightScale, 12.0f, 72.0f, "%.1f px");
         changed3D |= ImGui::SliderFloat("Grid Opacity", &viewport3D_.gridOpacity, 0.0f, 0.8f, "%.2f");
@@ -1163,9 +1300,8 @@ void EditorApp::drawPropertiesPanel()
             const bool wantsEmbedded = viewport3D_.useVulkan3D && viewport3D_.embeddedPreview;
             const bool hadEmbedded = prevUseVulkan3D && prevEmbedded;
             if (wantsEmbedded && !hadEmbedded && !vulkanPreviewRunning_) {
-                if (!startVulkanPreview()) {
-                    addLog("[Vulkan] Embedded preview auto-start failed.");
-                }
+                vulkanPreviewStartPending_ = true;
+                addLog("[VSTEP] Embedded preview start queued (waiting viewport geometry).");
             }
             if (!wantsEmbedded && hadEmbedded && vulkanPreviewRunning_) {
                 stopVulkanPreview();
@@ -1177,11 +1313,34 @@ void EditorApp::drawPropertiesPanel()
         if (!vulkanPreviewAvailable_) {
             ImGui::TextWrapped("VulkanBootstrap executable not found in build/. Build target VulkanBootstrap to enable live Vulkan preview.");
         } else {
-            ImGui::Text("Status: %s", vulkanPreviewRunning_ ? "Running" : "Stopped");
+            const char* previewStatus = "Stopped";
+            if (vulkanPreviewRunning_) {
+                previewStatus = "Running";
+            } else if (vulkanPreviewStartPending_) {
+                previewStatus = "Queued";
+            }
+
+            ImGui::Text("Status: %s", previewStatus);
+            if (vulkanPreviewStartPending_) {
+                ImGui::TextDisabled("Waiting for valid viewport geometry to launch embedded preview.");
+            }
+
             if (!vulkanPreviewRunning_) {
-                if (ImGui::Button("Start Vulkan Preview", ImVec2(180, 0))) {
-                    if (!startVulkanPreview()) {
-                        addLog("[Vulkan] Failed to start Vulkan preview.");
+                if (vulkanPreviewStartPending_) {
+                    if (ImGui::Button("Cancel Pending Start", ImVec2(180, 0))) {
+                        vulkanPreviewStartPending_ = false;
+                        addLog("[VSTEP] Cancelled queued Vulkan preview start.");
+                    }
+                } else {
+                    if (ImGui::Button("Start Vulkan Preview", ImVec2(180, 0))) {
+                        if (viewport3D_.embeddedPreview) {
+                            vulkanPreviewStartPending_ = true;
+                            addLog("[VSTEP] Start Vulkan Preview queued (embedded mode).");
+                        } else {
+                            if (!startVulkanPreview()) {
+                                addLog("[Vulkan] Failed to start Vulkan preview.");
+                            }
+                        }
                     }
                 }
             } else {
@@ -1575,10 +1734,7 @@ void EditorApp::drawViewport()
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0, 0});
     ImGui::Begin("Viewport");
 
-    // Render the world to texture
-    renderWorldToTexture();
-
-    // Display texture scaled to available space
+    // Get viewport coordinates and size BEFORE rendering
     ImVec2 avail = ImGui::GetContentRegionAvail();
     if (avail.x < 1) avail.x = 1;
     if (avail.y < 1) avail.y = 1;
@@ -1587,6 +1743,11 @@ void EditorApp::drawViewport()
     vpDisplayH_ = avail.y;
     vpScreenX_ = cursorPos.x;
     vpScreenY_ = cursorPos.y;
+
+    // Render the world to texture (now with valid viewport coordinates)
+    renderWorldToTexture();
+
+    // Display texture scaled to available space
     ImGui::Image((ImTextureID)viewportTex_, avail);
 
     if (viewport3D_.useVulkan3D) {
@@ -1594,9 +1755,14 @@ void EditorApp::drawViewport()
         ImVec2 min = cursorPos;
         ImVec2 max = {cursorPos.x + avail.x, cursorPos.y + avail.y};
         dl->AddRectFilled({min.x + 8, min.y + 8}, {min.x + 280, min.y + 48}, IM_COL32(18, 24, 32, 180), 4.0f);
-        const char* status = vulkanPreviewRunning_
-            ? "Vulkan backend active (external preview)"
-            : "Vulkan mode ON (start preview from World Settings)";
+        const char* status = nullptr;
+        if (vulkanPreviewRunning_ && viewport3D_.embeddedPreview) {
+            status = "Vulkan embedded preview docked";
+        } else if (vulkanPreviewRunning_) {
+            status = "Vulkan backend active (external preview)";
+        } else {
+            status = "Vulkan mode ON (start preview from World Settings)";
+        }
         dl->AddText({min.x + 16, min.y + 18}, IM_COL32(170, 220, 255, 255), status);
     }
 
@@ -1632,23 +1798,8 @@ void EditorApp::drawViewport()
     bool vpFocused = ImGui::IsWindowFocused();
     bool vpHovered = ImGui::IsItemHovered();
 
-    // ── Play-mode input: forward clicks to the embedded game ─────────────────
-    if (editorMode_ == EditorMode::Play && playGame_ && vpHovered) {
-        ImGuiIO& io = ImGui::GetIO();
-        float mx = io.MousePos.x - cursorPos.x;
-        float my = io.MousePos.y - cursorPos.y;
-
-        // Map viewport-relative coords to game screen coords
-        int sx = static_cast<int>(mx * SCREEN_W / vpDisplayW_);
-        int sy = static_cast<int>(my * SCREEN_H / vpDisplayH_);
-
-        SDL_SetCursor(cursorHand_);
-
-        if (ImGui::IsMouseClicked(ImGuiMouseButton_Left))
-            playGame_->injectClick(sx, sy, true);
-        if (ImGui::IsMouseClicked(ImGuiMouseButton_Right))
-            playGame_->injectAttack();
-    }
+    // ── Play-mode input: Vulkan handles its own input ────────────────────────
+    // (clicking in viewport sends input to Vulkan process, not editor)
 
     // ── Edit-mode interaction ────────────────────────────────────────────────
 
@@ -1944,6 +2095,8 @@ bool EditorApp::syncSceneRender3DSettingsFromUI()
     scene_.render3d.embeddedPreview = viewport3D_.embeddedPreview;
     scene_.render3d.isoYawDeg = viewport3D_.isoYawDeg;
     scene_.render3d.isoPitchDeg = viewport3D_.isoPitchDeg;
+    scene_.render3d.cameraDistance = viewport3D_.cameraDistance;
+    scene_.render3d.cameraHeight = viewport3D_.cameraHeight;
     scene_.render3d.zoom = viewport3D_.zoom;
     scene_.render3d.heightScale = viewport3D_.heightScale;
     scene_.render3d.gridOpacity = viewport3D_.gridOpacity;
@@ -1956,6 +2109,8 @@ void EditorApp::syncUIRender3DSettingsFromScene()
     viewport3D_.embeddedPreview = scene_.render3d.embeddedPreview;
     viewport3D_.isoYawDeg = scene_.render3d.isoYawDeg;
     viewport3D_.isoPitchDeg = scene_.render3d.isoPitchDeg;
+    viewport3D_.cameraDistance = scene_.render3d.cameraDistance;
+    viewport3D_.cameraHeight = scene_.render3d.cameraHeight;
     viewport3D_.zoom = scene_.render3d.zoom;
     viewport3D_.heightScale = scene_.render3d.heightScale;
     viewport3D_.gridOpacity = scene_.render3d.gridOpacity;
@@ -1963,7 +2118,12 @@ void EditorApp::syncUIRender3DSettingsFromScene()
 
 bool EditorApp::startVulkanPreview()
 {
-    if (vulkanPreviewRunning_) return true;
+    if (vulkanPreviewRunning_) {
+        addLog("[VSTEP] startVulkanPreview skipped: already running pid=" + std::to_string(static_cast<int>(vulkanPreviewPid_)));
+        return true;
+    }
+
+    addLog("[VSTEP] startVulkanPreview begin");
 
     const fs::path buildDir = fs::path(BUILD_DIR);
 
@@ -1976,6 +2136,7 @@ bool EditorApp::startVulkanPreview()
     fs::path previewExe;
     std::error_code ec;
     for (const auto& c : candidates) {
+        addLog("[VSTEP] checking preview candidate: " + c.string());
         if (fs::exists(c, ec) && fs::is_regular_file(c, ec)) {
             previewExe = c;
             break;
@@ -1989,6 +2150,7 @@ bool EditorApp::startVulkanPreview()
             outDir / "Debug" / "VulkanBootstrap",
         };
         for (const auto& c : outCandidates) {
+            addLog("[VSTEP] checking output candidate: " + c.string());
             if (fs::exists(c, ec) && fs::is_regular_file(c, ec)) {
                 previewExe = c;
                 break;
@@ -1998,37 +2160,66 @@ bool EditorApp::startVulkanPreview()
     }
 
     if (previewExe.empty()) {
-        addLog("[Vulkan] VulkanBootstrap executable not found.");
+        addLog("[VFAIL] VulkanBootstrap executable not found.");
         vulkanPreviewAvailable_ = false;
         return false;
     }
+
+    addLog("[VSTEP] using VulkanBootstrap executable: " + previewExe.string());
 
     std::string error;
     pid_t pid = -1;
     std::vector<std::string> args;
     args.emplace_back("--editor-preview");
-    if (viewport3D_.embeddedPreview) {
+
+    const bool forceEmbeddedForPlay = (editorMode_ == EditorMode::Play);
+    const bool launchEmbedded = forceEmbeddedForPlay || viewport3D_.embeddedPreview;
+    if (launchEmbedded) {
         args.emplace_back("--embedded-window");
     }
+    if (!vulkanScenePath_.empty()) {
+        args.emplace_back("--scene");
+        args.emplace_back(vulkanScenePath_);
+    }
+
+    // Play mode requires state sync for docking and camera/selection replication.
+    if (forceEmbeddedForPlay && vulkanViewportStatePath_.empty()) {
+        vulkanViewportStatePath_ = std::string(BUILD_DIR) + "/generated/vulkan_viewport_state.json";
+        addLog("[VSTEP] created default state path for Play: " + vulkanViewportStatePath_);
+    }
+
     if (!vulkanViewportStatePath_.empty()) {
         args.emplace_back("--state");
         args.emplace_back(vulkanViewportStatePath_);
     }
 
-    if (!spawnTrackedProcess(previewExe, args, pid, error)) {
-        addLog("[Vulkan] Failed to launch VulkanBootstrap: " + error);
+    {
+        std::string argsLog = "[Vulkan] Launch args:";
+        for (const auto& a : args) {
+            argsLog += " " + a;
+        }
+        addLog(argsLog);
+    }
+
+    const std::string previewLogPath = std::string(BUILD_DIR) + "/generated/vulkan_preview.log";
+    if (!spawnTrackedProcess(previewExe, args, pid, error, previewLogPath)) {
+        addLog("[VFAIL] spawnTrackedProcess failed: " + error);
         return false;
     }
 
     vulkanPreviewPid_ = pid;
     vulkanPreviewRunning_ = true;
     vulkanPreviewAvailable_ = true;
-    addLog("[Vulkan] Preview started (pid=" + std::to_string(static_cast<int>(pid)) + ").");
+    addLog("[VSTEP] preview log path: " + previewLogPath);
+    addLog("[VOK] Preview started (pid=" + std::to_string(static_cast<int>(pid)) + ")"
+           + (launchEmbedded ? " [embedded]" : " [external]") + ".");
     return true;
 }
 
 void EditorApp::stopVulkanPreview()
 {
+    vulkanPreviewStartPending_ = false;
+
     if (!vulkanPreviewRunning_ || vulkanPreviewPid_ <= 0) {
         vulkanPreviewRunning_ = false;
         vulkanPreviewPid_ = -1;
@@ -2039,7 +2230,8 @@ void EditorApp::stopVulkanPreview()
     int status = 0;
     (void)waitpid(vulkanPreviewPid_, &status, WNOHANG);
 
-    addLog("[Vulkan] Preview stopped.");
+    addLog("[VSTEP] stopVulkanPreview sent SIGTERM to pid=" + std::to_string(static_cast<int>(vulkanPreviewPid_)));
+    addLog("[VOK] Preview stopped.");
     vulkanPreviewRunning_ = false;
     vulkanPreviewPid_ = -1;
 }
@@ -2052,9 +2244,10 @@ void EditorApp::pollVulkanPreviewProcess()
     const pid_t res = waitpid(vulkanPreviewPid_, &status, WNOHANG);
     if (res == 0) return;
     if (res == vulkanPreviewPid_) {
+        addLog("[VSTEP] preview waitpid completed, status=" + std::to_string(status));
         vulkanPreviewRunning_ = false;
         vulkanPreviewPid_ = -1;
-        addLog("[Vulkan] Preview process ended.");
+        addLog("[VFAIL] Preview process ended unexpectedly.");
     }
 }
 
@@ -2084,13 +2277,38 @@ void EditorApp::writeVulkanViewportStateFile() const
     const float globalVpX = static_cast<float>(winX) + vpScreenX_;
     const float globalVpY = static_cast<float>(winY) + vpScreenY_;
 
+    float dpiScaleX = 1.0f;
+    float dpiScaleY = 1.0f;
+    if (window_ && renderer_) {
+        int logicalW = 0, logicalH = 0;
+        int outputW = 0, outputH = 0;
+        SDL_GetWindowSize(window_, &logicalW, &logicalH);
+        SDL_GetRendererOutputSize(renderer_, &outputW, &outputH);
+        if (logicalW > 0 && logicalH > 0 && outputW > 0 && outputH > 0) {
+            dpiScaleX = static_cast<float>(outputW) / static_cast<float>(logicalW);
+            dpiScaleY = static_cast<float>(outputH) / static_cast<float>(logicalH);
+        }
+    }
+
+    const float globalVpXPx = globalVpX * dpiScaleX;
+    const float globalVpYPx = globalVpY * dpiScaleY;
+    const float vpDisplayWPx = vpDisplayW_ * dpiScaleX;
+    const float vpDisplayHPx = vpDisplayH_ * dpiScaleY;
+
     j["scene"] = scene_.sceneName;
     j["worldSeed"] = scene_.worldSeed;
+    // Editor camera is top-down X/Y on the ground plane.
+    // Vulkan preview consumes X/Z on ground and Y as vertical height.
     j["camera"] = {
         {"x", camX_},
-        {"y", camY_},
+        {"y", 2.5f},
+        {"z", camY_},
+        {"height", 2.5f},
+        {"forward", camY_},
         {"isoYawDeg", viewport3D_.isoYawDeg},
         {"isoPitchDeg", viewport3D_.isoPitchDeg},
+        {"followDistance", viewport3D_.cameraDistance},
+        {"followHeight", viewport3D_.cameraHeight},
         {"zoom", viewport3D_.zoom}
     };
     j["viewport"] = {
@@ -2101,7 +2319,11 @@ void EditorApp::writeVulkanViewportStateFile() const
         {"screenX", globalVpX},
         {"screenY", globalVpY},
         {"screenW", vpDisplayW_},
-        {"screenH", vpDisplayH_}
+        {"screenH", vpDisplayH_},
+        {"screenXPx", globalVpXPx},
+        {"screenYPx", globalVpYPx},
+        {"screenWPx", vpDisplayWPx},
+        {"screenHPx", vpDisplayHPx}
     };
     j["selection"] = {
         {"entityId", selectedEntityId_},
@@ -2110,9 +2332,44 @@ void EditorApp::writeVulkanViewportStateFile() const
         {"z", selectedZ}
     };
 
-    std::ofstream out(vulkanViewportStatePath_);
-    if (!out.is_open()) return;
-    out << j.dump(2);
+    std::error_code ec;
+    const fs::path statePath(vulkanViewportStatePath_);
+    const fs::path parent = statePath.parent_path();
+    if (!parent.empty()) {
+        fs::create_directories(parent, ec);
+        ec.clear();
+    }
+
+    const fs::path tmpPath = statePath.string() + ".tmp";
+    {
+        std::ofstream out(tmpPath);
+        if (!out.is_open()) {
+            SDL_Log("[VFAIL] Could not write temp state file: %s", tmpPath.string().c_str());
+            return;
+        }
+        out << j.dump(2);
+    }
+
+    fs::rename(tmpPath, statePath, ec);
+    if (ec) {
+        fs::remove(statePath, ec);
+        ec.clear();
+        fs::rename(tmpPath, statePath, ec);
+        if (ec) {
+            SDL_Log("[VFAIL] Could not replace state file: %s", vulkanViewportStatePath_.c_str());
+            fs::remove(tmpPath, ec);
+            return;
+        }
+    }
+
+    static int s_stateWriteCounter = 0;
+    ++s_stateWriteCounter;
+    if ((s_stateWriteCounter % 120) == 1) {
+        SDL_Log("[VSTEP] state write ok path=%s vp=(%.1f,%.1f %.1fx%.1f) px=(%.1f,%.1f %.1fx%.1f)",
+                vulkanViewportStatePath_.c_str(),
+                globalVpX, globalVpY, vpDisplayW_, vpDisplayH_,
+                globalVpXPx, globalVpYPx, vpDisplayWPx, vpDisplayHPx);
+    }
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -2122,17 +2379,41 @@ void EditorApp::renderWorldToTexture()
 {
     SDL_SetRenderTarget(renderer_, viewportTex_);
 
-    // ── Play mode: let the Game render into the viewport texture ─────────────
-    if (editorMode_ == EditorMode::Play && playGame_) {
-        ImGuiIO& io = ImGui::GetIO();
-        playGame_->tickUpdate(io.DeltaTime);
-        playGame_->tickRender();
-        SDL_SetRenderTarget(renderer_, nullptr);
-        return;
+    // Start queued embedded preview only after viewport geometry is available.
+    if (vulkanPreviewStartPending_ && !vulkanPreviewRunning_ && viewport3D_.embeddedPreview) {
+        if (vpDisplayW_ > 0 && vpDisplayH_ > 0) {
+            writeVulkanViewportStateFile();
+            if (!startVulkanPreview()) {
+                addLog("[Vulkan] Failed to start Vulkan preview (queued start).");
+            }
+            vulkanPreviewStartPending_ = false;
+        }
     }
 
-    if (viewport3D_.useVulkan3D && vulkanPreviewRunning_) {
-        writeVulkanViewportStateFile();
+    // ── Play mode: Start Vulkan when viewport is ready, then sync state ──────────
+    if (editorMode_ == EditorMode::Play) {
+        // Start Vulkan preview on first frame (viewport coords are now valid)
+        if (!vulkanPreviewRunning_ && vpDisplayW_ > 0 && vpDisplayH_ > 0) {
+            writeVulkanViewportStateFile();
+            if (!startVulkanPreview()) {
+                addLog("ERROR: Could not start Vulkan preview.");
+                // Fallback: keep rendering editor viewport content if Vulkan startup fails.
+            }
+        }
+        
+        // Sync state every frame
+        if (vulkanPreviewRunning_) {
+            writeVulkanViewportStateFile();
+            pollVulkanPreviewProcess();
+
+            // Clear viewport while Vulkan renders in embedded window
+            SDL_SetRenderDrawColor(renderer_, 13, 15, 18, 255);
+            SDL_RenderClear(renderer_);
+            SDL_SetRenderTarget(renderer_, nullptr);
+            return;
+        }
+
+        // If Vulkan is not running yet, render normal viewport content as fallback.
     }
 
     // ── Edit mode: 3D isometric rendering ───────────────────────────────────
@@ -2255,6 +2536,66 @@ bool EditorApp::viewportScreenToWorld(float vx, float vy, float& wx, float& wy)
 void EditorApp::drawBuildLog()
 {
     ImGui::Begin("Build Log");
+
+    if (ImGui::CollapsingHeader("Play Audit (ultimas 2 sesiones)", ImGuiTreeNodeFlags_DefaultOpen)) {
+        const std::string auditPath = playAuditFilePath();
+        ImGui::TextDisabled("Archivo: %s", auditPath.c_str());
+
+        json auditRoot;
+        auditRoot["sessions"] = json::array();
+
+        std::ifstream in(auditPath);
+        if (in.is_open()) {
+            try {
+                in >> auditRoot;
+            } catch (...) {
+                auditRoot = json{};
+                auditRoot["sessions"] = json::array();
+            }
+        }
+
+        const bool hasSessions = auditRoot.contains("sessions")
+                                 && auditRoot["sessions"].is_array()
+                                 && !auditRoot["sessions"].empty();
+
+        if (!hasSessions) {
+            ImGui::TextDisabled("Sin sesiones auditadas todavia.");
+        } else {
+            const auto& sessions = auditRoot["sessions"];
+            int shown = 0;
+            for (int i = static_cast<int>(sessions.size()) - 1; i >= 0 && shown < 2; --i, ++shown) {
+                const auto& s = sessions[static_cast<size_t>(i)];
+                const std::string startedAt = s.value("startedAt", "unknown");
+                const std::string endedAt = s.value("endedAt", "unknown");
+                const std::string reason = s.value("reason", "unknown");
+
+                const std::string title = "Sesion " + std::to_string(shown + 1)
+                                        + " | " + startedAt
+                                        + "##audit_session_" + std::to_string(i);
+                if (ImGui::TreeNode(title.c_str())) {
+                    ImGui::Text("Inicio: %s", startedAt.c_str());
+                    ImGui::Text("Fin: %s", endedAt.c_str());
+                    ImGui::Text("Motivo: %s", reason.c_str());
+
+                    if (s.contains("logs") && s["logs"].is_array()) {
+                        ImGui::SeparatorText("Logs de sesion");
+                        ImGui::BeginChild(("audit_logs_" + std::to_string(i)).c_str(), ImVec2(-FLT_MIN, 140.0f), true);
+                        for (const auto& line : s["logs"]) {
+                            if (line.is_string()) {
+                                ImGui::TextUnformatted(line.get_ref<const std::string&>().c_str());
+                            }
+                        }
+                        ImGui::EndChild();
+                    }
+                    ImGui::TreePop();
+                }
+            }
+        }
+
+        ImGui::Separator();
+    }
+
+    ImGui::TextDisabled("Log en vivo del editor");
 
     std::string combinedLog;
     size_t totalSize = 0;
@@ -2486,37 +2827,62 @@ void EditorApp::refreshSceneFiles()
 
 void EditorApp::loadInitialProjectScene()
 {
-    if (!projectManager_.hasActiveProject()) return;
+    addLog("[SCENE:LOAD] loadInitialProjectScene begin");
+    if (!projectManager_.hasActiveProject()) {
+        addLog("[SCENE:LOAD] NO ACTIVE PROJECT - creating new scene");
+        return;
+    }
 
     const auto& manifest = projectManager_.manifest();
     const fs::path defaultScenePath = manifest.absoluteDefaultScene();
     const std::string defaultSceneFile = defaultScenePath.filename().string();
 
+    addLog("[SCENE:LOAD] Default scene from manifest: " + defaultSceneFile);
+    addLog("[SCENE:LOAD] Absolute path: " + defaultScenePath.string());
+
+    // Always prefer the project's declared default scene when it exists on disk.
+    // In SQLite mode, scene listings may not contain JSON-backed scenes yet.
+    if (fs::exists(defaultScenePath)) {
+        addLog("[SCENE:LOAD] Default scene path EXISTS on disk");
+        selectedSceneFile_ = defaultSceneFile;
+        openScene(defaultScenePath.string());
+        if (scene_.filePath.empty()) {
+            addLog("[SCENE:LOAD] ERROR: Could not open default scene path: " + defaultScenePath.string());
+        } else {
+            addLog("[SCENE:LOAD] SUCCESS: Loaded default scene from disk: " + defaultScenePath.string());
+            addLog("[SCENE:LOAD] Scene has " + std::to_string(scene_.entities.size()) + " entities");
+            refreshSceneFiles();
+            return;
+        }
+    } else {
+        addLog("[SCENE:LOAD] Default scene path DOES NOT EXIST: " + defaultScenePath.string());
+    }
+
     refreshSceneFiles();
+    addLog("[SCENE:LOAD] Available scenes: " + std::to_string(sceneFiles_.size()));
+    for (const auto& f : sceneFiles_) {
+        addLog("[SCENE:LOAD]   - " + f);
+    }
+    
     if (!sceneFiles_.empty()) {
         if (std::find(sceneFiles_.begin(), sceneFiles_.end(), defaultSceneFile) != sceneFiles_.end()) {
             selectedSceneFile_ = defaultSceneFile;
             openScene(defaultSceneFile);
-            addLog("Auto-loaded default scene: " + defaultSceneFile);
+            addLog("[SCENE:LOAD] Auto-loaded default scene from list: " + defaultSceneFile);
             return;
         }
 
         selectedSceneFile_ = sceneFiles_.front();
         openScene(selectedSceneFile_);
-        addLog("Auto-loaded first available scene: " + selectedSceneFile_);
-        return;
-    }
-
-    if (fs::exists(defaultScenePath)) {
-        selectedSceneFile_ = defaultSceneFile;
-        openScene(defaultScenePath.string());
-        addLog("Auto-loaded default scene: " + defaultScenePath.string());
+        addLog("[SCENE:LOAD] Auto-loaded first available scene: " + selectedSceneFile_);
+        addLog("[SCENE:LOAD] Scene has " + std::to_string(scene_.entities.size()) + " entities");
         return;
     }
 
     newScene();
-    addLog("No project scenes found; started a new scene.");
+    addLog("[SCENE:LOAD] No project scenes found; started a new scene.");
 }
+
 
 void EditorApp::saveScene(const std::string& path)
 {
@@ -2600,6 +2966,18 @@ void EditorApp::openScene(const std::string& path)
         camY_ = WORLD_H / 2.f;
         selectedSceneFile_ = fileName;
         addLog("Loaded: " + path + " (v" + std::to_string(scene_.sceneVersion) + ")");
+
+        if (sqliteScenes) {
+            const fs::path dbPath = projectSqlitePath(projectManager_.manifest());
+            SceneRepositorySqlite repo(dbPath.string());
+            std::string sqliteError;
+            if (repo.saveScene(fileName, scene_, &sqliteError)) {
+                addLog("[SCENE] Synced JSON scene into SQLite: " + fileName);
+                refreshSceneFiles();
+            } else {
+                addLog("[SCENE] SQLite sync after JSON load failed: " + sqliteError);
+            }
+        }
     } else {
         addLog("ERROR: Could not load scene: " + path);
         for (auto& err : scene_.loadErrors)
@@ -2693,35 +3071,85 @@ void EditorApp::enterPlayMode()
 {
     if (editorMode_ == EditorMode::Play) return;
 
+    beginPlayAuditSession();
+
+    addLog("[VSTEP] enterPlayMode begin");
+    addLog("[VSTEP] Current scene name: " + scene_.sceneName);
+    addLog("[VSTEP] Current scene entities: " + std::to_string(scene_.entities.size()));
+    for (size_t i = 0; i < scene_.entities.size(); ++i) {
+        const auto& e = scene_.entities[i];
+        addLog("[VSTEP]   Entity[" + std::to_string(i) + "]: " + e.name + " (type=" + 
+               (e.type == EntityData::Type::Player ? "Player" : "Enemy") + ")");
+    }
+
+    // If a preview is already running (possibly external), restart it for Play embedding.
+    if (vulkanPreviewRunning_) {
+        stopVulkanPreview();
+    }
+
     playSession_.capture(scene_, world_);
 
-    // Export current scene to temp file for the game to load
+    // Export current scene to temp file for Vulkan to load
     std::string tempScene = std::string(BUILD_DIR) + "/_play_scene.json";
     std::string prevPath = scene_.filePath;
     bool prevMod = scene_.modified;
-    scene_.saveToFile(tempScene);
+    
+    const bool saved = scene_.saveToFile(tempScene);
+    
+    // Append tilemap (world grid) to the exported scene JSON
+    if (saved) {
+        std::ifstream in(tempScene);
+        json j;
+        if (in >> j) {
+            in.close();
+            // Export the entire world.grid as a flat tilemap array
+            // tilemap[y*WORLD_W + x] = tileType (0-8)
+            std::vector<int> tilemap;
+            for (int y = 0; y < WORLD_H; ++y) {
+                for (int x = 0; x < WORLD_W; ++x) {
+                    tilemap.push_back(static_cast<int>(world_.grid[y][x].type));
+                }
+            }
+            j["tilemap"] = tilemap;
+            j["worldWidth"] = WORLD_W;
+            j["worldHeight"] = WORLD_H;
+            
+            std::ofstream out(tempScene);
+            out << j.dump(2);
+            out.close();
+        }
+    }
+    
     scene_.filePath = prevPath;
     scene_.modified = prevMod;
+    vulkanScenePath_ = tempScene;
+    addLog(std::string("[VSTEP] play scene export ") + (saved ? "ok: " : "failed: ") + tempScene);
+    addLog("[VSTEP] Tilemap exported (" + std::to_string(WORLD_W * WORLD_H) + " tiles)");
 
-    // Create embedded game instance
-    playGame_ = std::make_unique<Game>();
-    playGame_->setSceneFile(tempScene);
-    if (!playGame_->initEmbedded(renderer_)) {
-        addLog("ERROR: Could not start embedded game.");
-        playGame_.reset();
-        playSession_.restore(scene_, world_);
-        return;
-    }
-
+    // Enable embedded Vulkan preview mode (renders in viewport)
+    viewport3D_.embeddedPreview = true;  // Force embedded window
+    viewport3D_.useVulkan3D = true;
+    syncSceneRender3DSettingsFromUI();
+    
+    vulkanViewportStatePath_ = std::string(BUILD_DIR) + "/generated/vulkan_viewport_state.json";
+    
+    // Vulkan will be started in renderWorldToTexture() after viewport has valid coordinates
+    
     editorMode_ = EditorMode::Play;
-    addLog("Entered Play mode (game running in viewport).");
+    addLog("[VOK] Entered Play mode (Vulkan 3D starting...).");
 }
 
 void EditorApp::exitPlayMode()
 {
     if (editorMode_ != EditorMode::Play) return;
 
-    playGame_.reset();
+    flushPlayAuditSessionToFile("play_stopped");
+
+    stopVulkanPreview();
+    vulkanScenePath_.clear();
+    viewport3D_.embeddedPreview = false;  // Disable embedded mode
+    viewport3D_.useVulkan3D = false;
+    
     playSession_.restore(scene_, world_);
     selectedEntityId_ = 0;
     editorMode_ = EditorMode::Edit;
@@ -2745,11 +3173,12 @@ void EditorApp::exitPlayMode()
 
 void EditorApp::buildAndRun()
 {
-    addLog("--- Building game ---");
+    addLog("[VSTEP] Build & Run begin");
+    addLog("--- Building Vulkan runtime ---");
     showBuildLog_ = true;
 
     std::string cmd = "cd \"" + std::string(BUILD_DIR)
-                    + "\" && /usr/bin/make IsometricRPG 2>&1";
+                    + "\" && /usr/bin/make VulkanBootstrap 2>&1";
 
     FILE* pipe = popen(cmd.c_str(), "r");
     if (!pipe) {
@@ -2766,46 +3195,73 @@ void EditorApp::buildAndRun()
     int ret = pclose(pipe);
 
     if (ret == 0) {
-        addLog("Build OK. Launching...");
+        addLog("[VOK] Build OK. Launching Vulkan runtime...");
 
         // Save the current scene to a temp file so the game can load it
         std::string tempScene = std::string(BUILD_DIR) + "/_play_scene.json";
-        // Preserve scene state — saveToFile modifies filePath and modified flag
         std::string prevPath = scene_.filePath;
         bool prevMod = scene_.modified;
         if (scene_.saveToFile(tempScene)) {
             scene_.filePath = prevPath;
             scene_.modified = prevMod;
-            addLog("Scene exported to " + tempScene);
+            addLog("[VOK] Scene exported to " + tempScene);
         } else {
-            addLog("WARNING: Could not export scene, launching with defaults.");
+            addLog("[VFAIL] Could not export scene, launching with defaults.");
             tempScene.clear();
         }
 
-        const fs::path executablePath = resolveBuiltGameExecutable(BUILD_DIR);
+        const fs::path buildDir = fs::path(BUILD_DIR);
+        std::array<fs::path, 3> candidates = {
+            buildDir / "VulkanBootstrap",
+            buildDir / "src" / "tools" / "VulkanBootstrap",
+            buildDir / "Debug" / "VulkanBootstrap",
+        };
+
+        fs::path executablePath;
+        std::error_code ec;
+        for (const auto& c : candidates) {
+            if (fs::exists(c, ec) && fs::is_regular_file(c, ec)) {
+                executablePath = c;
+                break;
+            }
+            ec.clear();
+        }
+
         if (executablePath.empty()) {
-            addLog("ERROR: Built game executable not found under: " + std::string(BUILD_DIR));
+            addLog("[VFAIL] VulkanBootstrap executable not found under: " + std::string(BUILD_DIR));
             return;
         }
 
         std::vector<std::string> runArgs;
-        if (!tempScene.empty())
+        runArgs.emplace_back("--persistent");
+        if (!tempScene.empty()) {
+            runArgs.emplace_back("--scene");
             runArgs.push_back(tempScene);
+        }
+
+        {
+            std::string argsLog = "[VSTEP] Build&Run launch args:";
+            for (const auto& a : runArgs) argsLog += " " + a;
+            addLog(argsLog);
+        }
 
         std::string launchError;
-        if (!launchDetachedProcess(executablePath, runArgs, launchError)) {
-            addLog("ERROR: Could not launch game: " + launchError);
+        pid_t pid = -1;
+        const std::string runtimeLogPath = std::string(BUILD_DIR) + "/generated/vulkan_runtime.log";
+        if (!spawnTrackedProcess(executablePath, runArgs, pid, launchError, runtimeLogPath)) {
+            addLog("[VFAIL] Could not launch Vulkan runtime: " + launchError);
             return;
         }
 
-        // Bring the game window to front on macOS
+        // Bring the Vulkan window to front on macOS
         std::system("osascript -e 'delay 0.3' "
                     "-e 'tell application \"System Events\"' "
-                    "-e '  set frontmost of (first process whose name is \"IsometricRPG\") to true' "
+                    "-e '  set frontmost of (first process whose name is \"VulkanBootstrap\") to true' "
                     "-e 'end tell' &");
-        addLog("Game launched: " + executablePath.string());
+        addLog("[VSTEP] runtime log path: " + runtimeLogPath);
+        addLog("[VOK] Vulkan runtime launched (pid=" + std::to_string(static_cast<int>(pid)) + "): " + executablePath.string());
     } else {
-        addLog("Build FAILED (exit " + std::to_string(ret) + ").");
+        addLog("[VFAIL] Build FAILED (exit " + std::to_string(ret) + ").");
     }
 }
 

@@ -1,0 +1,406 @@
+2026-04-09 21:14:51.070 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x608.0) px=(231.6,130.9 815.9x491.3)
+2026-04-09 21:14:53.069 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x608.0) px=(231.6,130.9 815.9x491.3)
+2026-04-09 21:14:55.068 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:14:57.069 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:14:59.068 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:15:01.086 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:15:03.059 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:15:04.059 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:15:05.084 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:15:06.085 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:15:07.084 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:15:08.084 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:15:09.084 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:15:10.085 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:15:11.084 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:15:12.084 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:15:13.084 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:15:14.084 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:15:15.084 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:15:16.083 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:15:17.084 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:15:18.085 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:15:19.085 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:15:20.084 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:15:21.085 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:15:22.083 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:15:23.084 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:15:24.100 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:15:25.101 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:15:26.101 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:15:27.117 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:15:28.118 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:15:29.117 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:15:30.118 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:15:31.117 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:15:32.118 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:15:33.117 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:15:34.142 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:15:35.143 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:15:36.142 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:15:37.142 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:15:38.184 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:15:39.184 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:15:40.184 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:15:41.184 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:15:42.184 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:15:43.185 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:15:44.184 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:15:45.184 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:15:46.184 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:15:47.184 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:15:48.185 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:15:49.184 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:15:50.185 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:15:51.185 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:15:52.184 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:15:53.184 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:15:54.184 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:15:55.185 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:15:56.184 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:15:57.184 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:15:58.185 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:15:59.184 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:16:00.185 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:16:01.183 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:16:02.184 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:16:03.184 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:16:04.184 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:16:05.184 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:16:06.217 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:16:07.217 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:16:08.217 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:16:09.217 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:16:10.217 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:16:11.217 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:16:12.666 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:16:14.669 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:16:16.667 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:16:18.669 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:16:20.667 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:16:22.665 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:16:24.651 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:16:26.634 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:16:28.617 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:16:29.465 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:29.515 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:29.532 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:29.581 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:29.615 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:29.683 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:29.698 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:29.715 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:29.731 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:29.748 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:29.765 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:29.781 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:29.798 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:29.815 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:29.832 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:29.882 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:29.915 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:29.967 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:29.984 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:30.100 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:30.151 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:30.168 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:30.249 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:30.282 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:30.299 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:30.333 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:30.384 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:30.401 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:30.418 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:30.434 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:30.449 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:30.465 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:30.481 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:30.498 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:30.531 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:30.565 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:30.582 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:30.599 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:30.632 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:30.649 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:30.666 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:30.684 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:30.717 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:30.751 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:30.820 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:30.867 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:30.884 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:30.951 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:31.201 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:31.266 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:31.318 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:31.335 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:31.368 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:31.401 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:31.484 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:31.501 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:31.568 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:31.584 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:16:31.633 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:31.650 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:31.751 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:31.784 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:31.801 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:31.869 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:31.898 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:31.915 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:31.935 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:32.068 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:32.101 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:32.118 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:32.148 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:32.181 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:32.198 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:32.215 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:32.231 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:32.248 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:32.265 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:32.299 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:32.315 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:32.332 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:32.367 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:32.385 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:32.650 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:32.752 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:32.785 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:32.817 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:32.851 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:32.867 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:32.900 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:32.918 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:32.933 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:33.000 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:33.066 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:33.084 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:33.117 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:33.134 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:33.151 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:33.167 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:33.185 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:33.200 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:33.217 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:33.251 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:33.285 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:33.301 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:33.334 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:33.351 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:33.367 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:33.400 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:33.434 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:33.452 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:33.468 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:33.485 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:33.501 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:33.519 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:33.535 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:33.552 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:33.568 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:33.685 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:33.850 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:34.034 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:34.050 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:34.068 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:34.084 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:34.100 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:34.183 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:34.199 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:34.298 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:34.351 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:34.401 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:34.665 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:34.701 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:34.767 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:34.801 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:34.818 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:34.834 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:34.851 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:34.883 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:16:35.018 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:35.084 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:35.101 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:35.117 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:35.166 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:35.183 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:35.200 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:35.234 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:35.250 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:35.267 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:35.284 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:35.301 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:35.350 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:35.498 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:35.681 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:35.700 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:35.733 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:35.750 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:35.784 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:35.802 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:35.818 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:35.834 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:35.851 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:35.868 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:35.885 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:35.901 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:35.918 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:35.951 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:35.967 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:35.983 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:36.000 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:36.018 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:36.035 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:36.134 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:36.300 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:36.317 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:36.333 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:36.351 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:36.417 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:36.450 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:36.500 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:36.517 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:36.549 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:36.617 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:36.683 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:36.833 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:36.851 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:36.868 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:36.901 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:36.951 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:37.133 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:37.149 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:37.165 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:37.182 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:37.198 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:37.231 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:37.248 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:37.265 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:37.282 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:37.367 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:37.650 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:37.784 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:37.801 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:37.834 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:37.867 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:37.883 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:37.950 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:37.965 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:37.984 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:38.001 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:38.052 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:16:38.084 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:38.101 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:38.118 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:38.134 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:38.152 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:38.184 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:38.267 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:38.284 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:38.302 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:38.318 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:38.335 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:38.351 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:38.368 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:38.433 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:38.531 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:38.551 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:38.566 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:38.634 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:38.699 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:38.885 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:38.901 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:38.918 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:38.934 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:38.968 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:39.051 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:39.068 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:39.085 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:39.101 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:39.151 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:39.216 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:39.384 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:39.400 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:39.418 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:39.434 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:39.451 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:39.468 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:39.484 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:39.501 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:39.518 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:39.534 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:39.551 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:39.618 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:39.635 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:39.668 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:39.684 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:39.751 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:39.768 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:39.784 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:39.818 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:39.851 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:39.885 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:39.901 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:39.918 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:39.934 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:39.967 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:39.999 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:40.018 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:40.068 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:40.083 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:40.118 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:40.133 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:40.151 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:40.200 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:40.251 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:40.284 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:40.301 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:40.368 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:40.434 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:40.532 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:40.548 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:40.565 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:40.582 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:40.650 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:40.700 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:40.717 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:40.734 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:40.767 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:40.784 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:40.801 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:40.818 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:40.851 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:40.900 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:40.917 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:40.931 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:40.967 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:41.049 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:41.067 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:41.085 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:41.101 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:41.117 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:41.184 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:41.218 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:41.233 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:41.267 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:41.317 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:41.350 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:41.384 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:41.417 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:41.436 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:41.450 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:41.466 DashEngine[20096:107298] INFO: [VFAIL] Could not replace state file: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json
+2026-04-09 21:16:41.735 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:16:43.734 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:16:45.736 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:16:47.734 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+2026-04-09 21:16:49.698 DashEngine[20096:107298] INFO: [VSTEP] state write ok path=/Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json vp=(266.0,162.0 937.0x137.0) px=(231.6,130.9 815.9x110.7)
+[EditorMain] Set DASH_DB_MODE=sqlite
+[EditorMain] No argv[1], checking cwd: /Users/lihuelibanez/Development/proyects/Dash-Engine
+[EditorMain] Manifest path: /Users/lihuelibanez/Development/proyects/Dash-Engine/.dashproject
+[EditorMain] Auto-discovered project: /Users/lihuelibanez/Development/proyects/Dash-Engine/.dashproject
+[EditorMain] Calling editor.init with: '/Users/lihuelibanez/Development/proyects/Dash-Engine/.dashproject'
+[EditorApp::openProject] Starting migration and project load...
+[Profiler] Frame spike: 53.96 ms
+[Profiler] Frame spike: 16081.81 ms

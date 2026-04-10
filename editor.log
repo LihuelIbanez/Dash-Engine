@@ -1,0 +1,8 @@
+[EditorMain] Set DASH_DB_MODE=sqlite
+[EditorMain] No argv[1], checking cwd: /Users/lihuelibanez/Development/proyects/Dash-Engine
+[EditorMain] Manifest path: /Users/lihuelibanez/Development/proyects/Dash-Engine/.dashproject
+[EditorMain] Auto-discovered project: /Users/lihuelibanez/Development/proyects/Dash-Engine/.dashproject
+[EditorMain] Calling editor.init with: '/Users/lihuelibanez/Development/proyects/Dash-Engine/.dashproject'
+[EditorApp::openProject] Starting migration and project load...
+[Profiler] Frame spike: 42.39 ms
+[Profiler] Frame spike: 59.14 ms

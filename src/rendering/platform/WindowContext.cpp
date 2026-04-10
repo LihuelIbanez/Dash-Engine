@@ -9,8 +9,11 @@ WindowContext::~WindowContext()
     shutdown();
 }
 
-bool WindowContext::init(uint32_t width, uint32_t height, const char* title)
+bool WindowContext::init(uint32_t width, uint32_t height, const char* title, bool embeddedMode)
 {
+    std::fprintf(stderr, "[VSTEP] WindowContext::init width=%u height=%u embedded=%d\n",
+                 width, height, embeddedMode ? 1 : 0);
+
     if (!glfwInit()) {
         std::fprintf(stderr, "[D71] glfwInit failed.\n");
         return false;
@@ -23,7 +26,12 @@ bool WindowContext::init(uint32_t width, uint32_t height, const char* title)
     }
 
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
+    glfwWindowHint(GLFW_RESIZABLE, embeddedMode ? GLFW_FALSE : GLFW_TRUE);
+    if (embeddedMode) {
+        glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
+        glfwWindowHint(GLFW_FOCUS_ON_SHOW, GLFW_FALSE);
+        glfwWindowHint(GLFW_FLOATING, GLFW_TRUE);
+    }
 
     window_ = glfwCreateWindow(static_cast<int>(width), static_cast<int>(height), title, nullptr, nullptr);
     if (!window_) {
@@ -31,6 +39,14 @@ bool WindowContext::init(uint32_t width, uint32_t height, const char* title)
         glfwTerminate();
         return false;
     }
+
+    int wx = 0, wy = 0, ww = 0, wh = 0;
+    glfwGetWindowPos(window_, &wx, &wy);
+    glfwGetWindowSize(window_, &ww, &wh);
+    float sx = 1.0f, sy = 1.0f;
+    glfwGetWindowContentScale(window_, &sx, &sy);
+    std::fprintf(stderr, "[VOK] Window created pos=(%d,%d) size=(%d,%d) scale=(%.3f,%.3f)\n",
+                 wx, wy, ww, wh, sx, sy);
 
     return true;
 }

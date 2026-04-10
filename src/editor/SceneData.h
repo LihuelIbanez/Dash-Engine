@@ -48,6 +48,8 @@ struct SceneData {
         bool  embeddedPreview = false;
         float isoYawDeg = 45.0f;
         float isoPitchDeg = 35.264f;
+        float cameraDistance = 8.0f;
+        float cameraHeight = 2.5f;
         float zoom = 1.0f;
         float heightScale = 32.0f;
         float gridOpacity = 0.22f;

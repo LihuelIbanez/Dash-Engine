@@ -36,7 +36,7 @@ struct Mat4 {
 };
 
 struct CameraUBO {
-    Mat4 mvp;
+    Mat4 viewProj;
 };
 
 static Mat4 identity()
@@ -119,15 +119,6 @@ static Mat4 lookAt(const Vec3& eye, const Vec3& center, const Vec3& up)
     return out;
 }
 
-static Mat4 translate(const Vec3& t)
-{
-    Mat4 out = identity();
-    out.m[12] = t.x;
-    out.m[13] = t.y;
-    out.m[14] = t.z;
-    return out;
-}
-
 static uint32_t findMemoryType(VkPhysicalDevice physicalDevice, uint32_t typeFilter, VkMemoryPropertyFlags properties)
 {
     VkPhysicalDeviceMemoryProperties memProperties{};
@@ -196,11 +187,215 @@ static bool hasValidationLayer()
     return false;
 }
 
+static bool loadSceneSpawnPoint(const std::string& scenePath, dash::physics::Vec3& outSpawn)
+{
+    std::ifstream in(scenePath);
+    if (!in.is_open()) return false;
+
+    json j;
+    try {
+        in >> j;
+    } catch (...) {
+        return false;
+    }
+
+    if (!j.contains("entities") || !j["entities"].is_array()) return false;
+
+    const auto& entities = j["entities"];
+    const json* selected = nullptr;
+    for (const auto& e : entities) {
+        if (!e.is_object()) continue;
+        if (e.value("type", std::string{}) == "Player") {
+            selected = &e;
+            break;
+        }
+    }
+    if (!selected && !entities.empty() && entities[0].is_object()) {
+        selected = &entities[0];
+    }
+    if (!selected) return false;
+
+    const float sx = selected->value("x", 0.0f);
+    const float sy = selected->value("y", 0.0f);
+
+    // Dash scenes store horizontal position in (x, y). Vulkan baseline uses y-up,
+    // so map scene y to z and keep a default spawn height on physics y.
+    outSpawn = {sx, 0.8f, sy};
+    return true;
+}
+
+static std::vector<Renderer::RenderInstance> loadSceneInstances(const std::string& scenePath)
+{
+    std::vector<Renderer::RenderInstance> out;
+    std::ifstream in(scenePath);
+    if (!in.is_open()) return out;
+
+    json j;
+    try {
+        in >> j;
+    } catch (...) {
+        return out;
+    }
+
+    if (!j.contains("entities") || !j["entities"].is_array()) return out;
+
+    for (const auto& e : j["entities"]) {
+        if (!e.is_object()) continue;
+        const float ex = e.value("x", 0.0f);
+        const float ez = e.value("y", 0.0f);
+        float ey = 0.6f;
+        dash::physics::Vec3 color{0.82f, 0.34f, 0.34f};
+        dash::physics::Vec3 scale{0.22f, 0.40f, 0.22f};
+        bool isPlayer = false;
+        if (e.contains("type") && e["type"].is_string()) {
+            const std::string t = e["type"].get<std::string>();
+            if (t == "Player") {
+                ey = 1.0f;
+                color = {0.30f, 0.58f, 0.95f};
+                scale = {0.26f, 0.52f, 0.26f};
+                isPlayer = true;
+            }
+        }
+        out.push_back({{ex, ey, ez}, scale, color, isPlayer});
+    }
+    return out;
+}
+
+// Helper: Get tile color based on tile type (0-8)
+static dash::physics::Vec3 getTileColor(int tileType)
+{
+    // Tile types: 0=DeepWater, 1=Water, 2=Sand, 3=Grass, 4=Forest, 5=Dirt, 6=Stone, 7=Mountain, 8=Snow
+    switch (tileType) {
+        case 0:  return {0.04f, 0.07f, 0.22f};   // DeepWater
+        case 1:  return {0.08f, 0.14f, 0.31f};   // Water
+        case 2:  return {0.43f, 0.35f, 0.20f};   // Sand
+        case 3:  return {0.14f, 0.22f, 0.10f};   // Grass
+        case 4:  return {0.08f, 0.16f, 0.06f};   // Forest
+        case 5:  return {0.25f, 0.16f, 0.10f};   // Dirt
+        case 6:  return {0.27f, 0.25f, 0.24f};   // Stone
+        case 7:  return {0.22f, 0.20f, 0.19f};   // Mountain
+        case 8:  return {0.63f, 0.65f, 0.69f};   // Snow
+        default: return {0.14f, 0.22f, 0.10f};   // Default to Grass
+    }
+}
+
+// Helper: Load player position from scene JSON
+static bool loadPlayerPosition(const std::string& scenePath, float& outX, float& outZ)
+{
+    std::ifstream in(scenePath);
+    if (!in.is_open()) return false;
+
+    json j;
+    try {
+        in >> j;
+    } catch (...) {
+        return false;
+    }
+
+    if (!j.contains("entities") || !j["entities"].is_array()) return false;
+
+    for (const auto& e : j["entities"]) {
+        if (!e.is_object()) continue;
+        if (e.contains("type") && e["type"].is_string()) {
+            const std::string t = e["type"].get<std::string>();
+            if (t == "Player") {
+                outX = e.value("x", 32.0f);
+                outZ = e.value("y", 32.0f);
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+static std::vector<Renderer::RenderInstance> loadTerrainInstances(const std::string& scenePath)
+{
+    std::vector<Renderer::RenderInstance> out;
+    std::ifstream in(scenePath);
+    if (!in.is_open()) return out;
+
+    json j;
+    try {
+        in >> j;
+    } catch (...) {
+        return out;
+    }
+
+    // Try to load tilemap from JSON
+    if (j.contains("tilemap") && j["tilemap"].is_array()) {
+        const auto& tilemap = j["tilemap"];
+        const int worldWidth = j.value("worldWidth", 64);
+        
+        // Render all tiles with their corresponding colors
+        for (int idx = 0; idx < static_cast<int>(tilemap.size()); ++idx) {
+            const int y = idx / worldWidth;
+            const int x = idx % worldWidth;
+            
+            const int tileType = tilemap[idx].is_number() ? tilemap[idx].get<int>() : 3;  // Default to Grass
+            const dash::physics::Vec3 color = getTileColor(tileType);
+            
+            out.push_back({
+                {static_cast<float>(x), -1.05f, static_cast<float>(y)},
+                {0.48f, 0.03f, 0.48f},
+                color
+            });
+        }
+        return out;
+    }
+
+    // Fallback: Generate checkerboard around entities if no tilemap
+    int minX = 28;
+    int maxX = 36;
+    int minZ = 28;
+    int maxZ = 36;
+
+    if (j.contains("entities") && j["entities"].is_array() && !j["entities"].empty()) {
+        bool first = true;
+        for (const auto& e : j["entities"]) {
+            if (!e.is_object()) continue;
+            const int ex = static_cast<int>(std::round(e.value("x", 0.0f)));
+            const int ez = static_cast<int>(std::round(e.value("y", 0.0f)));
+            if (first) {
+                minX = maxX = ex;
+                minZ = maxZ = ez;
+                first = false;
+            } else {
+                minX = std::min(minX, ex);
+                maxX = std::max(maxX, ex);
+                minZ = std::min(minZ, ez);
+                maxZ = std::max(maxZ, ez);
+            }
+        }
+    }
+
+    minX -= 3;
+    maxX += 3;
+    minZ -= 3;
+    maxZ += 3;
+    for (int z = minZ; z <= maxZ; ++z) {
+        for (int x = minX; x <= maxX; ++x) {
+            const bool checker = ((x + z) & 1) == 0;
+            out.push_back({
+                {static_cast<float>(x), -1.05f, static_cast<float>(z)},
+                {0.48f, 0.03f, 0.48f},
+                checker ? dash::physics::Vec3{0.24f, 0.34f, 0.24f}
+                        : dash::physics::Vec3{0.18f, 0.28f, 0.18f}
+            });
+        }
+    }
+    return out;
+}
+
 } // namespace
 
 Renderer::~Renderer()
 {
     shutdown();
+}
+
+void Renderer::setScenePath(const std::string& scenePath)
+{
+    scenePath_ = scenePath;
 }
 
 void Renderer::setEditorStatePath(const std::string& statePath)
@@ -217,6 +412,15 @@ void Renderer::applyEditorStateIfNeeded(GLFWwindow* window)
 {
     if (editorStatePath_.empty()) return;
 
+    static bool s_loggedStatePath = false;
+    static bool s_loggedOpenFail = false;
+    static bool s_loggedParseFail = false;
+    static int s_stateReadCounter = 0;
+    if (!s_loggedStatePath) {
+        std::fprintf(stderr, "[VSTEP] editor state sync enabled path=%s\n", editorStatePath_.c_str());
+        s_loggedStatePath = true;
+    }
+
     const auto now = std::chrono::steady_clock::now();
     if (lastEditorStateRead_.time_since_epoch().count() != 0) {
         const auto deltaMs = std::chrono::duration_cast<std::chrono::milliseconds>(now - lastEditorStateRead_).count();
@@ -225,23 +429,89 @@ void Renderer::applyEditorStateIfNeeded(GLFWwindow* window)
     lastEditorStateRead_ = now;
 
     std::ifstream in(editorStatePath_);
-    if (!in.is_open()) return;
+    if (!in.is_open()) {
+        if (!s_loggedOpenFail) {
+            std::fprintf(stderr, "[VFAIL] could not open editor state file: %s\n", editorStatePath_.c_str());
+            s_loggedOpenFail = true;
+        }
+        return;
+    }
+    s_loggedOpenFail = false;
 
     json j;
     try {
         in >> j;
     } catch (...) {
+        if (!s_loggedParseFail) {
+            std::fprintf(stderr, "[VFAIL] invalid JSON in editor state file: %s\n", editorStatePath_.c_str());
+            s_loggedParseFail = true;
+        }
         return;
     }
+    s_loggedParseFail = false;
+    ++s_stateReadCounter;
 
     if (j.contains("camera") && j["camera"].is_object()) {
         const auto& c = j["camera"];
-        cameraX_ = c.value("x", cameraX_);
-        cameraY_ = c.value("y", cameraY_);
-        yawDegrees_ = c.value("isoYawDeg", yawDegrees_);
-        pitchDegrees_ = c.value("isoPitchDeg", pitchDegrees_);
-        if (pitchDegrees_ > 89.0f) pitchDegrees_ = 89.0f;
-        if (pitchDegrees_ < -89.0f) pitchDegrees_ = -89.0f;
+        // Editor camera values represent viewport target/center in world space.
+        // Convert to Vulkan free camera by placing the eye at an isometric offset.
+        const float targetX = c.value("x", cameraX_);
+        const float targetZ = c.value("z", c.value("forward", cameraZ_));
+        const float zoom = std::max(0.10f, c.value("zoom", 1.0f));
+        const float editorYaw = c.value("isoYawDeg", yawDegrees_);
+        const float editorPitch = c.value("isoPitchDeg", std::fabs(pitchDegrees_));
+        const float followDistance = std::max(0.10f, c.value("followDistance", followDistance_));
+        const float followHeight = std::max(0.0f, c.value("followHeight", followHeight_));
+
+        // Check if editor camera state changed significantly
+        const float eps = 0.01f;
+        bool posChanged = std::fabs(targetX - lastEditorTargetX_) > eps || 
+                         std::fabs(targetZ - lastEditorTargetZ_) > eps;
+        bool zoomChanged = std::fabs(zoom - lastEditorZoom_) > eps;
+        bool angleChanged = std::fabs(editorYaw - lastEditorYaw_) > eps ||
+                          std::fabs(editorPitch - lastEditorPitch_) > eps;
+        bool followChanged = std::fabs(followDistance - lastEditorFollowDistance_) > eps ||
+                             std::fabs(followHeight - lastEditorFollowHeight_) > eps;
+
+        // Only update camera if something changed (don't overwrite WASD each frame)
+        if (posChanged || zoomChanged || angleChanged || followChanged) {
+            yawDegrees_ = editorYaw;
+            pitchDegrees_ = -std::fabs(editorPitch);
+            followDistance_ = followDistance;
+            followHeight_ = followHeight;
+
+            if (pitchDegrees_ > 89.0f) pitchDegrees_ = 89.0f;
+            if (pitchDegrees_ < -89.0f) pitchDegrees_ = -89.0f;
+
+            const float yawRad = yawDegrees_ * 0.0174532925f;
+            const float pitchRad = pitchDegrees_ * 0.0174532925f;
+            const float fx = std::cos(yawRad) * std::cos(pitchRad);
+            const float fy = std::sin(pitchRad);
+            const float fz = std::sin(yawRad) * std::cos(pitchRad);
+
+            // Zoom in editor means "closer", so reduce distance with higher zoom.
+            const float distance = 22.0f / zoom;
+            cameraX_ = targetX - fx * distance;
+            cameraY_ = std::max(1.2f, 6.0f - fy * distance);
+            cameraZ_ = targetZ - fz * distance;
+
+            static int s_camConvLogCount = 0;
+            if (s_camConvLogCount < 3) {
+                std::fprintf(stderr,
+                             "[VSTEP] camera changed: editor(targetX=%.2f,targetZ=%.2f,zoom=%.2f) -> vulkan(camX=%.2f,camZ=%.2f)\n",
+                             targetX, targetZ, zoom, cameraX_, cameraZ_);
+                ++s_camConvLogCount;
+            }
+
+            // Remember these values for next frame
+            lastEditorTargetX_ = targetX;
+            lastEditorTargetZ_ = targetZ;
+            lastEditorZoom_ = zoom;
+            lastEditorYaw_ = editorYaw;
+            lastEditorPitch_ = editorPitch;
+            lastEditorFollowDistance_ = followDistance;
+            lastEditorFollowHeight_ = followHeight;
+        }
     }
 
     hasExternalSelection_ = false;
@@ -249,25 +519,55 @@ void Renderer::applyEditorStateIfNeeded(GLFWwindow* window)
         const auto& s = j["selection"];
         const uint64_t entityId = s.value("entityId", static_cast<uint64_t>(0));
         if (entityId != 0) {
-            cubeTransform_.position.x = s.value("x", cubeTransform_.position.x);
-            cubeTransform_.position.y = s.value("y", cubeTransform_.position.y);
-            cubeTransform_.position.z = s.value("z", cubeTransform_.position.z);
+            const float sx = s.value("x", cubeTransform_.position.x);
+            const float sy = s.value("y", cubeTransform_.position.z);
+            const float sz = s.value("z", cubeTransform_.position.y);
+            // Editor selection uses (x,y,zHeight). Map to Vulkan (x,yVertical,zGround).
+            cubeTransform_.position.x = sx;
+            cubeTransform_.position.y = sz;
+            cubeTransform_.position.z = sy;
             hasExternalSelection_ = true;
         }
     }
 
     if (embeddedPreview_ && window && j.contains("viewport") && j["viewport"].is_object()) {
         const auto& vp = j["viewport"];
-        const int sx = static_cast<int>(vp.value("screenX", 0.0f));
-        const int sy = static_cast<int>(vp.value("screenY", 0.0f));
-        const int sw = std::max(64, static_cast<int>(vp.value("screenW", 640.0f)));
-        const int sh = std::max(64, static_cast<int>(vp.value("screenH", 360.0f)));
+        int sx = static_cast<int>(vp.value("screenX", 0.0f));
+        int sy = static_cast<int>(vp.value("screenY", 0.0f));
+        int sw = std::max(64, static_cast<int>(vp.value("screenW", 640.0f)));
+        int sh = std::max(64, static_cast<int>(vp.value("screenH", 360.0f)));
+
+        // Use logical coordinates directly. On macOS this keeps editor and GLFW in
+        // the same coordinate space for positioned utility windows.
 
         glfwSetWindowAttrib(window, GLFW_DECORATED, GLFW_FALSE);
         glfwSetWindowAttrib(window, GLFW_FLOATING, GLFW_TRUE);
         glfwSetWindowAttrib(window, GLFW_RESIZABLE, GLFW_FALSE);
         glfwSetWindowPos(window, sx, sy);
         glfwSetWindowSize(window, sw, sh);
+
+        if (!loggedEmbeddedDocking_) {
+            int wx = 0, wy = 0, ww = 0, wh = 0;
+            glfwGetWindowPos(window, &wx, &wy);
+            glfwGetWindowSize(window, &ww, &wh);
+            std::fprintf(stderr,
+                         "[D84] Embedded docking applied: target=(%d,%d %dx%d) actual=(%d,%d %dx%d)\n",
+                         sx, sy, sw, sh, wx, wy, ww, wh);
+            loggedEmbeddedDocking_ = true;
+        }
+
+        if ((s_stateReadCounter % 120) == 1) {
+            int wx = 0, wy = 0, ww = 0, wh = 0;
+            glfwGetWindowPos(window, &wx, &wy);
+            glfwGetWindowSize(window, &ww, &wh);
+            std::fprintf(stderr,
+                         "[VSTEP] state tick #%d cam=(%.2f,%.2f,%.2f) yaw=%.2f pitch=%.2f dock target=(%d,%d %dx%d) actual=(%d,%d %dx%d)\n",
+                         s_stateReadCounter,
+                         cameraX_, cameraY_, cameraZ_,
+                         yawDegrees_, pitchDegrees_,
+                         sx, sy, sw, sh,
+                         wx, wy, ww, wh);
+        }
     }
 }
 
@@ -476,8 +776,55 @@ bool Renderer::init(WindowContext& window)
     });
 
     floorBodyId_ = physicsWorld_.createStaticPlane(-0.7f);
-    cubeBodyId_ = physicsWorld_.createDynamicBox({0.0f, 0.8f, 0.0f}, {0.30f, 0.30f, 0.30f}, 1.0f);
+
+    dash::physics::Vec3 spawn{0.0f, 0.8f, 0.0f};
+    bool loadedSceneSpawn = false;
+    if (!scenePath_.empty()) {
+        dash::physics::Vec3 sceneSpawn{};
+        if (loadSceneSpawnPoint(scenePath_, sceneSpawn)) {
+            spawn = sceneSpawn;
+            loadedSceneSpawn = true;
+            std::printf("[D84] Loaded scene spawn from %s -> (%.3f, %.3f, %.3f)\n",
+                        scenePath_.c_str(), spawn.x, spawn.y, spawn.z);
+        } else {
+            std::printf("[D84] Could not parse scene spawn from %s (using default).\n", scenePath_.c_str());
+        }
+
+        sceneInstances_ = loadSceneInstances(scenePath_);
+        terrainInstances_ = loadTerrainInstances(scenePath_);
+        std::fprintf(stderr, "[VSTEP] scene instances loaded: %zu\n", sceneInstances_.size());
+        std::fprintf(stderr, "[VSTEP] terrain instances loaded: %zu\n", terrainInstances_.size());
+
+            // Load player position for WASD movement
+            if (loadPlayerPosition(scenePath_, playerX_, playerZ_)) {
+                playerLoaded_ = true;
+                std::fprintf(stderr, "[VSTEP] Player position loaded: (%.2f, %.2f)\n", playerX_, playerZ_);
+            } else {
+                playerLoaded_ = false;
+                playerX_ = 32.0f;
+                playerZ_ = 32.0f;
+                std::fprintf(stderr, "[VSTEP] Player position not found, using default (32, 32)\n");
+            }
+    }
+
+    if (sceneInstances_.empty()) {
+        sceneInstances_.push_back({spawn, {0.26f, 0.52f, 0.26f}, {0.30f, 0.58f, 0.95f}});
+    }
+
+    cubeBodyId_ = physicsWorld_.createDynamicBox(spawn, {0.30f, 0.30f, 0.30f}, 1.0f);
     transformProxy_.syncFromPhysics(physicsWorld_, cubeBodyId_, cubeTransform_);
+
+    // In standalone mode there is no editor camera sync file, so align camera
+    // to the loaded scene spawn to avoid starting with an empty/black view.
+    if (!embeddedPreview_ && loadedSceneSpawn) {
+        cameraX_ = spawn.x + 3.0f;
+        cameraY_ = spawn.y + 2.5f;
+        cameraZ_ = spawn.z + 3.0f;
+        yawDegrees_ = -135.0f;
+        pitchDegrees_ = -28.0f;
+        pendingAutoFocus_ = true;
+    }
+
     dash::physics::DebugPhysicsDraw::logBodyAabb(physicsWorld_, floorBodyId_, "floor");
     dash::physics::DebugPhysicsDraw::logBodyAabb(physicsWorld_, cubeBodyId_, "cube");
 
@@ -502,7 +849,6 @@ bool Renderer::updateCameraUbo(uint32_t imageIndex)
     Vec3 forward = forwardFromAngles();
     const Vec3 target{ cameraX_ + forward.x, cameraY_ + forward.y, cameraZ_ + forward.z };
 
-    Mat4 model = translate({cubeTransform_.position.x, cubeTransform_.position.y, cubeTransform_.position.z});
     Mat4 view = lookAt({cameraX_, cameraY_, cameraZ_}, target, {0.0f, 1.0f, 0.0f});
     Mat4 proj = perspective(
         60.0f * 0.0174532925f,
@@ -512,7 +858,7 @@ bool Renderer::updateCameraUbo(uint32_t imageIndex)
     proj.m[5] *= -1.0f;
 
     CameraUBO ubo{};
-    ubo.mvp = multiply(multiply(proj, view), model);
+    ubo.viewProj = multiply(proj, view);
 
     void* mapped = nullptr;
     if (vkMapMemory(deviceContext_.device(), uniformMemories_[imageIndex], 0, sizeof(CameraUBO), 0, &mapped) != VK_SUCCESS) {
@@ -556,66 +902,109 @@ bool Renderer::runSmoke(WindowContext& window, uint32_t targetFrames)
             transformProxy_.syncFromPhysics(physicsWorld_, cubeBodyId_, cubeTransform_);
         }
 
-        auto forwardFromAngles = [&]() -> Vec3 {
-            const float yaw = yawDegrees_ * 0.0174532925f;
-            const float pitch = pitchDegrees_ * 0.0174532925f;
-            return normalize({
-                std::cos(yaw) * std::cos(pitch),
-                std::sin(pitch),
-                std::sin(yaw) * std::cos(pitch)
-            });
-        };
-
-        Vec3 forward = forwardFromAngles();
-        Vec3 right = normalize(cross(forward, {0.0f, 1.0f, 0.0f}));
-
-        if (!infiniteRun) {
-            const float moveSpeed = 1.9f;
-            if (glfwGetKey(window.handle(), GLFW_KEY_W) == GLFW_PRESS) {
-                cameraX_ += forward.x * moveSpeed * dt;
-                cameraY_ += forward.y * moveSpeed * dt;
-                cameraZ_ += forward.z * moveSpeed * dt;
-            }
-            if (glfwGetKey(window.handle(), GLFW_KEY_S) == GLFW_PRESS) {
-                cameraX_ -= forward.x * moveSpeed * dt;
-                cameraY_ -= forward.y * moveSpeed * dt;
-                cameraZ_ -= forward.z * moveSpeed * dt;
-            }
-            if (glfwGetKey(window.handle(), GLFW_KEY_A) == GLFW_PRESS) {
-                cameraX_ -= right.x * moveSpeed * dt;
-                cameraY_ -= right.y * moveSpeed * dt;
-                cameraZ_ -= right.z * moveSpeed * dt;
-            }
-            if (glfwGetKey(window.handle(), GLFW_KEY_D) == GLFW_PRESS) {
-                cameraX_ += right.x * moveSpeed * dt;
-                cameraY_ += right.y * moveSpeed * dt;
-                cameraZ_ += right.z * moveSpeed * dt;
-            }
-
-            if (glfwGetMouseButton(window.handle(), GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS) {
-                double mouseX = 0.0;
-                double mouseY = 0.0;
-                glfwGetCursorPos(window.handle(), &mouseX, &mouseY);
-                if (!hadLookFrame_) {
-                    hadLookFrame_ = true;
-                    lastMouseX_ = mouseX;
-                    lastMouseY_ = mouseY;
-                }
-                const float dx = static_cast<float>(mouseX - lastMouseX_);
-                const float dy = static_cast<float>(mouseY - lastMouseY_);
-                lastMouseX_ = mouseX;
-                lastMouseY_ = mouseY;
-
-                const float sensitivity = 0.10f;
-                yawDegrees_ += dx * sensitivity;
-                pitchDegrees_ -= dy * sensitivity;
+        // Standalone startup helper: align camera to look at the loaded scene body
+        // on the first frame so we don't start with an empty/black-looking view.
+        if (pendingAutoFocus_) {
+            const float dx = cubeTransform_.position.x - cameraX_;
+            const float dy = cubeTransform_.position.y - cameraY_;
+            const float dz = cubeTransform_.position.z - cameraZ_;
+            const float flat = std::sqrt(dx * dx + dz * dz);
+            if (flat > 0.0001f || std::fabs(dy) > 0.0001f) {
+                yawDegrees_ = std::atan2(dz, dx) * 57.2957795f;
+                pitchDegrees_ = std::atan2(dy, std::max(0.0001f, flat)) * 57.2957795f;
                 if (pitchDegrees_ > 89.0f) pitchDegrees_ = 89.0f;
                 if (pitchDegrees_ < -89.0f) pitchDegrees_ = -89.0f;
-            } else {
-                hadLookFrame_ = false;
             }
+            pendingAutoFocus_ = false;
         }
 
+        // Isometric camera controls (synchronized with editor viewport)
+
+        const float moveSpeed = 2.4f;
+        
+        // ── Isometric WASD controls (like editor) ──────────────────────────
+        // These work in both standalone and embedded preview modes
+        // World movement: W/S move along diagonal, A/D move along perpendicular diagonal
+        
+        // In isometric view (looking at X-Z plane from above):
+        // W: move north-west (negative X, negative Z)
+        // S: move south-east (positive X, positive Z)
+        // A: move south-west (negative X, positive Z)  
+        // D: move north-east (positive X, negative Z)
+
+        // ── Player movement with WASD (player-centric gameplay) ──────────────
+        // Move the Hero entity and keep camera centered in fixed isometric view.
+        if (playerLoaded_) {
+            float inputX = 0.0f;
+            float inputZ = 0.0f;
+            if (glfwGetKey(window.handle(), GLFW_KEY_W) == GLFW_PRESS) {
+                inputX -= 1.0f;
+                inputZ -= 1.0f;
+            }
+            if (glfwGetKey(window.handle(), GLFW_KEY_S) == GLFW_PRESS) {
+                inputX += 1.0f;
+                inputZ += 1.0f;
+            }
+            if (glfwGetKey(window.handle(), GLFW_KEY_A) == GLFW_PRESS) {
+                inputX -= 1.0f;
+                inputZ += 1.0f;
+            }
+            if (glfwGetKey(window.handle(), GLFW_KEY_D) == GLFW_PRESS) {
+                inputX += 1.0f;
+                inputZ -= 1.0f;
+            }
+
+            const float len = std::sqrt(inputX * inputX + inputZ * inputZ);
+            if (len > 0.0001f) {
+                playerX_ += (inputX / len) * moveSpeed * dt;
+                playerZ_ += (inputZ / len) * moveSpeed * dt;
+            }
+
+            for (auto& instance : sceneInstances_) {
+                if (instance.isPlayer) {
+                    instance.position.x = playerX_;
+                    instance.position.z = playerZ_;
+                }
+            }
+
+            // ── Camera follows player (centered isometric view) ────────────────
+            // Fixed iso orbit around Hero.
+            const float yawRad = yawDegrees_ * 0.0174532925f;
+            const float pitchRad = pitchDegrees_ * 0.0174532925f;
+            const float fx = std::cos(yawRad) * std::cos(pitchRad);
+            const float fy = std::sin(pitchRad);
+            const float fz = std::sin(yawRad) * std::cos(pitchRad);
+
+            const float targetY = 1.0f;
+            cameraX_ = playerX_ - fx * followDistance_;
+            cameraY_ = targetY - fy * followDistance_ + followHeight_;
+            cameraZ_ = playerZ_ - fz * followDistance_;
+        }
+        // ── Mouse look with right-click (legacy mode) ──────────────────────
+        if (glfwGetMouseButton(window.handle(), GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS) {
+            double mouseX = 0.0;
+            double mouseY = 0.0;
+            glfwGetCursorPos(window.handle(), &mouseX, &mouseY);
+            if (!hadLookFrame_) {
+                hadLookFrame_ = true;
+                lastMouseX_ = mouseX;
+                lastMouseY_ = mouseY;
+            }
+            const float dx = static_cast<float>(mouseX - lastMouseX_);
+            const float dy = static_cast<float>(mouseY - lastMouseY_);
+            lastMouseX_ = mouseX;
+            lastMouseY_ = mouseY;
+
+            const float sensitivity = 0.10f;
+            yawDegrees_ += dx * sensitivity;
+            pitchDegrees_ -= dy * sensitivity;
+            if (pitchDegrees_ > 89.0f) pitchDegrees_ = 89.0f;
+            if (pitchDegrees_ < -89.0f) pitchDegrees_ = -89.0f;
+        } else {
+            hadLookFrame_ = false;
+        }
+
+        // Frame rendering (always execute regardless of input mode)
         uint32_t imageIndex = 0;
         if (!frameGraph_.beginFrame(imageIndex)) break;
         if (!updateCameraUbo(imageIndex)) break;
@@ -626,7 +1015,7 @@ bool Renderer::runSmoke(WindowContext& window, uint32_t targetFrames)
         if (vkBeginCommandBuffer(cmd, &beginInfo) != VK_SUCCESS) break;
 
         VkClearValue clearColor{};
-        clearColor.color = { {0.06f, 0.07f, 0.09f, 1.0f} };
+        clearColor.color = { {0.14f, 0.16f, 0.20f, 1.0f} };
 
         VkRenderPassBeginInfo rpBegin{};
         rpBegin.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -653,7 +1042,57 @@ bool Renderer::runSmoke(WindowContext& window, uint32_t targetFrames)
         VkDeviceSize offsets[] = { 0 };
         vkCmdBindVertexBuffers(cmd, 0, 1, vertexBuffers, offsets);
         vkCmdBindIndexBuffer(cmd, meshBuffers_.indexBuffer(), 0, VK_INDEX_TYPE_UINT16);
-        vkCmdDrawIndexed(cmd, meshBuffers_.indexCount(), 1, 0, 0, 0);
+
+        if (!embeddedPreview_) {
+            const float pc[12] = {
+                cubeTransform_.position.x,
+                cubeTransform_.position.y,
+                cubeTransform_.position.z,
+                0.0f,
+                0.30f, 0.30f, 0.30f, 0.0f,
+                0.86f, 0.34f, 0.34f, 1.0f
+            };
+            vkCmdPushConstants(cmd, pipelineLayout_, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pc), pc);
+            vkCmdDrawIndexed(cmd, meshBuffers_.indexCount(), 1, 0, 0, 0);
+        }
+
+        for (const auto& tile : terrainInstances_) {
+            const float pc[12] = {
+                tile.position.x,
+                tile.position.y,
+                tile.position.z,
+                0.0f,
+                tile.scale.x,
+                tile.scale.y,
+                tile.scale.z,
+                0.0f,
+                tile.color.x,
+                tile.color.y,
+                tile.color.z,
+                1.0f
+            };
+            vkCmdPushConstants(cmd, pipelineLayout_, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pc), pc);
+            vkCmdDrawIndexed(cmd, meshBuffers_.indexCount(), 1, 0, 0, 0);
+        }
+
+        for (const auto& instance : sceneInstances_) {
+            const float pc[12] = {
+                instance.position.x,
+                instance.position.y,
+                instance.position.z,
+                0.0f,
+                instance.scale.x,
+                instance.scale.y,
+                instance.scale.z,
+                0.0f,
+                instance.color.x,
+                instance.color.y,
+                instance.color.z,
+                1.0f
+            };
+            vkCmdPushConstants(cmd, pipelineLayout_, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pc), pc);
+            vkCmdDrawIndexed(cmd, meshBuffers_.indexCount(), 1, 0, 0, 0);
+        }
         vkCmdEndRenderPass(cmd);
         if (vkEndCommandBuffer(cmd) != VK_SUCCESS) break;
 
@@ -668,7 +1107,11 @@ bool Renderer::runSmoke(WindowContext& window, uint32_t targetFrames)
 
     vkDeviceWaitIdle(deviceContext_.device());
     if (infiniteRun) {
-        std::printf("[D76] Editor preview loop finished after %u frames.\n", renderedFrames);
+        if (embeddedPreview_) {
+            std::printf("[D76] Embedded preview loop finished after %u frames.\n", renderedFrames);
+        } else {
+            std::printf("[D76] Standalone persistent loop finished after %u frames.\n", renderedFrames);
+        }
         return true;
     }
 

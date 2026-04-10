@@ -111,6 +111,8 @@ private:
         bool  embeddedPreview = false;
         float isoYawDeg = 45.0f;
         float isoPitchDeg = 35.264f;
+        float cameraDistance = 8.0f;
+        float cameraHeight = 2.5f;
         float zoom = 1.0f;
         float heightScale = 32.0f;
         float gridOpacity = 0.22f;
@@ -118,8 +120,10 @@ private:
 
     bool vulkanPreviewAvailable_ = false;
     bool vulkanPreviewRunning_ = false;
+    bool vulkanPreviewStartPending_ = false;
     pid_t vulkanPreviewPid_ = -1;
     std::string vulkanViewportStatePath_;
+    std::string vulkanScenePath_;
 
     // Displayed size of the viewport image (for mouse coordinate mapping)
     float vpDisplayW_ = 1.f;
@@ -153,6 +157,9 @@ private:
 
     // ── Build / log ──────────────────────────────────────────────────────────
     std::vector<std::string> log_;
+    bool playAuditActive_ = false;
+    std::string playAuditSessionStartedAt_;
+    std::vector<std::string> playAuditCurrentSessionLogs_;
     bool showToolbar_ = true;
     bool showSceneHierarchy_ = true;
     bool showPropertiesPanel_ = true;
@@ -244,6 +251,9 @@ private:
     void paintTileAt(float wx, float wy);
 
     void addLog(const std::string& msg);
+    void beginPlayAuditSession();
+    void flushPlayAuditSessionToFile(const std::string& reason);
+    std::string playAuditFilePath() const;
 
     // Persist and restore asset DB, file watcher from current assetsRoot_/libraryRoot_.
     void reinitAssetPipeline();

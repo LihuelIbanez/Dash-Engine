@@ -19,6 +19,13 @@ namespace dash::vkexp {
 
 class Renderer {
 public:
+    struct RenderInstance {
+        dash::physics::Vec3 position{};
+        dash::physics::Vec3 scale{1.0f, 1.0f, 1.0f};
+        dash::physics::Vec3 color{0.7f, 0.7f, 0.7f};
+        bool isPlayer = false;
+    };
+
     Renderer() = default;
     ~Renderer();
 
@@ -27,6 +34,7 @@ public:
 
     bool init(WindowContext& window);
     bool runSmoke(WindowContext& window, uint32_t targetFrames);
+    void setScenePath(const std::string& scenePath);
     void setEditorStatePath(const std::string& statePath);
     void setEmbeddedPreview(bool enabled);
     void shutdown();
@@ -61,6 +69,8 @@ private:
     dash::physics::PhysicsWorld physicsWorld_;
     dash::physics::TransformProxy transformProxy_;
     dash::physics::Transform3 cubeTransform_{};
+    std::vector<RenderInstance> sceneInstances_;
+    std::vector<RenderInstance> terrainInstances_;
     int floorBodyId_ = -1;
     int cubeBodyId_ = -1;
     float fixedAccumulator_ = 0.0f;
@@ -70,14 +80,34 @@ private:
     float cameraZ_ = 2.2f;
     float yawDegrees_ = -90.0f;
     float pitchDegrees_ = 0.0f;
+    bool pendingAutoFocus_ = false;
     bool hadLookFrame_ = false;
     double lastMouseX_ = 0.0;
     double lastMouseY_ = 0.0;
 
+    // Player position (from scene)
+    float playerX_ = 32.0f;
+    float playerZ_ = 32.0f;
+    float followDistance_ = 8.0f;
+    float followHeight_ = 2.5f;
+
     bool embeddedPreview_ = false;
+    std::string scenePath_;
     std::string editorStatePath_;
     std::chrono::steady_clock::time_point lastEditorStateRead_{};
     bool hasExternalSelection_ = false;
+    bool loggedEmbeddedDocking_ = false;
+
+    // Track editor state changes to avoid overwriting WASD input every frame
+    float lastEditorTargetX_ = 0.0f;
+    float lastEditorTargetZ_ = 0.0f;
+    float lastEditorZoom_ = 1.0f;
+    float lastEditorYaw_ = -90.0f;
+    float lastEditorPitch_ = 0.0f;
+    float lastEditorFollowDistance_ = 8.0f;
+    float lastEditorFollowHeight_ = 2.5f;
+
+    bool playerLoaded_ = false;
 };
 
 } // namespace dash::vkexp

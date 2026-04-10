@@ -54,6 +54,8 @@ nlohmann::json SceneData::toJson() const
         {"embeddedPreview", render3d.embeddedPreview},
         {"isoYawDeg", render3d.isoYawDeg},
         {"isoPitchDeg", render3d.isoPitchDeg},
+        {"cameraDistance", render3d.cameraDistance},
+        {"cameraHeight", render3d.cameraHeight},
         {"zoom", render3d.zoom},
         {"heightScale", render3d.heightScale},
         {"gridOpacity", render3d.gridOpacity}
@@ -155,6 +157,8 @@ bool SceneData::loadFromJson(const nlohmann::json& j, const std::string& assetsR
         render3d.embeddedPreview = r3.value("embeddedPreview", false);
         render3d.isoYawDeg = r3.value("isoYawDeg", 45.0f);
         render3d.isoPitchDeg = r3.value("isoPitchDeg", 35.264f);
+        render3d.cameraDistance = r3.value("cameraDistance", 8.0f);
+        render3d.cameraHeight = r3.value("cameraHeight", 2.5f);
         render3d.zoom = r3.value("zoom", 1.0f);
         render3d.heightScale = r3.value("heightScale", 32.0f);
         render3d.gridOpacity = r3.value("gridOpacity", 0.22f);

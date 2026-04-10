@@ -25,7 +25,10 @@ static std::string resolveManifestPath(const std::string& projectPath)
     if (!ec) inputPath = resolvedPath;
 
     if (fs::is_regular_file(inputPath, ec)) {
-        return inputPath.extension() == ".dashproject" ? inputPath.string() : std::string();
+        const std::string fileName = inputPath.filename().string();
+        return (inputPath.extension() == ".dashproject" || fileName == ".dashproject")
+            ? inputPath.string()
+            : std::string();
     }
 
     if (!fs::is_directory(inputPath, ec)) {

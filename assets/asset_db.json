@@ -22,9 +22,9 @@
       "assetType": "Unknown",
       "dependencies": [],
       "guid": "1cb9febe-46fc-4bb9-bc44-dbdb46b1c000",
-      "hash": "c357689235798af8",
+      "hash": "5ed44ff4900e9186",
       "importPath": "",
-      "lastImportTime": 1775770142,
+      "lastImportTime": 1775778798,
       "sourcePath": "shaders/basic.vert"
     },
     {
