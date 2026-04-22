@@ -27,7 +27,7 @@ function(dash_add_test TEST_NAME TEST_SRC)
         nlohmann_json::nlohmann_json
         ${SDL2_LIBRARIES}
     )
-    target_compile_options(${TEST_NAME} PRIVATE -Wall -Wextra -O2)
+    target_compile_options(${TEST_NAME} PRIVATE ${DASH_COMPILE_FLAGS})
     add_test(NAME ${TEST_NAME} COMMAND ${TEST_NAME})
 endfunction()
 
@@ -50,7 +50,7 @@ target_include_directories(test_scene_serialization PRIVATE
 target_link_libraries(test_scene_serialization PRIVATE
     game_core nlohmann_json::nlohmann_json ${SDL2_LIBRARIES}
 )
-target_compile_options(test_scene_serialization PRIVATE -Wall -Wextra -O2)
+target_compile_options(test_scene_serialization PRIVATE ${DASH_COMPILE_FLAGS})
 add_test(NAME test_scene_serialization COMMAND test_scene_serialization)
 
 # ── Undo/redo needs editor command sources ────────────────────────────────────
@@ -72,7 +72,7 @@ target_include_directories(test_undo_redo_commands PRIVATE
 target_link_libraries(test_undo_redo_commands PRIVATE
     game_core nlohmann_json::nlohmann_json ${SDL2_LIBRARIES}
 )
-target_compile_options(test_undo_redo_commands PRIVATE -Wall -Wextra -O2)
+target_compile_options(test_undo_redo_commands PRIVATE ${DASH_COMPILE_FLAGS})
 add_test(NAME test_undo_redo_commands COMMAND test_undo_redo_commands)
 
 # ── Component serialization (D23) ────────────────────────────────────────────
@@ -96,7 +96,7 @@ target_include_directories(test_entity_registry PRIVATE
 target_link_libraries(test_entity_registry PRIVATE
     game_core nlohmann_json::nlohmann_json ${SDL2_LIBRARIES}
 )
-target_compile_options(test_entity_registry PRIVATE -Wall -Wextra -O2)
+target_compile_options(test_entity_registry PRIVATE ${DASH_COMPILE_FLAGS})
 add_test(NAME test_entity_registry COMMAND test_entity_registry)
 
 # ── MoveEntity and EditProperty commands ─────────────────────────────────────
@@ -118,7 +118,7 @@ target_include_directories(test_move_edit_commands PRIVATE
 target_link_libraries(test_move_edit_commands PRIVATE
     game_core nlohmann_json::nlohmann_json ${SDL2_LIBRARIES}
 )
-target_compile_options(test_move_edit_commands PRIVATE -Wall -Wextra -O2)
+target_compile_options(test_move_edit_commands PRIVATE ${DASH_COMPILE_FLAGS})
 add_test(NAME test_move_edit_commands COMMAND test_move_edit_commands)
 
 # ── World seed determinism ────────────────────────────────────────────────────
@@ -148,7 +148,7 @@ target_compile_definitions(test_prefab_system PRIVATE
 target_link_libraries(test_prefab_system PRIVATE
     game_core nlohmann_json::nlohmann_json ${SDL2_LIBRARIES}
 )
-target_compile_options(test_prefab_system PRIVATE -Wall -Wextra -O2)
+target_compile_options(test_prefab_system PRIVATE ${DASH_COMPILE_FLAGS})
 add_test(NAME test_prefab_system COMMAND test_prefab_system)
 
 # ── Content validation (D28) ──────────────────────────────────────────────────
@@ -173,7 +173,7 @@ target_include_directories(test_content_validation PRIVATE
 target_link_libraries(test_content_validation PRIVATE
     game_core nlohmann_json::nlohmann_json ${SDL2_LIBRARIES}
 )
-target_compile_options(test_content_validation PRIVATE -Wall -Wextra -O2)
+target_compile_options(test_content_validation PRIVATE ${DASH_COMPILE_FLAGS})
 add_test(NAME test_content_validation COMMAND test_content_validation)
 
 # ── Event system (D30) ────────────────────────────────────────────────────────
@@ -206,7 +206,7 @@ target_include_directories(test_hot_reload PRIVATE
 target_link_libraries(test_hot_reload PRIVATE
     game_core nlohmann_json::nlohmann_json ${SDL2_LIBRARIES}
 )
-target_compile_options(test_hot_reload PRIVATE -Wall -Wextra -O2)
+target_compile_options(test_hot_reload PRIVATE ${DASH_COMPILE_FLAGS})
 add_test(NAME test_hot_reload COMMAND test_hot_reload)
 
 # ── SaveGame round-trip (D32) ─────────────────────────────────────────────────
@@ -235,7 +235,7 @@ target_link_libraries(test_save_game PRIVATE
 target_compile_definitions(test_save_game PRIVATE
     PROJECT_DIR="${CMAKE_SOURCE_DIR}"
 )
-target_compile_options(test_save_game PRIVATE -Wall -Wextra -O2)
+target_compile_options(test_save_game PRIVATE ${DASH_COMPILE_FLAGS})
 add_test(NAME test_save_game COMMAND test_save_game)
 
 # ── GameplayDatabase loading (D32) ────────────────────────────────────────────
@@ -263,7 +263,7 @@ target_compile_definitions(test_gameplay_database PRIVATE
 target_link_libraries(test_gameplay_database PRIVATE
     game_core nlohmann_json::nlohmann_json ${SDL2_LIBRARIES}
 )
-target_compile_options(test_gameplay_database PRIVATE -Wall -Wextra -O2)
+target_compile_options(test_gameplay_database PRIVATE ${DASH_COMPILE_FLAGS})
 add_test(NAME test_gameplay_database COMMAND test_gameplay_database)
 
 # ── Sprite editor pure logic + PNG roundtrip (D45) ──────────────────────────
@@ -292,7 +292,7 @@ target_link_libraries(test_sprite_editor PRIVATE
     nlohmann_json::nlohmann_json
     ${SDL2_LIBRARIES}
 )
-target_compile_options(test_sprite_editor PRIVATE -Wall -Wextra -O2)
+target_compile_options(test_sprite_editor PRIVATE ${DASH_COMPILE_FLAGS})
 add_test(NAME test_sprite_editor COMMAND test_sprite_editor)
 
 # ── ProjectManifest roundtrip (D53) ──────────────────────────────────────────
@@ -311,7 +311,7 @@ target_link_libraries(test_project_manifest PRIVATE
     nlohmann_json::nlohmann_json
     ${SDL2_LIBRARIES}
 )
-target_compile_options(test_project_manifest PRIVATE -Wall -Wextra -O2)
+target_compile_options(test_project_manifest PRIVATE ${DASH_COMPILE_FLAGS})
 add_test(NAME test_project_manifest COMMAND test_project_manifest)
 
 # ── ProjectManager create/open workflow (D53) ───────────────────────────────
@@ -344,7 +344,7 @@ target_link_libraries(test_project_manager PRIVATE
 target_compile_definitions(test_project_manager PRIVATE
     PROJECT_DIR="${CMAKE_SOURCE_DIR}"
 )
-target_compile_options(test_project_manager PRIVATE -Wall -Wextra -O2)
+target_compile_options(test_project_manager PRIVATE ${DASH_COMPILE_FLAGS})
 add_test(NAME test_project_manager COMMAND test_project_manager)
 
 # ── ProjectDataMigrator JSON->SQLite migration (D58) ───────────────────────
@@ -376,7 +376,7 @@ target_link_libraries(test_project_data_migrator PRIVATE
 target_compile_definitions(test_project_data_migrator PRIVATE
     PROJECT_DIR="${CMAKE_SOURCE_DIR}"
 )
-target_compile_options(test_project_data_migrator PRIVATE -Wall -Wextra -O2)
+target_compile_options(test_project_data_migrator PRIVATE ${DASH_COMPILE_FLAGS})
 add_test(NAME test_project_data_migrator COMMAND test_project_data_migrator)
 
 # ── GameBuildPipeline export bundle (D53) ────────────────────────────────────
@@ -396,7 +396,7 @@ target_link_libraries(test_game_build_pipeline PRIVATE
     nlohmann_json::nlohmann_json
     ${SDL2_LIBRARIES}
 )
-target_compile_options(test_game_build_pipeline PRIVATE -Wall -Wextra -O2)
+target_compile_options(test_game_build_pipeline PRIVATE ${DASH_COMPILE_FLAGS})
 add_test(NAME test_game_build_pipeline COMMAND test_game_build_pipeline)
 
 # ── Runtime isolation source check (D53) ─────────────────────────────────────
@@ -409,7 +409,7 @@ target_include_directories(test_runtime_isolation PRIVATE
 target_compile_definitions(test_runtime_isolation PRIVATE
     PROJECT_DIR="${CMAKE_SOURCE_DIR}"
 )
-target_compile_options(test_runtime_isolation PRIVATE -Wall -Wextra -O2)
+target_compile_options(test_runtime_isolation PRIVATE ${DASH_COMPILE_FLAGS})
 add_test(NAME test_runtime_isolation COMMAND test_runtime_isolation)
 
 # ── SQLite schema migrations (D61) ─────────────────────────────────────────
@@ -429,7 +429,7 @@ target_link_libraries(test_sqlite_schema PRIVATE
 target_compile_definitions(test_sqlite_schema PRIVATE
     PROJECT_DIR="${CMAKE_SOURCE_DIR}"
 )
-target_compile_options(test_sqlite_schema PRIVATE -Wall -Wextra -O2)
+target_compile_options(test_sqlite_schema PRIVATE ${DASH_COMPILE_FLAGS})
 add_test(NAME test_sqlite_schema COMMAND test_sqlite_schema)
 
 # ── AssetDatabase SQLite backend (D61) ─────────────────────────────────────
@@ -453,7 +453,7 @@ target_link_libraries(test_asset_db_sqlite PRIVATE
 target_compile_definitions(test_asset_db_sqlite PRIVATE
     PROJECT_DIR="${CMAKE_SOURCE_DIR}"
 )
-target_compile_options(test_asset_db_sqlite PRIVATE -Wall -Wextra -O2)
+target_compile_options(test_asset_db_sqlite PRIVATE ${DASH_COMPILE_FLAGS})
 add_test(NAME test_asset_db_sqlite COMMAND test_asset_db_sqlite)
 
 # ── GameplayDatabase SQLite backend (D61) ──────────────────────────────────
@@ -484,7 +484,7 @@ target_link_libraries(test_gameplay_db_sqlite PRIVATE
 target_compile_definitions(test_gameplay_db_sqlite PRIVATE
     PROJECT_DIR="${CMAKE_SOURCE_DIR}"
 )
-target_compile_options(test_gameplay_db_sqlite PRIVATE -Wall -Wextra -O2)
+target_compile_options(test_gameplay_db_sqlite PRIVATE ${DASH_COMPILE_FLAGS})
 add_test(NAME test_gameplay_db_sqlite COMMAND test_gameplay_db_sqlite)
 
 # ── SQLite cutover performance benchmark (D69) ─────────────────────────────
@@ -517,7 +517,7 @@ target_link_libraries(test_sqlite_cutover_performance PRIVATE
 target_compile_definitions(test_sqlite_cutover_performance PRIVATE
     PROJECT_DIR="${CMAKE_SOURCE_DIR}"
 )
-target_compile_options(test_sqlite_cutover_performance PRIVATE -Wall -Wextra -O2)
+target_compile_options(test_sqlite_cutover_performance PRIVATE ${DASH_COMPILE_FLAGS})
 add_test(NAME test_sqlite_cutover_performance COMMAND test_sqlite_cutover_performance)
 
 # ── CLI tool: migrate an arbitrary project root to SQLite ───────────────────
@@ -547,7 +547,7 @@ target_link_libraries(migrate_project_data PRIVATE
 target_compile_definitions(migrate_project_data PRIVATE
     PROJECT_DIR="${CMAKE_SOURCE_DIR}"
 )
-target_compile_options(migrate_project_data PRIVATE -Wall -Wextra -O2)
+target_compile_options(migrate_project_data PRIVATE ${DASH_COMPILE_FLAGS})
 
 # ── Physics determinism baseline (D84) ─────────────────────────────────────
 dash_add_test(test_physics_determinism test_physics_determinism.cpp)

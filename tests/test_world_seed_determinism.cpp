@@ -3,7 +3,7 @@
 // ═════════════════════════════════════════════════════════════════════════════
 #include "World.h"
 #include <cstdio>
-#include <cstring>
+#include <vector>
 
 static int g_pass = 0, g_fail = 0;
 
@@ -64,8 +64,7 @@ static void test_regeneration_after_different()
     w.generate(77);
 
     // Save first state
-    Tile snapshot[WORLD_H][WORLD_W];
-    std::memcpy(snapshot, w.grid, sizeof(w.grid));
+    auto snapshot = w.grid;  // std::vector copy
 
     // Generate with different seed
     w.generate(9999);
@@ -73,7 +72,7 @@ static void test_regeneration_after_different()
     // Regenerate with original seed
     w.generate(77);
 
-    bool identical = (std::memcmp(snapshot, w.grid, sizeof(w.grid)) == 0);
+    bool identical = (snapshot == w.grid);
     ASSERT(identical, "re-generating with same seed restores original state");
 }
 
@@ -83,7 +82,7 @@ static void test_multiple_runs_consistent()
     std::printf("  test_multiple_runs_consistent\n");
 
     // Generate 5 times with same seed and check all are identical
-    World worlds[5];
+    std::vector<World> worlds(5);
     for (int i = 0; i < 5; ++i)
         worlds[i].generate(12345);
 

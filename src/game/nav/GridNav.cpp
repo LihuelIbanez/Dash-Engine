@@ -1,9 +1,9 @@
 #include "GridNav.h"
 #include "World.h"
 #include <queue>
+#include <vector>
 #include <cmath>
 #include <algorithm>
-#include <cstring>
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Internal A* implementation
@@ -70,14 +70,11 @@ std::vector<NavPoint> GridNav::findPath(int sx, int sy,
 
     const int total = WORLD_W * WORLD_H;
 
-    // Per-cell arrays (stack-allocated for 64x64 = 4096 cells)
-    float bestG[WORLD_W * WORLD_H];
-    int   parentX[WORLD_W * WORLD_H];
-    int   parentY[WORLD_W * WORLD_H];
-    bool  closed[WORLD_W * WORLD_H];
-
-    std::memset(closed, 0, sizeof(closed));
-    for (int i = 0; i < total; ++i) bestG[i] = 1e30f;
+    // Per-cell arrays (heap-allocated; WORLD_W * WORLD_H can exceed 64 KB)
+    std::vector<float> bestG(total, 1e30f);
+    std::vector<int>   parentX(total, -1);
+    std::vector<int>   parentY(total, -1);
+    std::vector<bool>  closed(total, false);
 
     // Open set (min-heap by f)
     std::priority_queue<Node, std::vector<Node>, NodeCmp> open;

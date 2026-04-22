@@ -1,5 +1,7 @@
 #pragma once
 #include <SDL2/SDL.h>
+#include <array>
+#include <vector>
 #include "IsoRenderer.h"
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -33,7 +35,7 @@ struct Tile {
 // ─────────────────────────────────────────────────────────────────────────────
 class World {
 public:
-    Tile grid[WORLD_H][WORLD_W];
+    std::vector<std::array<Tile, WORLD_W>> grid;
 
     World();
 

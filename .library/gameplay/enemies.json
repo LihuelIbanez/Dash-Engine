@@ -1,0 +1,66 @@
+[
+  {
+    "attackCooldown": 1.0,
+    "attackRadius": 1.2,
+    "detectionRadius": 6.0,
+    "expReward": 40,
+    "id": "skeleton",
+    "maxHp": 60,
+    "name": "Skeleton",
+    "stats": {
+      "attack": 10,
+      "critChance": 0.05,
+      "defense": 5,
+      "magicAttack": 0,
+      "speed": 2.2
+    }
+  },
+  {
+    "attackCooldown": 1.4,
+    "attackRadius": 1.0,
+    "detectionRadius": 5.0,
+    "expReward": 50,
+    "id": "zombie",
+    "maxHp": 90,
+    "name": "Zombie",
+    "stats": {
+      "attack": 12,
+      "critChance": 0.02,
+      "defense": 8,
+      "magicAttack": 0,
+      "speed": 1.5
+    }
+  },
+  {
+    "attackCooldown": 0.8,
+    "attackRadius": 1.0,
+    "detectionRadius": 7.0,
+    "expReward": 30,
+    "id": "fallen",
+    "maxHp": 40,
+    "name": "Fallen",
+    "stats": {
+      "attack": 8,
+      "critChance": 0.1,
+      "defense": 3,
+      "magicAttack": 0,
+      "speed": 3.5
+    }
+  },
+  {
+    "attackCooldown": 1.2,
+    "attackRadius": 1.5,
+    "detectionRadius": 8.0,
+    "expReward": 60,
+    "id": "dark_mage",
+    "maxHp": 50,
+    "name": "Dark Mage",
+    "stats": {
+      "attack": 5,
+      "critChance": 0.08,
+      "defense": 3,
+      "magicAttack": 18,
+      "speed": 2.0
+    }
+  }
+]

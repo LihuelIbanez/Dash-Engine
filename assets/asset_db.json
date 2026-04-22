@@ -1,6 +1,24 @@
 {
   "assets": [
     {
+      "assetType": "Unknown",
+      "dependencies": [],
+      "guid": "19afd88e-e0ca-43df-b743-f5ddd00f376e",
+      "hash": "7f236afa23019436",
+      "importPath": "prefabs\\goblin_warrior.json",
+      "lastImportTime": 1776865944,
+      "sourcePath": "prefabs\\goblin_warrior.json"
+    },
+    {
+      "assetType": "Unknown",
+      "dependencies": [],
+      "guid": "d6ef548b-3324-49db-a20f-39b5b60e2aa2",
+      "hash": "92cbc2729d96affa",
+      "importPath": "prefabs/goblin_warrior.json",
+      "lastImportTime": 1775663757,
+      "sourcePath": "prefabs/goblin_warrior.json"
+    },
+    {
       "assetType": "GameplayConfig",
       "dependencies": [],
       "guid": "db279756-b173-48fe-9483-9c070f513105",
@@ -8,6 +26,15 @@
       "importPath": "gameplay/loot_tables.json",
       "lastImportTime": 1775663757,
       "sourcePath": "gameplay/loot_tables.json"
+    },
+    {
+      "assetType": "Unknown",
+      "dependencies": [],
+      "guid": "5229689c-8179-49a7-ae98-7fe803a1bdf0",
+      "hash": "5e9c87c0d22a1a0d",
+      "importPath": "",
+      "lastImportTime": 1775663757,
+      "sourcePath": "fonts/fa-solid-900.ttf"
     },
     {
       "assetType": "GameplayConfig",
@@ -37,6 +64,15 @@
       "sourcePath": "gameplay/player_classes.json"
     },
     {
+      "assetType": "GameplayConfig",
+      "dependencies": [],
+      "guid": "9700277c-7cba-45ed-aa10-9e0f58d9ac74",
+      "hash": "c341d2f619a5c6db",
+      "importPath": "sprites/sprite_32x32.sprite.json",
+      "lastImportTime": 1775686321,
+      "sourcePath": "sprites/sprite_32x32.sprite.json"
+    },
+    {
       "assetType": "Unknown",
       "dependencies": [],
       "guid": "22f807f4-1c7d-4a04-9f70-f08a0445cf77",
@@ -46,6 +82,15 @@
       "sourcePath": "sprites/.gitkeep"
     },
     {
+      "assetType": "Unknown",
+      "dependencies": [],
+      "guid": "1564e84c-b81c-46b7-b26e-9bf9d39db0ee",
+      "hash": "6ff2690b1d4b4218",
+      "importPath": "",
+      "lastImportTime": 1776865944,
+      "sourcePath": "shaders\\basic.frag"
+    },
+    {
       "assetType": "GameplayConfig",
       "dependencies": [],
       "guid": "1ed7206e-58fa-4d26-beae-779e3bf6b035",
@@ -53,24 +98,6 @@
       "importPath": "gameplay/enemies.json",
       "lastImportTime": 1775663757,
       "sourcePath": "gameplay/enemies.json"
-    },
-    {
-      "assetType": "Unknown",
-      "dependencies": [],
-      "guid": "5229689c-8179-49a7-ae98-7fe803a1bdf0",
-      "hash": "5e9c87c0d22a1a0d",
-      "importPath": "",
-      "lastImportTime": 1775663757,
-      "sourcePath": "fonts/fa-solid-900.ttf"
-    },
-    {
-      "assetType": "GameplayConfig",
-      "dependencies": [],
-      "guid": "9700277c-7cba-45ed-aa10-9e0f58d9ac74",
-      "hash": "c341d2f619a5c6db",
-      "importPath": "sprites/sprite_32x32.sprite.json",
-      "lastImportTime": 1775686321,
-      "sourcePath": "sprites/sprite_32x32.sprite.json"
     },
     {
       "assetType": "Unknown",
@@ -89,15 +116,6 @@
       "importPath": "",
       "lastImportTime": 1775663757,
       "sourcePath": "icons/dashengine.png"
-    },
-    {
-      "assetType": "Unknown",
-      "dependencies": [],
-      "guid": "d6ef548b-3324-49db-a20f-39b5b60e2aa2",
-      "hash": "92cbc2729d96affa",
-      "importPath": "prefabs/goblin_warrior.json",
-      "lastImportTime": 1775663757,
-      "sourcePath": "prefabs/goblin_warrior.json"
     },
     {
       "assetType": "Unknown",
@@ -125,6 +143,114 @@
       "importPath": "sprites/sprite_16x16.png",
       "lastImportTime": 1775685359,
       "sourcePath": "sprites/sprite_16x16.png"
+    },
+    {
+      "assetType": "Unknown",
+      "dependencies": [],
+      "guid": "534a504f-14ee-4c12-9f11-b56996fc78c0",
+      "hash": "1ad7977d10816204",
+      "importPath": "",
+      "lastImportTime": 1776865944,
+      "sourcePath": "fonts\\fa-solid-900.ttf"
+    },
+    {
+      "assetType": "GameplayConfig",
+      "dependencies": [],
+      "guid": "6354b8e6-fcbd-4ff7-a13e-3d45be9044fa",
+      "hash": "766dd3f9244ceb35",
+      "importPath": "gameplay\\enemies.json",
+      "lastImportTime": 1776865944,
+      "sourcePath": "gameplay\\enemies.json"
+    },
+    {
+      "assetType": "GameplayConfig",
+      "dependencies": [],
+      "guid": "903a6819-ce64-4643-8647-60475beb1b30",
+      "hash": "f512ce1b800af890",
+      "importPath": "gameplay\\loot_tables.json",
+      "lastImportTime": 1776865944,
+      "sourcePath": "gameplay\\loot_tables.json"
+    },
+    {
+      "assetType": "GameplayConfig",
+      "dependencies": [],
+      "guid": "79fb3f34-5141-4fec-8779-b53d87c42173",
+      "hash": "a77d65070300e347",
+      "importPath": "gameplay\\player_classes.json",
+      "lastImportTime": 1776865944,
+      "sourcePath": "gameplay\\player_classes.json"
+    },
+    {
+      "assetType": "Texture",
+      "dependencies": [],
+      "guid": "e905c8a2-6101-4f29-8348-514d1255e851",
+      "hash": "9b7104cbe6ad62f3",
+      "importPath": "",
+      "lastImportTime": 1776865944,
+      "sourcePath": "icons\\dashengine.png"
+    },
+    {
+      "assetType": "Unknown",
+      "dependencies": [],
+      "guid": "e659cfd8-77fa-4ed0-91df-214ddab32a06",
+      "hash": "ca496071ca006100",
+      "importPath": "",
+      "lastImportTime": 1776865944,
+      "sourcePath": "shaders\\basic.vert"
+    },
+    {
+      "assetType": "Unknown",
+      "dependencies": [],
+      "guid": "84d3c751-17e6-486c-b974-8a3f333a1b12",
+      "hash": "cbf29ce484222325",
+      "importPath": "",
+      "lastImportTime": 1776865944,
+      "sourcePath": "sprites\\.gitkeep"
+    },
+    {
+      "assetType": "GameplayConfig",
+      "dependencies": [],
+      "guid": "ca97c660-5263-4363-bc5b-eea1cdc9c3a2",
+      "hash": "980179b492f106f1",
+      "importPath": "sprites\\default_palette.json",
+      "lastImportTime": 1776865944,
+      "sourcePath": "sprites\\default_palette.json"
+    },
+    {
+      "assetType": "Unknown",
+      "dependencies": [],
+      "guid": "6dd558e2-efd6-498d-b12a-4c7e18885974",
+      "hash": "f105154d5e919351",
+      "importPath": "sprites\\sprite_16x16.png",
+      "lastImportTime": 1776865944,
+      "sourcePath": "sprites\\sprite_16x16.png"
+    },
+    {
+      "assetType": "GameplayConfig",
+      "dependencies": [],
+      "guid": "19084653-a95a-4232-b533-1eb0ae0e8015",
+      "hash": "5028c78d867b6f19",
+      "importPath": "sprites\\sprite_16x16.sprite.json",
+      "lastImportTime": 1776865944,
+      "sourcePath": "sprites\\sprite_16x16.sprite.json"
+    },
+    {
+      "assetType": "Unknown",
+      "dependencies": [],
+      "guid": "d5636928-7949-4b66-8999-cd56b4684e4c",
+      "hash": "1cafc9584f40b3ee",
+      "importPath": "sprites\\sprite_32x32.png",
+      "lastImportTime": 1776865944,
+      "sourcePath": "sprites\\sprite_32x32.png"
+    },
+    {
+      "assetType": "GameplayConfig",
+      "dependencies": [],
+      "guid": "5d16474e-814d-4674-aca3-1099dbe58f64",
+      "hash": "5028c78d867b6f19",
+      "importPath": "sprites\\sprite_32x32.sprite.json",
+      "lastImportTime": 1776865944,
+      "sourcePath": "sprites\\sprite_32x32.sprite.json"
     }
   ]
 }

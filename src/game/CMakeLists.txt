@@ -38,7 +38,39 @@ target_link_libraries(game_runtime PUBLIC
     ${SDL2_LIBRARIES}
 )
 
-target_compile_options(game_runtime PRIVATE -Wall -Wextra -O2)
+add_executable(${PROJECT_NAME}
+    ${CMAKE_SOURCE_DIR}/src/main.cpp
+)
+
+target_include_directories(${PROJECT_NAME} PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/src/core
+    ${CMAKE_SOURCE_DIR}/src/entities
+    ${CMAKE_SOURCE_DIR}/src/world
+    ${CMAKE_SOURCE_DIR}/src/rendering
+    ${CMAKE_SOURCE_DIR}/src/game
+    ${CMAKE_SOURCE_DIR}/src/game/runtime
+    ${CMAKE_SOURCE_DIR}/src/game/systems
+    ${CMAKE_SOURCE_DIR}/src/game/data
+    ${CMAKE_SOURCE_DIR}/src/game/nav
+    ${CMAKE_SOURCE_DIR}/src/game/save
+    ${CMAKE_SOURCE_DIR}/src/game/rendering
+    ${SDL2_INCLUDE_DIRS}
+)
+
+target_link_libraries(${PROJECT_NAME} PRIVATE
+    game_runtime
+    game_core
+    nlohmann_json::nlohmann_json
+    ${SDL2_LIBRARIES}
+)
+
+if(APPLE)
+    target_link_libraries(${PROJECT_NAME} PRIVATE "-framework Cocoa")
+endif()
+
+target_compile_options(game_runtime PRIVATE ${DASH_COMPILE_FLAGS})
+target_compile_options(${PROJECT_NAME} PRIVATE ${DASH_COMPILE_FLAGS})
 
 if(ENABLE_ISOLATION_CHECK)
     target_compile_definitions(game_runtime PRIVATE GAME_RUNTIME_ONLY)

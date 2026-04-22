@@ -8,7 +8,11 @@ namespace fs = std::filesystem;
 int main(int argc, char* argv[])
 {
     // Force Hybrid mode to enable SQLite with JSON fallback
+#ifdef _WIN32
+    _putenv_s("DASH_DB_MODE", "sqlite");
+#else
     setenv("DASH_DB_MODE", "sqlite", 1);
+#endif
     std::fprintf(stdout, "[EditorMain] Set DASH_DB_MODE=sqlite\n");
     
     EditorApp editor;
@@ -22,8 +26,8 @@ int main(int argc, char* argv[])
         // Auto-discover .dashproject in current working directory
         fs::path cwd = fs::current_path();
         fs::path manifestPath = cwd / ".dashproject";
-        std::fprintf(stdout, "[EditorMain] No argv[1], checking cwd: %s\n", cwd.c_str());
-        std::fprintf(stdout, "[EditorMain] Manifest path: %s\n", manifestPath.c_str());
+        std::fprintf(stdout, "[EditorMain] No argv[1], checking cwd: %s\n", cwd.string().c_str());
+        std::fprintf(stdout, "[EditorMain] Manifest path: %s\n", manifestPath.string().c_str());
         if (fs::exists(manifestPath)) {
             startupProjectPath = manifestPath.string();
             std::fprintf(stdout, "[EditorMain] Auto-discovered project: %s\n", startupProjectPath.c_str());

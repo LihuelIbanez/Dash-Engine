@@ -35,7 +35,11 @@ fs::path resolveBuiltExecutable(const std::string& buildDir, const std::string& 
 
 bool runCommandCapture(const std::string& cmd, std::vector<std::string>& out)
 {
+#ifdef _WIN32
+    FILE* pipe = _popen(cmd.c_str(), "r");
+#else
     FILE* pipe = popen(cmd.c_str(), "r");
+#endif
     if (!pipe) {
         out.push_back("[ERROR] Could not start command: " + cmd);
         return false;
@@ -48,7 +52,11 @@ bool runCommandCapture(const std::string& cmd, std::vector<std::string>& out)
         if (!line.empty()) out.push_back(line);
     }
 
+#ifdef _WIN32
+    int rc = _pclose(pipe);
+#else
     int rc = pclose(pipe);
+#endif
     return rc == 0;
 }
 

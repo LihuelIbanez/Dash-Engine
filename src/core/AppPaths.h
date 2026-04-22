@@ -4,11 +4,17 @@
 //
 // Resolves correctly for:
 //   • macOS .app bundle  (resources live in Contents/Resources/)
-//   • Linux / development (falls back to PROJECT_DIR compile-time define)
+//   • iOS app bundle     (CWD is set to bundle resources by SDL2;
+//                         user data lives in the app sandbox Documents/)
+//   • Linux / dev        (falls back to PROJECT_DIR compile-time define)
+//   • Windows            (%APPDATA% for user data, exe-relative for resources)
 // ─────────────────────────────────────────────────────────────────────────────
 #include <string>
 #include <filesystem>
 #include <cstdlib>
+#if defined(__APPLE__)
+#  include <TargetConditionals.h>
+#endif
 
 namespace AppPaths {
 
@@ -70,7 +76,12 @@ inline std::string getResourcesDir()
 
     // Locate the executable via /proc/self/exe (Linux) or argv[0] fallback.
     // On macOS we use the well-known bundle layout instead.
-#if defined(__APPLE__)
+#if defined(__APPLE__) && TARGET_OS_IPHONE
+    // iOS: SDL2 sets CWD to the app bundle's resources directory at startup.
+    // Everything under assets/ is copied there at build time.
+    static const std::string cached = ".";
+    return cached;
+#elif defined(__APPLE__)
     // __executable_path trick via dyld APIs is complex; use a simpler heuristic:
     // If we are inside a .app bundle, the executable is at:
     //   .app/Contents/MacOS/<exeName>
@@ -140,6 +151,24 @@ inline std::string getResourcesDir()
 #endif
     }();
     return cached;
+#elif defined(_WIN32)
+    static const std::string cached = []() -> std::string {
+        namespace fs = std::filesystem;
+        // Probe from CWD (works for dev builds where CWD == project root,
+        // and for deployed apps where the exe sits next to the assets/ folder).
+        std::error_code ec;
+        for (const auto& rel : {fs::path("."), fs::path("..")}) {
+            fs::path abs = fs::weakly_canonical(rel, ec);
+            if (!ec && fs::exists(abs / "assets" / "asset_db.json"))
+                return abs.string();
+        }
+#  ifdef PROJECT_DIR
+        return std::string(PROJECT_DIR);
+#  else
+        return ".";
+#  endif
+    }();
+    return cached;
 #else
 #  ifdef PROJECT_DIR
     return std::string(PROJECT_DIR);
@@ -151,17 +180,37 @@ inline std::string getResourcesDir()
 
 // Returns the user-writable directory for save files.
 // macOS: ~/Library/Application Support/DashEngine/saves
+// iOS:   <bundle>/../Documents/DashEngine/saves (within sandbox)
 // Linux: ~/.local/share/DashEngine/saves
+// Windows: %APPDATA%/DashEngine/saves
 // Fallback: ./saves
 inline std::string getSavesDir()
 {
     static const std::string cached = []() -> std::string {
         namespace fs = std::filesystem;
-#if defined(__APPLE__)
+#if defined(__APPLE__) && TARGET_OS_IPHONE
+        // iOS sandbox: Documents/ is the user-visible, iTunes-synced write area.
+        // HOME on iOS is the app container root; Documents is a subdir.
+        const char* home = std::getenv("HOME");
+        if (home) {
+            fs::path p = fs::path(home) / "Documents" / "DashEngine" / "saves";
+            std::error_code ec;
+            fs::create_directories(p, ec);
+            if (!ec) return p.string();
+        }
+#elif defined(__APPLE__)
         const char* home = std::getenv("HOME");
         if (home) {
             fs::path p = fs::path(home) / "Library" / "Application Support"
                          / "DashEngine" / "saves";
+            std::error_code ec;
+            fs::create_directories(p, ec);
+            if (!ec) return p.string();
+        }
+#elif defined(_WIN32)
+        const char* appdata = std::getenv("APPDATA");
+        if (appdata) {
+            fs::path p = fs::path(appdata) / "DashEngine" / "saves";
             std::error_code ec;
             fs::create_directories(p, ec);
             if (!ec) return p.string();
@@ -189,16 +238,34 @@ inline std::string getSavesDir()
 
 // Returns the user-writable directory for editor configuration/preferences.
 // macOS: ~/Library/Application Support/DashEngine
+// iOS:   <bundle>/../Documents/DashEngine (within sandbox)
 // Linux: ~/.config/DashEngine
+// Windows: %APPDATA%/DashEngine
 // Fallback: ./config
 inline std::string getConfigDir()
 {
     static const std::string cached = []() -> std::string {
         namespace fs = std::filesystem;
-#if defined(__APPLE__)
+#if defined(__APPLE__) && TARGET_OS_IPHONE
+        const char* home = std::getenv("HOME");
+        if (home) {
+            fs::path p = fs::path(home) / "Documents" / "DashEngine";
+            std::error_code ec;
+            fs::create_directories(p, ec);
+            if (!ec) return p.string();
+        }
+#elif defined(__APPLE__)
         const char* home = std::getenv("HOME");
         if (home) {
             fs::path p = fs::path(home) / "Library" / "Application Support" / "DashEngine";
+            std::error_code ec;
+            fs::create_directories(p, ec);
+            if (!ec) return p.string();
+        }
+#elif defined(_WIN32)
+        const char* appdata = std::getenv("APPDATA");
+        if (appdata) {
+            fs::path p = fs::path(appdata) / "DashEngine";
             std::error_code ec;
             fs::create_directories(p, ec);
             if (!ec) return p.string();

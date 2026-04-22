@@ -11,9 +11,13 @@ file(GLOB IMPORTER_SOURCES "${CMAKE_SOURCE_DIR}/src/assets/importers/*.cpp")
 file(GLOB PANEL_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/panels/*.cpp")
 
 set(EDITOR_PLATFORM_SOURCES)
-if(APPLE)
+if(APPLE AND NOT IOS)
     list(APPEND EDITOR_PLATFORM_SOURCES
         "${CMAKE_CURRENT_SOURCE_DIR}/platform/NativeFileDialogs_mac.mm"
+    )
+elseif(WIN32)
+    list(APPEND EDITOR_PLATFORM_SOURCES
+        "${CMAKE_CURRENT_SOURCE_DIR}/platform/NativeFileDialogs_win.cpp"
     )
 else()
     list(APPEND EDITOR_PLATFORM_SOURCES
@@ -73,8 +77,12 @@ target_compile_definitions(DashEngine PRIVATE
     DASH_VERSION="${PROJECT_VERSION}"
 )
 
-if(APPLE)
+if(APPLE AND NOT IOS)
     target_link_libraries(DashEngine PRIVATE "-framework Cocoa" "-framework UniformTypeIdentifiers")
 endif()
 
-target_compile_options(DashEngine PRIVATE -Wall -Wextra -O2)
+if(WIN32)
+    target_link_libraries(DashEngine PRIVATE comdlg32 ole32 shell32)
+endif()
+
+target_compile_options(DashEngine PRIVATE ${DASH_COMPILE_FLAGS})

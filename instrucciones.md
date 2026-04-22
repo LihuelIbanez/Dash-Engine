@@ -2,82 +2,101 @@
 
 ## Requisitos previos
 
-- macOS con Homebrew
-- CMake ≥ 3.16
+### Windows
+- Visual Studio 2022+ con soporte C++ y CMake
+- [vcpkg](https://github.com/microsoft/vcpkg) en `C:\vcpkg`
+- Git
+
+### macOS
+- Homebrew, CMake ≥ 3.16
 - SDL2 (`brew install sdl2`)
-- Clang / Xcode Command Line Tools (`xcode-select --install`)
+- Xcode Command Line Tools (`xcode-select --install`)
 
 ---
 
-## Aliases de terminal
+## Comandos `dash` — Windows (PowerShell)
 
-Los aliases se agregan automáticamente al `.zshrc`. Después de cada nueva terminal o de ejecutar `source ~/.zshrc`, están disponibles:
+El script `dash.ps1` en la raíz del proyecto expone todos los flujos como `dash <comando>`.
+
+### Configuración del alias (una sola vez)
+
+```powershell
+Add-Content $PROFILE 'function dash { powershell -ExecutionPolicy Bypass -File "E:\Develop\Proyects\Dash-Engine\dash.ps1" @args }'
+. $PROFILE
+```
+
+> Ya aplicado en este equipo. En una nueva máquina, ejecutar el bloque de arriba desde la raíz del proyecto.
+
+### Referencia de comandos
+
+| Comando | Acción |
+|---|---|
+| `dash build` | Compila todo (editor + runtime) |
+| `dash editor` | Compila y abre el **editor DashEngine** |
+| `dash run` | Abre el editor **sin recompilar** |
+| `dash game` | Abre el runtime **IsometricRPG** sin recompilar |
+| `dash clean` | Elimina `build/` para recompilar desde cero |
+| `dash update` | `git pull` + recompila |
+| `dash test` | Compila y ejecuta los tests |
+| `dash config` | Solo configura CMake (sin compilar) |
+| `dash help` | Muestra ayuda y opciones disponibles |
+
+### Opciones
+
+| Opción | Default | Descripción |
+|---|---|---|
+| `-Config` | `Release` | `Release` o `Debug` |
+| `-BuildDir` | `build` | Directorio de build |
+| `-VcpkgRoot` | `C:\vcpkg` | Ruta de instalación de vcpkg |
+| `-Vulkan` | off | Habilita el target `VulkanBootstrap` |
+
+### Ejemplos
+
+```powershell
+# Primer uso
+dash build
+
+# Abrir el editor (compila si hace falta)
+dash editor
+
+# Solo abrir el editor ya compilado
+dash run
+
+# Recompilar desde cero
+dash clean
+dash build
+
+# Actualizar y recompilar
+dash update
+
+# Build debug
+dash build -Config Debug
+
+# Con soporte Vulkan
+dash build -Vulkan
+```
+
+---
+
+## Comandos `dash` — macOS (zsh)
+
+Los aliases se agregan al `.zshrc`:
 
 | Alias | Acción |
 |---|---|
-| `dash-build` | Configura CMake (si no existe el build) y compila todos los targets |
+| `dash-build` | Configura CMake y compila todos los targets |
 | `dash-editor` | Compila y abre el **editor DashEngine** |
-| `dash-game` | Compila y ejecuta el **runtime VulkanBootstrap** standalone |
-| `dash-update` | Hace `git pull` y recompila con los últimos cambios |
-| `dash-clean` | Elimina el directorio `build/` para hacer un build desde cero |
-
----
-
-## Flujos comunes
-
-### Primer uso (clonar y compilar)
+| `dash-game` | Compila y ejecuta el runtime standalone |
+| `dash-update` | `git pull` + recompila |
+| `dash-clean` | Elimina `build/` para recompilar desde cero |
 
 ```bash
-git clone https://github.com/LihuelIbanez/Dash-Engine.git
-cd Dash-Engine
-source ~/.zshrc   # cargar aliases si recién clonaste
-dash-build
-```
+# Activar aliases
+source ~/.zshrc
 
-### Abrir el editor
-
-```bash
-dash-editor
-```
-
-### Jugar
-
-```bash
-dash-game
-```
-
-### Actualizar con los últimos cambios del repositorio
-
-```bash
-dash-update
-```
-
-Este comando:
-1. Descarga los últimos cambios con `git pull`
-2. Recompila solo los archivos modificados (incremental)
-
-### Build limpio desde cero
-
-```bash
-dash-clean && dash-build
-```
-
----
-
-## Build manual (sin aliases)
-
-```bash
-# Configurar
-cmake -S . -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
-
-# Compilar todo
-cmake --build build --parallel
-
-# Solo el editor
-cmake --build build --target DashEngine --parallel
-
-# Solo runtime standalone
-cmake --build build --target VulkanBootstrap --parallel
+dash-build          # compilar
+dash-editor         # editor
+dash-clean && dash-build  # build limpio
 ```
 
 ---
@@ -86,8 +105,8 @@ cmake --build build --target VulkanBootstrap --parallel
 
 | Archivo | Descripción |
 |---|---|
-| `build/DashEngine` | Editor de niveles (Dear ImGui, estilo Unreal) |
-| `build/VulkanBootstrap` | Runtime standalone (Vulkan 3D, sin UI de editor) |
+| `build\src\editor\Release\DashEngine.exe` | Editor de niveles (Dear ImGui, estilo Unreal) |
+| `build\src\game\Release\IsometricRPG.exe` | Runtime standalone del juego |
 
 ---
 

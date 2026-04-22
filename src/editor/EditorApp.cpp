@@ -34,68 +34,103 @@
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
-#include <iomanip>
-#include <spawn.h>
 #include <sstream>
-#include <sys/wait.h>
-#include <signal.h>
-#include <fcntl.h>
-#include <unistd.h>
 #include <nlohmann/json.hpp>
+#ifdef _WIN32
+#  define NOMINMAX
+#  include <windows.h>
+#else
+#  include <spawn.h>
+#  include <sys/wait.h>
+#  include <signal.h>
+extern char** environ;
+#endif
 
 namespace fs = std::filesystem;
 using json = nlohmann::json;
 
-extern char** environ;
-
 namespace {
 
-bool spawnTrackedProcess(const fs::path& executable,
-                        const std::vector<std::string>& args,
-                        pid_t& outPid,
-                        std::string& error,
-                        const std::string& logPath = "")
+fs::path resolveBuiltGameExecutable(const fs::path& buildDir)
 {
+    std::error_code ec;
+    const std::array<fs::path, 3> candidates = {
+        buildDir / "IsometricRPG",
+        buildDir / "src" / "game" / "IsometricRPG",
+        buildDir / "Debug" / "IsometricRPG",
+    };
+
+    for (const auto& candidate : candidates) {
+        if (fs::exists(candidate, ec) && fs::is_regular_file(candidate, ec)) {
+            return candidate;
+        }
+        ec.clear();
+    }
+
+    return {};
+}
+
+bool launchDetachedProcess(const fs::path& executable,
+                           const std::vector<std::string>& args,
+                           std::string& error)
+{
+#ifdef _WIN32
+    std::string cmdLine = "\"" + executable.string() + "\"";
+    for (const auto& arg : args) cmdLine += " \"" + arg + "\"";
+    STARTUPINFOA si{}; si.cb = sizeof(si);
+    PROCESS_INFORMATION pi{};
+    if (!CreateProcessA(nullptr, cmdLine.data(), nullptr, nullptr, FALSE,
+                        DETACHED_PROCESS, nullptr, nullptr, &si, &pi)) {
+        error = "CreateProcess failed (" + std::to_string(GetLastError()) + ")";
+        return false;
+    }
+    CloseHandle(pi.hProcess); CloseHandle(pi.hThread);
+    return true;
+#else
     std::vector<char*> argv;
     argv.reserve(args.size() + 2);
     argv.push_back(const_cast<char*>(executable.c_str()));
     for (const auto& arg : args)
         argv.push_back(const_cast<char*>(arg.c_str()));
     argv.push_back(nullptr);
-
     pid_t pid = 0;
-    posix_spawn_file_actions_t fileActions;
-    posix_spawn_file_actions_t* fileActionsPtr = nullptr;
+    const int rc = posix_spawn(&pid, executable.c_str(), nullptr, nullptr, argv.data(), environ);
+    if (rc != 0) { error = std::strerror(rc); return false; }
+    return true;
+#endif
+}
 
-    if (!logPath.empty()) {
-        if (posix_spawn_file_actions_init(&fileActions) != 0) {
-            error = "posix_spawn_file_actions_init failed";
-            return false;
-        }
-        fileActionsPtr = &fileActions;
-
-        (void)posix_spawn_file_actions_addopen(
-            fileActionsPtr,
-            STDOUT_FILENO,
-            logPath.c_str(),
-            O_CREAT | O_WRONLY | O_TRUNC,
-            0644);
-        (void)posix_spawn_file_actions_adddup2(fileActionsPtr, STDOUT_FILENO, STDERR_FILENO);
-    }
-
-    const int rc = posix_spawn(&pid, executable.c_str(), fileActionsPtr, nullptr, argv.data(), environ);
-
-    if (fileActionsPtr) {
-        posix_spawn_file_actions_destroy(fileActionsPtr);
-    }
-
-    if (rc != 0) {
-        error = std::strerror(rc);
+bool spawnTrackedProcess(const fs::path& executable,
+                        const std::vector<std::string>& args,
+                        intptr_t& outPid,
+                        std::string& error)
+{
+#ifdef _WIN32
+    std::string cmdLine = "\"" + executable.string() + "\"";
+    for (const auto& arg : args) cmdLine += " \"" + arg + "\"";
+    STARTUPINFOA si{}; si.cb = sizeof(si);
+    PROCESS_INFORMATION pi{};
+    if (!CreateProcessA(nullptr, cmdLine.data(), nullptr, nullptr, FALSE,
+                        0, nullptr, nullptr, &si, &pi)) {
+        error = "CreateProcess failed (" + std::to_string(GetLastError()) + ")";
         return false;
     }
-
-    outPid = pid;
+    CloseHandle(pi.hThread);
+    outPid = reinterpret_cast<intptr_t>(pi.hProcess);
     return true;
+#else
+    std::vector<char*> argv;
+    argv.reserve(args.size() + 2);
+    argv.push_back(const_cast<char*>(executable.c_str()));
+    for (const auto& arg : args)
+        argv.push_back(const_cast<char*>(arg.c_str()));
+    argv.push_back(nullptr);
+    pid_t pid = 0;
+    const int rc = posix_spawn(&pid, executable.c_str(), nullptr, nullptr, argv.data(), environ);
+    if (rc != 0) { error = std::strerror(rc); return false; }
+    outPid = static_cast<intptr_t>(pid);
+    return true;
+#endif
 }
 
 bool sqliteModeEnabled()
@@ -226,7 +261,8 @@ bool EditorApp::init(const std::string& projectPath)
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
     io.ConfigWindowsMoveFromTitleBarOnly = true;
 
-    // Load SF Pro (SFNS) — falls back to ImGui default if not found
+    // Load SF Pro (SFNS) on macOS; fall back to ImGui default on other platforms
+#ifdef __APPLE__
     const char* sfProPath = "/System/Library/Fonts/SFNS.ttf";
     if (FILE* f = fopen(sfProPath, "rb")) {
         fclose(f);
@@ -234,6 +270,9 @@ bool EditorApp::init(const std::string& projectPath)
     } else {
         io.Fonts->AddFontDefault();
     }
+#else
+    io.Fonts->AddFontDefault();
+#endif
 
     // Merge Font Awesome 6 solid icons into the same font atlas
     std::string faPath = AppPaths::getAssetsDir() + "/fonts/fa-solid-900.ttf";
@@ -283,7 +322,8 @@ bool EditorApp::init(const std::string& projectPath)
     refreshProjectPaths();   // sets scenesDir_, assetsRoot_, libraryRoot_
 
     // ── File browser root ────────────────────────────────────────────────────
-    fileBrowserRoot_ = AppPaths::getResourcesDir() + "/src";
+    fileBrowserRoot_ = AppPaths::getResourcesDir();
+    std::strncpy(fileBrowserNavBuf_, fileBrowserRoot_.c_str(), sizeof(fileBrowserNavBuf_) - 1);
 
     // ── Asset Database ─────────────────────────────────────────────────────
     assetDbPath_ = assetsRoot_ + "/asset_db.json";
@@ -339,9 +379,12 @@ bool EditorApp::init(const std::string& projectPath)
     // Detect Vulkan preview executable availability.
     {
         const fs::path buildDir = fs::path(BUILD_DIR);
-        const std::array<fs::path, 3> previewCandidates = {
+        const std::array<fs::path, 6> previewCandidates = {
             buildDir / "VulkanBootstrap",
+            buildDir / "VulkanBootstrap.exe",
             buildDir / "src" / "tools" / "VulkanBootstrap",
+            buildDir / "src" / "tools" / "Release" / "VulkanBootstrap.exe",
+            buildDir / "Release" / "VulkanBootstrap.exe",
             buildDir / "Debug" / "VulkanBootstrap",
         };
         std::error_code ec;
@@ -2127,9 +2170,12 @@ bool EditorApp::startVulkanPreview()
 
     const fs::path buildDir = fs::path(BUILD_DIR);
 
-    std::array<fs::path, 3> candidates = {
+    std::array<fs::path, 6> candidates = {
         buildDir / "VulkanBootstrap",
+        buildDir / "VulkanBootstrap.exe",
         buildDir / "src" / "tools" / "VulkanBootstrap",
+        buildDir / "src" / "tools" / "Release" / "VulkanBootstrap.exe",
+        buildDir / "Release" / "VulkanBootstrap.exe",
         buildDir / "Debug" / "VulkanBootstrap",
     };
 
@@ -2168,7 +2214,7 @@ bool EditorApp::startVulkanPreview()
     addLog("[VSTEP] using VulkanBootstrap executable: " + previewExe.string());
 
     std::string error;
-    pid_t pid = -1;
+    intptr_t pid = -1;
     std::vector<std::string> args;
     args.emplace_back("--editor-preview");
 
@@ -2201,8 +2247,7 @@ bool EditorApp::startVulkanPreview()
         addLog(argsLog);
     }
 
-    const std::string previewLogPath = std::string(BUILD_DIR) + "/generated/vulkan_preview.log";
-    if (!spawnTrackedProcess(previewExe, args, pid, error, previewLogPath)) {
+    if (!spawnTrackedProcess(previewExe, args, pid, error)) {
         addLog("[VFAIL] spawnTrackedProcess failed: " + error);
         return false;
     }
@@ -2210,7 +2255,6 @@ bool EditorApp::startVulkanPreview()
     vulkanPreviewPid_ = pid;
     vulkanPreviewRunning_ = true;
     vulkanPreviewAvailable_ = true;
-    addLog("[VSTEP] preview log path: " + previewLogPath);
     addLog("[VOK] Preview started (pid=" + std::to_string(static_cast<int>(pid)) + ")"
            + (launchEmbedded ? " [embedded]" : " [external]") + ".");
     return true;
@@ -2226,9 +2270,16 @@ void EditorApp::stopVulkanPreview()
         return;
     }
 
-    kill(vulkanPreviewPid_, SIGTERM);
-    int status = 0;
-    (void)waitpid(vulkanPreviewPid_, &status, WNOHANG);
+#ifdef _WIN32
+    HANDLE h = reinterpret_cast<HANDLE>(vulkanPreviewPid_);
+    TerminateProcess(h, 0);
+    WaitForSingleObject(h, 1000);
+    CloseHandle(h);
+#else
+    kill(static_cast<pid_t>(vulkanPreviewPid_), SIGTERM);
+    int stopStatus = 0;
+    (void)waitpid(static_cast<pid_t>(vulkanPreviewPid_), &stopStatus, WNOHANG);
+#endif
 
     addLog("[VSTEP] stopVulkanPreview sent SIGTERM to pid=" + std::to_string(static_cast<int>(vulkanPreviewPid_)));
     addLog("[VOK] Preview stopped.");
@@ -2240,15 +2291,25 @@ void EditorApp::pollVulkanPreviewProcess()
 {
     if (!vulkanPreviewRunning_ || vulkanPreviewPid_ <= 0) return;
 
-    int status = 0;
-    const pid_t res = waitpid(vulkanPreviewPid_, &status, WNOHANG);
-    if (res == 0) return;
-    if (res == vulkanPreviewPid_) {
-        addLog("[VSTEP] preview waitpid completed, status=" + std::to_string(status));
+#ifdef _WIN32
+    HANDLE h = reinterpret_cast<HANDLE>(vulkanPreviewPid_);
+    DWORD exitCode = 0;
+    if (GetExitCodeProcess(h, &exitCode) && exitCode != STILL_ACTIVE) {
+        CloseHandle(h);
         vulkanPreviewRunning_ = false;
         vulkanPreviewPid_ = -1;
         addLog("[VFAIL] Preview process ended unexpectedly.");
     }
+#else
+    int status = 0;
+    const pid_t res = waitpid(static_cast<pid_t>(vulkanPreviewPid_), &status, WNOHANG);
+    if (res == 0) return;
+    if (res == static_cast<pid_t>(vulkanPreviewPid_)) {
+        vulkanPreviewRunning_ = false;
+        vulkanPreviewPid_ = -1;
+        addLog("[Vulkan] Preview process ended.");
+    }
+#endif
 }
 
 void EditorApp::writeVulkanViewportStateFile() const
@@ -2392,11 +2453,13 @@ void EditorApp::renderWorldToTexture()
 
     // ── Play mode: Start Vulkan when viewport is ready, then sync state ──────────
     if (editorMode_ == EditorMode::Play) {
-        // Start Vulkan preview on first frame (viewport coords are now valid)
-        if (!vulkanPreviewRunning_ && vpDisplayW_ > 0 && vpDisplayH_ > 0) {
+        // Start Vulkan preview on first frame (viewport coords are now valid).
+        // vulkanPreviewStartFailed_ prevents retrying every frame after a failure.
+        if (!vulkanPreviewRunning_ && !vulkanPreviewStartFailed_ && vpDisplayW_ > 0 && vpDisplayH_ > 0) {
             writeVulkanViewportStateFile();
             if (!startVulkanPreview()) {
                 addLog("ERROR: Could not start Vulkan preview.");
+                vulkanPreviewStartFailed_ = true;  // suppress further per-frame retries
                 // Fallback: keep rendering editor viewport content if Vulkan startup fails.
             }
         }
@@ -3147,6 +3210,7 @@ void EditorApp::exitPlayMode()
 
     stopVulkanPreview();
     vulkanScenePath_.clear();
+    vulkanPreviewStartFailed_ = false;  // allow retrying on next Play press
     viewport3D_.embeddedPreview = false;  // Disable embedded mode
     viewport3D_.useVulkan3D = false;
     
@@ -3177,10 +3241,35 @@ void EditorApp::buildAndRun()
     addLog("--- Building Vulkan runtime ---");
     showBuildLog_ = true;
 
+#ifdef _WIN32
+    // Locate cmake: check PATH first, then common VS install locations.
+    std::string cmakeExe;
+    if (std::system("where cmake >nul 2>&1") == 0) {
+        cmakeExe = "cmake";
+    } else {
+        const char* vsCandidates[] = {
+            "C:\\Program Files\\Microsoft Visual Studio\\18\\Insiders\\Common7\\IDE\\CommonExtensions\\Microsoft\\CMake\\CMake\\bin\\cmake.exe",
+            "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\Common7\\IDE\\CommonExtensions\\Microsoft\\CMake\\CMake\\bin\\cmake.exe",
+            "C:\\Program Files\\Microsoft Visual Studio\\2022\\Professional\\Common7\\IDE\\CommonExtensions\\Microsoft\\CMake\\CMake\\bin\\cmake.exe",
+            "C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\Common7\\IDE\\CommonExtensions\\Microsoft\\CMake\\CMake\\bin\\cmake.exe",
+        };
+        for (const char* p : vsCandidates) {
+            if (fs::exists(p)) { cmakeExe = "\"" + std::string(p) + "\""; break; }
+        }
+    }
+    if (cmakeExe.empty()) {
+        addLog("[VFAIL] cmake not found. Make sure Visual Studio or CMake is installed.");
+        addLog("        To build VulkanBootstrap manually: dash build -Vulkan");
+        return;
+    }
+    std::string cmd = cmakeExe + " --build \"" + std::string(BUILD_DIR)
+                    + "\" --target VulkanBootstrap --config Release 2>&1";
+    FILE* pipe = _popen(cmd.c_str(), "r");
+#else
     std::string cmd = "cd \"" + std::string(BUILD_DIR)
-                    + "\" && /usr/bin/make VulkanBootstrap 2>&1";
-
+                    + "\" && make VulkanBootstrap 2>&1";
     FILE* pipe = popen(cmd.c_str(), "r");
+#endif
     if (!pipe) {
         addLog("ERROR: Could not start build.");
         return;
@@ -3192,7 +3281,11 @@ void EditorApp::buildAndRun()
         if (!line.empty() && line.back() == '\n') line.pop_back();
         if (!line.empty()) addLog(line);
     }
+#ifdef _WIN32
+    int ret = _pclose(pipe);
+#else
     int ret = pclose(pipe);
+#endif
 
     if (ret == 0) {
         addLog("[VOK] Build OK. Launching Vulkan runtime...");
@@ -3231,10 +3324,13 @@ void EditorApp::buildAndRun()
         }
 
         const fs::path buildDir = fs::path(BUILD_DIR);
-        std::array<fs::path, 3> candidates = {
+        std::array<fs::path, 6> candidates = {
+            buildDir / "Release" / "VulkanBootstrap.exe",
+            buildDir / "Release" / "VulkanBootstrap",
+            buildDir / "VulkanBootstrap.exe",
             buildDir / "VulkanBootstrap",
-            buildDir / "src" / "tools" / "VulkanBootstrap",
-            buildDir / "Debug" / "VulkanBootstrap",
+            buildDir / "src" / "tools" / "Release" / "VulkanBootstrap.exe",
+            buildDir / "Debug" / "VulkanBootstrap.exe",
         };
 
         fs::path executablePath;
@@ -3266,20 +3362,20 @@ void EditorApp::buildAndRun()
         }
 
         std::string launchError;
-        pid_t pid = -1;
-        const std::string runtimeLogPath = std::string(BUILD_DIR) + "/generated/vulkan_runtime.log";
-        if (!spawnTrackedProcess(executablePath, runArgs, pid, launchError, runtimeLogPath)) {
+        intptr_t pid = -1;
+        if (!spawnTrackedProcess(executablePath, runArgs, pid, launchError)) {
             addLog("[VFAIL] Could not launch Vulkan runtime: " + launchError);
             return;
         }
 
-        // Bring Vulkan window to front on macOS
+        // Bring the game window to front on macOS
+#ifdef __APPLE__
         std::system("osascript -e 'delay 0.3' "
                     "-e 'tell application \"System Events\"' "
                     "-e '  set frontmost of (first process whose name is \"VulkanBootstrap\") to true' "
                     "-e 'end tell' &");
-        addLog("[VSTEP] runtime log path: " + runtimeLogPath);
-        addLog("[VOK] Vulkan runtime launched (pid=" + std::to_string(static_cast<int>(pid)) + "): " + executablePath.string());
+#endif
+        addLog("Game launched: " + executablePath.string());
     } else {
         addLog("[VFAIL] Build FAILED (exit " + std::to_string(ret) + ").");
     }
@@ -3387,12 +3483,21 @@ void EditorApp::redoFile(OpenFile& f)
 // ═════════════════════════════════════════════════════════════════════════════
 // File Browser panel — recursive directory tree
 // ═════════════════════════════════════════════════════════════════════════════
-static void drawDirectoryTree(const fs::path& dir, EditorApp* /*unused*/,
-                            std::string& clickedFile)
+static void drawDirectoryTree(const fs::path& dir,
+                              const char* filter,
+                              std::string& clickedFile,
+                              std::string& copiedPath,
+                              const fs::path& workspaceRoot)
 {
+    std::string filterStr(filter ? filter : "");
+    for (auto& c : filterStr)
+        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+
     // Collect entries and sort (dirs first, then files)
     std::vector<fs::directory_entry> entries;
-    for (auto& e : fs::directory_iterator(dir, fs::directory_options::skip_permission_denied))
+    std::error_code iterEc;
+    for (auto& e : fs::directory_iterator(dir,
+            fs::directory_options::skip_permission_denied, iterEc))
         entries.push_back(e);
     std::sort(entries.begin(), entries.end(), [](const auto& a, const auto& b) {
         if (a.is_directory() != b.is_directory())
@@ -3409,16 +3514,42 @@ static void drawDirectoryTree(const fs::path& dir, EditorApp* /*unused*/,
                                     | ImGuiTreeNodeFlags_SpanAvailWidth;
             bool open = ImGui::TreeNodeEx(name.c_str(), flags);
             if (open) {
-                drawDirectoryTree(entry.path(), nullptr, clickedFile);
+                drawDirectoryTree(entry.path(), filter, clickedFile, copiedPath, workspaceRoot);
                 ImGui::TreePop();
             }
         } else {
+            // Apply filter to leaf files
+            if (!filterStr.empty()) {
+                std::string nameLower = name;
+                for (auto& c : nameLower)
+                    c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+                if (nameLower.find(filterStr) == std::string::npos)
+                    continue;
+            }
+
             ImGuiTreeNodeFlags leafFlags = ImGuiTreeNodeFlags_Leaf
                                         | ImGuiTreeNodeFlags_NoTreePushOnOpen
                                         | ImGuiTreeNodeFlags_SpanAvailWidth;
             ImGui::TreeNodeEx(name.c_str(), leafFlags);
-            if (ImGui::IsItemClicked()) {
+
+            if (ImGui::IsItemClicked(ImGuiMouseButton_Left))
                 clickedFile = entry.path().string();
+
+            // Right-click context menu
+            if (ImGui::BeginPopupContextItem()) {
+                ImGui::TextDisabled("%s", name.c_str());
+                ImGui::Separator();
+                if (ImGui::MenuItem(ICON_FA_FOLDER_OPEN "  Open in Editor"))
+                    clickedFile = entry.path().string();
+                ImGui::Separator();
+                if (ImGui::MenuItem(ICON_FA_COPY "  Copy Full Path"))
+                    copiedPath = entry.path().string();
+                if (ImGui::MenuItem(ICON_FA_COPY "  Copy Relative Path")) {
+                    std::error_code ec;
+                    fs::path rel = fs::relative(entry.path(), workspaceRoot, ec);
+                    copiedPath = ec ? entry.path().string() : rel.string();
+                }
+                ImGui::EndPopup();
             }
         }
     }
@@ -3428,29 +3559,82 @@ void EditorApp::drawFileBrowser()
 {
     ImGui::Begin("File Browser");
 
-    // Reimport All button
-    if (ImGui::Button("Reimport All")) {
-        std::vector<std::string> importErrors;
-        int count = importManager_.importAll(assetsRoot_, libraryRoot_, assetDb_, importErrors);
-        addLog("Reimported " + std::to_string(count) + " asset(s).");
-        for (auto& err : importErrors)
-            addLog("[IMPORT] " + err);
-        if (count > 0)
-            assetDb_.save(assetDbPath_);
-    }
+    const std::string resDir = AppPaths::getResourcesDir();
+
+    // ── Navigation bar ────────────────────────────────────────────────────
+    ImGui::SetNextItemWidth(-52.f);
+    bool navEnter = ImGui::InputText("##navpath", fileBrowserNavBuf_,
+                                     sizeof(fileBrowserNavBuf_),
+                                     ImGuiInputTextFlags_EnterReturnsTrue);
     ImGui::SameLine();
-    ImGui::TextDisabled("(%zu assets)", assetDb_.records().size());
+    bool navGo = ImGui::SmallButton("Go");
+    if (navEnter || navGo) {
+        fs::path p(fileBrowserNavBuf_);
+        if (fs::is_directory(p))
+            fileBrowserRoot_ = p.string();
+        // Sync nav buf back to resolved root
+        std::strncpy(fileBrowserNavBuf_, fileBrowserRoot_.c_str(),
+                     sizeof(fileBrowserNavBuf_) - 1);
+    }
+
+    // ── Bookmarks ─────────────────────────────────────────────────────────
+    auto bookmark = [&](const char* icon, const char* tip, const std::string& dir) {
+        if (ImGui::SmallButton(icon)) {
+            if (fs::is_directory(dir)) {
+                fileBrowserRoot_ = dir;
+                std::strncpy(fileBrowserNavBuf_, fileBrowserRoot_.c_str(),
+                             sizeof(fileBrowserNavBuf_) - 1);
+            }
+        }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", tip);
+        ImGui::SameLine();
+    };
+
+    bookmark(ICON_FA_HOUSE,        resDir.c_str(),         resDir);
+    bookmark(ICON_FA_IMAGE,        assetsRoot_.c_str(),    assetsRoot_);
+    bookmark(ICON_FA_MAP,          scenesDir_.c_str(),     scenesDir_);
+    bookmark(ICON_FA_CODE,         (resDir+"/src").c_str(), resDir + "/src");
+    {
+        std::string savesDir = resDir + "/saves";
+        bookmark(ICON_FA_FLOPPY_DISK, savesDir.c_str(), savesDir);
+    }
+    // Up one level
+    if (ImGui::SmallButton(ICON_FA_ARROW_UP)) {
+        fs::path parent = fs::path(fileBrowserRoot_).parent_path();
+        if (fs::is_directory(parent)) {
+            fileBrowserRoot_ = parent.string();
+            std::strncpy(fileBrowserNavBuf_, fileBrowserRoot_.c_str(),
+                         sizeof(fileBrowserNavBuf_) - 1);
+        }
+    }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Up one level");
+
+    ImGui::NewLine();
     ImGui::Separator();
 
-    ImGui::TextColored({0.6f,0.9f,0.6f,1.f}, "src/");
+    // ── Filter bar ────────────────────────────────────────────────────────
+    ImGui::SetNextItemWidth(-1.f);
+    ImGui::InputTextWithHint("##fbfilter", ICON_FA_MAGNIFYING_GLASS "  Filter files...",
+                              fileBrowserFilter_, sizeof(fileBrowserFilter_));
     ImGui::Separator();
 
-    std::string clickedFile;
-    if (fs::is_directory(fileBrowserRoot_))
-        drawDirectoryTree(fileBrowserRoot_, this, clickedFile);
+    // ── Directory tree ────────────────────────────────────────────────────
+    std::string clickedFile, copiedPath;
+    if (fs::is_directory(fileBrowserRoot_)) {
+        drawDirectoryTree(fileBrowserRoot_, fileBrowserFilter_,
+                          clickedFile, copiedPath, fs::path(resDir));
+    } else {
+        ImGui::TextColored({1.f,0.4f,0.4f,1.f}, "Path not found: %s",
+                           fileBrowserRoot_.c_str());
+    }
 
     if (!clickedFile.empty())
         openFileInEditor(clickedFile);
+
+    if (!copiedPath.empty()) {
+        ImGui::SetClipboardText(copiedPath.c_str());
+        addLog("[Browser] Copied to clipboard: " + copiedPath);
+    }
 
     ImGui::End();
 }

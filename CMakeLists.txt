@@ -5,11 +5,26 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 option(ENABLE_ISOLATION_CHECK "Enable game runtime isolation checks" OFF)
 
+# ── Cross-platform compile flags ──────────────────────────────────────────────
+if(MSVC)
+    set(DASH_COMPILE_FLAGS /W4 /O2 /wd4996)
+else()
+    set(DASH_COMPILE_FLAGS -Wall -Wextra -O2)
+endif()
+
 include(FetchContent)
 
 # ── SDL2 ─────────────────────────────────────────────────────────────────────
 find_package(SDL2 REQUIRED)
-find_package(SQLite3 REQUIRED)
+# SQLite3: prefer vcpkg unofficial target, fall back to CMake's FindSQLite3
+find_package(unofficial-sqlite3 CONFIG QUIET)
+if(TARGET unofficial::sqlite3::sqlite3)
+    if(NOT TARGET SQLite3::SQLite3)
+        add_library(SQLite3::SQLite3 ALIAS unofficial::sqlite3::sqlite3)
+    endif()
+else()
+    find_package(SQLite3 REQUIRED)
+endif()
 find_package(Vulkan QUIET)
 find_package(glfw3 QUIET)
 
@@ -146,11 +161,14 @@ target_link_libraries(game_core PUBLIC ${SDL2_LIBRARIES} nlohmann_json::nlohmann
 target_link_libraries(game_core PUBLIC SQLite3::SQLite3)
 
 add_subdirectory(src/game)
-add_subdirectory(src/editor)
+# The editor is a desktop-only tool; skip it when cross-compiling for iOS.
+if(NOT IOS)
+    add_subdirectory(src/editor)
+endif()
 
 option(ENABLE_VULKAN_EXPERIMENTAL "Build experimental Vulkan bootstrap (D70-D74)" ON)
 
-if(ENABLE_VULKAN_EXPERIMENTAL)
+if(ENABLE_VULKAN_EXPERIMENTAL AND NOT IOS)
     set(GLFW_VK_TARGET "")
     if(TARGET glfw)
         set(GLFW_VK_TARGET glfw)
@@ -175,7 +193,7 @@ if(ENABLE_VULKAN_EXPERIMENTAL)
             ${CMAKE_SOURCE_DIR}/src
         )
         target_link_libraries(vulkan_experimental PUBLIC Vulkan::Vulkan ${GLFW_VK_TARGET} game_core)
-        target_compile_options(vulkan_experimental PRIVATE -Wall -Wextra -O2)
+        target_compile_options(vulkan_experimental PRIVATE ${DASH_COMPILE_FLAGS})
 
         set(VULKAN_SHADER_SRC_DIR "${CMAKE_SOURCE_DIR}/assets/shaders")
         set(VULKAN_SHADER_BIN_DIR "${CMAKE_BINARY_DIR}/generated/shaders")
@@ -212,7 +230,7 @@ if(ENABLE_VULKAN_EXPERIMENTAL)
             ${CMAKE_SOURCE_DIR}/src/tools/vulkan_bootstrap_main.cpp
         )
         target_link_libraries(VulkanBootstrap PRIVATE vulkan_experimental)
-        target_compile_options(VulkanBootstrap PRIVATE -Wall -Wextra -O2)
+        target_compile_options(VulkanBootstrap PRIVATE ${DASH_COMPILE_FLAGS})
 
         if(TARGET vulkan_shaders)
             add_dependencies(VulkanBootstrap vulkan_shaders)
@@ -227,7 +245,7 @@ if(ENABLE_VULKAN_EXPERIMENTAL)
 endif()
 
 # ── Compile flags ─────────────────────────────────────────────────────────────
-target_compile_options(game_core PRIVATE -Wall -Wextra -O2)
+target_compile_options(game_core PRIVATE ${DASH_COMPILE_FLAGS})
 
 # ── Tests (opt-in via -DBUILD_TESTING=ON) ─────────────────────────────────────
 option(BUILD_TESTING "Build unit tests" OFF)

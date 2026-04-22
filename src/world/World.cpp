@@ -129,6 +129,7 @@ SDL_Color Tile::sideColor() const
 // ═════════════════════════════════════════════════════════════════════════════
 World::World()
 {
+    grid.resize(WORLD_H);
     generate();
 }
 
@@ -152,7 +153,7 @@ void World::generate(unsigned int seed)
 {
     // ── Elevation noise ──────────────────────────────────────────────────────
     initPerm(seed);
-    float elev[WORLD_H][WORLD_W];
+    std::vector<float> elev(WORLD_H * WORLD_W);
 
     const float scale = 0.07f;  // controls continent size
 
@@ -161,18 +162,18 @@ void World::generate(unsigned int seed)
             float e = fbm(col * scale, row * scale, 6, 2.0f, 0.5f);
             e = norm01(e);
             e *= islandMask(col, row, WORLD_W, WORLD_H);
-            elev[row][col] = e;
+            elev[row * WORLD_W + col] = e;
         }
     }
 
     // ── Moisture noise (different seed offset) ───────────────────────────────
     initPerm(seed + 31337u);
-    float moist[WORLD_H][WORLD_W];
+    std::vector<float> moist(WORLD_H * WORLD_W);
 
     for (int row = 0; row < WORLD_H; ++row) {
         for (int col = 0; col < WORLD_W; ++col) {
             float m = fbm(col * 0.09f + 100.f, row * 0.09f + 100.f, 4, 2.0f, 0.5f);
-            moist[row][col] = norm01(m);
+            moist[row * WORLD_W + col] = norm01(m);
         }
     }
 
@@ -182,8 +183,8 @@ void World::generate(unsigned int seed)
     // ── Biome assignment ─────────────────────────────────────────────────────
     for (int row = 0; row < WORLD_H; ++row) {
         for (int col = 0; col < WORLD_W; ++col) {
-            float e = elev[row][col];
-            float m = moist[row][col];
+            float e = elev[row * WORLD_W + col];
+            float m = moist[row * WORLD_W + col];
             float detail = norm01(perlin(col * 0.25f, row * 0.25f));
 
             Tile& t = grid[row][col];
