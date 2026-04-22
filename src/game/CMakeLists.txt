@@ -69,8 +69,8 @@ if(APPLE)
     target_link_libraries(${PROJECT_NAME} PRIVATE "-framework Cocoa")
 endif()
 
-target_compile_options(game_runtime PRIVATE -Wall -Wextra -O2)
-target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -O2)
+target_compile_options(game_runtime PRIVATE ${DASH_COMPILE_FLAGS})
+target_compile_options(${PROJECT_NAME} PRIVATE ${DASH_COMPILE_FLAGS})
 
 if(ENABLE_ISOLATION_CHECK)
     target_compile_definitions(game_runtime PRIVATE GAME_RUNTIME_ONLY)

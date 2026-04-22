@@ -24,7 +24,7 @@
 #include <memory>
 #include <unordered_map>
 #include <filesystem>
-#include <sys/types.h>
+#include <cstdint>
 
 // ─────────────────────────────────────────────────────────────────────────────
 // EditorApp – Unreal-style level editor for the Isometric RPG
@@ -118,7 +118,7 @@ private:
 
     bool vulkanPreviewAvailable_ = false;
     bool vulkanPreviewRunning_ = false;
-    pid_t vulkanPreviewPid_ = -1;
+    intptr_t vulkanPreviewPid_ = -1;
     std::string vulkanViewportStatePath_;
 
     // Displayed size of the viewport image (for mouse coordinate mapping)
@@ -185,6 +185,8 @@ private:
     std::vector<OpenFile> openFiles_;
     int                   activeFileTab_ = -1;
     std::string           fileBrowserRoot_;
+    char                  fileBrowserNavBuf_[512] = {};
+    char                  fileBrowserFilter_[128] = {};
     void openFileInEditor(const std::string& path);
     void saveOpenFile(int idx);
     void snapshotForUndo(OpenFile& f);
