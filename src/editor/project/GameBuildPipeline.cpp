@@ -105,8 +105,8 @@ GameBuildPipeline::BuildResult GameBuildPipeline::build(const ProjectManifest& m
     const char* skipBuildEnv = std::getenv("DASH_SKIP_GAME_BUILD");
     const bool skipBuild = (skipBuildEnv && std::string(skipBuildEnv) == "1");
     if (!skipBuild) {
-        res.log.push_back("[BuildPipeline] Building target IsometricRPG...");
-        std::string cmd = "cd \"" + buildDir + "\" && cmake --build . --target IsometricRPG --parallel 2>&1";
+        res.log.push_back("[BuildPipeline] Building target VulkanBootstrap...");
+        std::string cmd = "cd \"" + buildDir + "\" && cmake --build . --target VulkanBootstrap --parallel 2>&1";
         if (!runCommandCapture(cmd, res.log)) {
             res.log.push_back("[ERROR] Build failed.");
             return res;
@@ -115,7 +115,7 @@ GameBuildPipeline::BuildResult GameBuildPipeline::build(const ProjectManifest& m
         res.log.push_back("[BuildPipeline] Skipping build (DASH_SKIP_GAME_BUILD=1).");
     }
 
-    fs::path exePath = resolveBuiltExecutable(buildDir, "IsometricRPG");
+    fs::path exePath = resolveBuiltExecutable(buildDir, "VulkanBootstrap");
     if (!fs::exists(exePath, ec)) {
         res.log.push_back("[ERROR] Built executable not found under build directory: " + buildDir);
         return res;
@@ -186,7 +186,7 @@ GameBuildPipeline::BuildResult GameBuildPipeline::build(const ProjectManifest& m
     fs::create_directories(assetsDir, ec);
     fs::create_directories(scenesDir, ec);
 
-    fs::path outExe = binDir / "IsometricRPG";
+    fs::path outExe = binDir / "VulkanBootstrap";
     fs::copy_file(exePath, outExe, fs::copy_options::overwrite_existing, ec);
     if (ec) {
         res.log.push_back("[ERROR] Could not copy executable: " + ec.message());

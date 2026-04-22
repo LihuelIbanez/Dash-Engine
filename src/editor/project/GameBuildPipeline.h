@@ -12,7 +12,7 @@ public:
         std::vector<std::string> log;
     };
 
-    // Build IsometricRPG and export a self-contained game bundle.
+    // Build VulkanBootstrap and export a self-contained game bundle.
     // `outputDir` is the parent output directory. The pipeline creates
     // `<outputDir>/<project-name>_bundle`.
     static BuildResult build(const ProjectManifest& manifest,

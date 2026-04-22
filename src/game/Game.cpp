@@ -36,6 +36,44 @@ RenderRuntimeInfo extractRenderInfo(const nlohmann::json& entityJson)
     }
     return out;
 }
+
+bool snapToNearestWalkable(const World& world, float& x, float& y, const char* label)
+{
+    if (world.isWalkable(x, y)) return false;
+
+    const float origX = x;
+    const float origY = y;
+
+    const int baseTx = std::clamp(static_cast<int>(x), 0, WORLD_W - 1);
+    const int baseTy = std::clamp(static_cast<int>(y), 0, WORLD_H - 1);
+
+    static constexpr int kMaxRadius = 24;
+    for (int r = 1; r <= kMaxRadius; ++r) {
+        for (int dy = -r; dy <= r; ++dy) {
+            for (int dx = -r; dx <= r; ++dx) {
+                if (std::abs(dx) != r && std::abs(dy) != r) continue; // ring border only
+
+                const int tx = baseTx + dx;
+                const int ty = baseTy + dy;
+                if (tx < 0 || tx >= WORLD_W || ty < 0 || ty >= WORLD_H) continue;
+
+                const float wx = static_cast<float>(tx) + 0.5f;
+                const float wy = static_cast<float>(ty) + 0.5f;
+                if (world.isWalkable(wx, wy)) {
+                    x = wx;
+                    y = wy;
+                    std::printf("[WARN] Spawn relocated (%s): (%.2f, %.2f) -> (%.2f, %.2f)\n",
+                                label ? label : "Entity", origX, origY, x, y);
+                    return true;
+                }
+            }
+        }
+    }
+
+    std::printf("[ERROR] Could not find walkable spawn for %s near (%.2f, %.2f)\n",
+                label ? label : "Entity", origX, origY);
+    return false;
+}
 } // namespace
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -170,6 +208,7 @@ bool Game::loadSceneFile()
                 // Reposition player
                 player_.x = ex;
                 player_.y = ey;
+                snapToNearestWalkable(world_, player_.x, player_.y, "Player");
                 playerSprite_ = rr.sprite;
                 playerSpriteVisible_ = rr.visible;
 
@@ -201,6 +240,9 @@ bool Game::loadSceneFile()
                 } else {
                     enemies_.push_back(std::make_unique<Enemy>(ex, ey, name));
                 }
+                if (!enemies_.empty()) {
+                    snapToNearestWalkable(world_, enemies_.back()->x, enemies_.back()->y, name.c_str());
+                }
                 enemySprites_.push_back(rr.sprite);
                 enemySpriteVisible_.push_back(rr.visible);
             }
@@ -226,13 +268,17 @@ void Game::spawnEnemiesFromData()
     };
 
     for (auto& s : spawns) {
+        float sx = cx + s.ox;
+        float sy = cy + s.oy;
+        snapToNearestWalkable(world_, sx, sy, s.type);
+
         if (auto* data = gameDb_.findEnemy(s.type)) {
             enemies_.push_back(
-                std::make_unique<Enemy>(cx + s.ox, cy + s.oy, *data));
+                std::make_unique<Enemy>(sx, sy, *data));
         } else {
             // Fallback: create with default constructor using type as name
             enemies_.push_back(
-                std::make_unique<Enemy>(cx + s.ox, cy + s.oy, std::string(s.type)));
+                std::make_unique<Enemy>(sx, sy, std::string(s.type)));
         }
         enemySprites_.push_back("default");
         enemySpriteVisible_.push_back(true);

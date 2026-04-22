@@ -167,9 +167,9 @@ graph TD
 
 ### Build & Run Button (🔨)
 
-Se ha **revertido** a compilar/lanzar `IsometricRPG` (juego standalone en SDL2), NO Vulkan.
-- Compilation: `make IsometricRPG`
-- Execution: `IsometricRPG --scene <tempfile.json>`
+Estado actual: flujo **Vulkan-only** con `VulkanBootstrap` como runtime standalone.
+- Compilation: `make VulkanBootstrap`
+- Execution: `VulkanBootstrap --scene <tempfile.json>`
 
 ---
 
@@ -198,8 +198,8 @@ Para confirmar que el fixed funciona:
    - La ventana Vulkan debería cerrarse
    - Debería volver a Edit mode
 4. **Presiona Build & Run** (🔨):
-   - Debería compilar `IsometricRPG`
-   - Debería lanzar el juego en fullscreen/window separado
+  - Debería compilar `VulkanBootstrap`
+  - Debería lanzar el runtime en window separado
 
 ---
 

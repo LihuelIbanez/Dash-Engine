@@ -8,7 +8,7 @@ Un **proyecto** (`.dashproject`) es la unidad de trabajo del editor: especifica 
 
 **Resultado esperado al completar el sprint:**
 1. `DashEngine` abre/crea proyectos `.dashproject` y sabe dónde están sus assets/scenes.
-2. `IsometricRPG` (o cualquier game bundle) corre de forma completamente autónoma sin dependencias del editor.
+2. `VulkanBootstrap` (o cualquier game bundle) corre de forma completamente autónoma sin dependencias del editor.
 3. El editor puede "Build Game" → genera un bundle listo para distribuir.
 4. Los paths de assets son relativos al proyecto, no al binario del editor.
 5. Tests de integración validan la separación (ningún header de editor en game core).
@@ -232,7 +232,7 @@ cmake/
   GameBundle.cmake        ← función helper para generar un game bundle
 src/
   game/
-    CMakeLists.txt        ← target game_runtime (lib estática), target IsometricRPG (exe)
+    CMakeLists.txt        ← target game_runtime (lib estática), target VulkanBootstrap (exe)
   editor/
     CMakeLists.txt        ← target DashEngine (exe), depende de game_runtime
 ```
@@ -260,7 +260,7 @@ src/
 
 ### Criterio de aceptación
 - `cmake --build build --target game_runtime` compila sin errores.
-- `cmake --build build --target IsometricRPG` compila sin incluir ningún header de `src/editor/`.
+- `cmake --build build --target VulkanBootstrap` compila sin incluir ningún header de `src/editor/`.
 - `cmake --build build --target DashEngine` compila completo.
 
 ---
@@ -276,7 +276,7 @@ src/
 
 ```
 Editor → "Build Game" → GameBuildPipeline::build(manifest, outputDir)
-  1. Compilar target IsometricRPG si está desactualizado.
+  1. Compilar target VulkanBootstrap si está desactualizado.
   2. Copiar binario a outputDir/bin/.
   3. Copiar manifest.assetsDir/ → outputDir/assets/.
   4. Copiar manifest.scenesDir/ → outputDir/scenes/.
@@ -486,7 +486,7 @@ Dash-Engine/                        ← repositorio / workspace del editor
 │   ├── entities/
 │   ├── world/
 │   ├── rendering/
-│   ├── game/                       ← game_runtime lib + IsometricRPG exe
+│   ├── game/                       ← game_runtime lib + VulkanBootstrap exe
 │   │   ├── CMakeLists.txt
 │   │   └── rendering/
 │   │       └── SpriteRenderer.h/.cpp  ← NUEVO, reemplaza uso de TextureCache

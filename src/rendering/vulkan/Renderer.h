@@ -71,6 +71,9 @@ private:
     dash::physics::Transform3 cubeTransform_{};
     std::vector<RenderInstance> sceneInstances_;
     std::vector<RenderInstance> terrainInstances_;
+    std::vector<float> terrainHeightMap_;
+    int terrainMapWidth_ = 0;
+    int terrainMapHeight_ = 0;
     int floorBodyId_ = -1;
     int cubeBodyId_ = -1;
     float fixedAccumulator_ = 0.0f;
@@ -87,7 +90,9 @@ private:
 
     // Player position (from scene)
     float playerX_ = 32.0f;
+    float playerY_ = 1.0f;
     float playerZ_ = 32.0f;
+    float playerVelY_ = 0.0f;
     float followDistance_ = 8.0f;
     float followHeight_ = 2.5f;
 

@@ -355,6 +355,11 @@ void World::drawTile(SDL_Renderer* renderer,
 
 void World::draw(SDL_Renderer* renderer, float camX, float camY) const
 {
+    // Coarse culling for large worlds: skip tiles far outside viewport footprint.
+    const float maxIsoReach = (static_cast<float>(SCREEN_W) / TILE_W)
+                            + (static_cast<float>(SCREEN_H) / TILE_H)
+                            + 10.0f;
+
     // Painter's algorithm: iterate by increasing (row + col) depth,
     // so tiles farther from camera are drawn first.
     for (int depth = 0; depth < WORLD_W + WORLD_H - 1; ++depth) {
@@ -362,8 +367,12 @@ void World::draw(SDL_Renderer* renderer, float camX, float camY) const
         int colEnd   = std::min(WORLD_W - 1, depth);
         for (int col = colStart; col <= colEnd; ++col) {
             int row = depth - col;
-            if (row >= 0 && row < WORLD_H)
+            if (row >= 0 && row < WORLD_H) {
+                const float dx = std::fabs((col + 0.5f) - camX);
+                const float dy = std::fabs((row + 0.5f) - camY);
+                if ((dx + dy) > maxIsoReach) continue;
                 drawTile(renderer, col, row, camX, camY);
+            }
         }
     }
 }

@@ -5,6 +5,7 @@
 #include <cstdlib>
 #include <cmath>
 #include <algorithm>
+#include <cstdio>
 
 Enemy::Enemy(float x, float y, const std::string& name)
     : Character(x, y, CharacterClass::Enemy, 60, name)
@@ -51,6 +52,12 @@ void Enemy::pickNewPatrolDir()
 // ─── AI update ────────────────────────────────────────────────────────────────
 void Enemy::updateAI(float dt, float playerX, float playerY, const World* world)
 {
+    movementWorld_ = world;
+
+    // Process cooldowns at the beginning of the AI phase so any attack trigger
+    // remains visible to CombatSystem during this frame.
+    tickCooldowns(dt);
+
     float dist = distTo(playerX, playerY);
     vx = 0.f;  vy = 0.f;
 
@@ -153,13 +160,65 @@ void Enemy::updateAI(float dt, float playerX, float playerY, const World* world)
 
 void Enemy::update(float dt)
 {
-    tickCooldowns(dt);
-    // Move using velocity set by updateAI()
-    x += vx * stats.speed * dt;
-    y += vy * stats.speed * dt;
+    // Physics-style movement: accelerate toward AI intent and apply damping.
+    auto approach = [](float current, float target, float maxDelta) {
+        const float delta = target - current;
+        if (delta > maxDelta) return current + maxDelta;
+        if (delta < -maxDelta) return current - maxDelta;
+        return target;
+    };
+
+    const float desiredVx = vx * stats.speed;
+    const float desiredVy = vy * stats.speed;
+    const float maxDelta = std::max(0.0f, moveAccel_ * dt);
+    physVelX_ = approach(physVelX_, desiredVx, maxDelta);
+    physVelY_ = approach(physVelY_, desiredVy, maxDelta);
+
+    // Extra drag when no active movement intent.
+    if (std::fabs(vx) < 1e-3f) {
+        physVelX_ *= std::exp(-moveDamping_ * dt);
+    }
+    if (std::fabs(vy) < 1e-3f) {
+        physVelY_ *= std::exp(-moveDamping_ * dt);
+    }
+
+    float nextX = x + physVelX_ * dt;
+    float nextY = y + physVelY_ * dt;
+    bool blockedX = false;
+    bool blockedY = false;
+
+    if (movementWorld_) {
+        const bool currentWalkable = movementWorld_->isWalkable(x, y);
+
+        // Resolve axis independently to allow sliding along walls.
+        if (!currentWalkable || movementWorld_->isWalkable(nextX, y)) {
+            x = nextX;
+        } else {
+            physVelX_ = 0.f;
+            blockedX = true;
+        }
+
+        if (!currentWalkable || movementWorld_->isWalkable(x, nextY)) {
+            y = nextY;
+        } else {
+            physVelY_ = 0.f;
+            blockedY = true;
+        }
+    } else {
+        x = nextX;
+        y = nextY;
+    }
 
     x = std::clamp(x, 0.5f, static_cast<float>(WORLD_W) - 1.5f);
     y = std::clamp(y, 0.5f, static_cast<float>(WORLD_H) - 1.5f);
+
+    if (stuckLogCooldown_ > 0.f) stuckLogCooldown_ = std::max(0.f, stuckLogCooldown_ - dt);
+    const bool hasMoveIntent = (std::fabs(vx) + std::fabs(vy)) > 0.2f;
+    if (hasMoveIntent && blockedX && blockedY && stuckLogCooldown_ <= 0.f) {
+        std::printf("[WARN] Enemy movement blocked: name=%s pos=(%.2f,%.2f) intent=(%.2f,%.2f)\n",
+                    name.c_str(), x, y, vx, vy);
+        stuckLogCooldown_ = 2.0f;
+    }
 }
 
 // ─── Draw ─────────────────────────────────────────────────────────────────────

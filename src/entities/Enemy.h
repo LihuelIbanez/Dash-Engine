@@ -46,6 +46,14 @@ private:
     float      patrolDirY_ = 0.f;
     float      patrolTimer_= 0.f;
 
+    // Movement physics state
+    float      physVelX_   = 0.f;
+    float      physVelY_   = 0.f;
+    float      moveAccel_  = 10.0f; // units/s^2 toward desired velocity
+    float      moveDamping_= 8.0f;  // exponential drag when no intent
+    const class World* movementWorld_ = nullptr;
+    float      stuckLogCooldown_ = 0.f;
+
     // A* path cache
     std::vector<NavPoint> path_;
     int                   pathIdx_       = 0;

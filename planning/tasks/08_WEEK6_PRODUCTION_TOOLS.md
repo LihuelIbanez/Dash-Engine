@@ -283,7 +283,7 @@ Generar un distribuible del juego y del editor como .app bundle en macOS, con as
   - `DASH_BUILD_DATE` (via `string(TIMESTAMP ...)`).
 - Reglas de install():
   - `install(TARGETS DashEngine BUNDLE DESTINATION .)`.
-  - `install(TARGETS IsometricRPG RUNTIME DESTINATION .)`.
+  - `install(TARGETS VulkanBootstrap RUNTIME DESTINATION .)`.
   - `install(DIRECTORY assets/ DESTINATION DashEngine.app/Contents/Resources/assets)`.
   - `install(DIRECTORY library/ DESTINATION DashEngine.app/Contents/Resources/library)`.
   - `install(DIRECTORY scenes/ DESTINATION DashEngine.app/Contents/Resources/scenes)`.
@@ -338,7 +338,7 @@ Generar un distribuible del juego y del editor como .app bundle en macOS, con as
 - `cmake --build . --target package` genera un .dmg funcional.
 - El .app bundle arranca y encuentra assets sin paths absolutos.
 - La version y commit hash se muestran en el About dialog.
-- El juego standalone (IsometricRPG) tambien se puede empaquetar.
+- El runtime standalone (VulkanBootstrap) tambien se puede empaquetar.
 
 ---
 

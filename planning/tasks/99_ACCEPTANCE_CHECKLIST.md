@@ -23,7 +23,7 @@ Usa este archivo para control de cierre por fase.
 - [x] Game update migrado a scheduler + sistemas. *(SystemScheduler, RuntimeContext, MovementSystem/AISystem/CombatSystem/SpawnRewardSystem — D15)*
 - [x] Gameplay configurable desde archivos de datos. *(GameplayDatabase carga player_classes.json, enemies.json, loot_tables.json; Enemy ctor data-driven — D16)*
 - [x] AI con pathfinding A* usando costos de terreno. *(GridNav A* con costos por TileType, AISystem usa pathfinding — D14)*
-- [x] Paridad funcional mantenida respecto al comportamiento previo. *(build standalone IsometricRPG funcional, sin regresiones — D30)*
+- [x] Paridad funcional mantenida respecto al comportamiento previo. *(build standalone VulkanBootstrap funcional, sin regresiones — D30)*
 
 ## Fase D - Produccion y QA
 

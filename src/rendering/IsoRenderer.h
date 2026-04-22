@@ -12,8 +12,8 @@ constexpr int SCREEN_W = 1280;
 constexpr int SCREEN_H = 720;
 
 // ─── World dimensions ─────────────────────────────────────────────────────────
-constexpr int WORLD_W = 64;
-constexpr int WORLD_H = 64;
+constexpr int WORLD_W = 256;
+constexpr int WORLD_H = 256;
 
 // ─── 2-D vector helpers ───────────────────────────────────────────────────────
 struct Vec2f { float x, y; };

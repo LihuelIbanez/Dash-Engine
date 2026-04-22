@@ -34,7 +34,7 @@ Prerequisito: Sprint 2 (D21-D30) completado. Tag v2.0-alpha etiquetado.
 `EditorApp.cpp` y `Game::init()` construyen rutas con la macro de compilacion `PROJECT_DIR` que contiene el path absoluto del directorio de desarrollo. Cuando se distribuye el .app bundle, estos paths apuntan a una maquina inexistente.
 
 - En el editor, los recursos estan en `DashEngine.app/Contents/Resources/`.
-- En el standalone `IsometricRPG`, SDL2 expone `SDL_GetBasePath()` que devuelve el directorio del binario.
+- En el runtime standalone `VulkanBootstrap`, la ruta base del ejecutable debe resolverse en tiempo de ejecucion para acceder a recursos del bundle.
 
 ### Archivos a crear
 

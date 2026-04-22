@@ -3197,14 +3197,34 @@ void EditorApp::buildAndRun()
     if (ret == 0) {
         addLog("[VOK] Build OK. Launching Vulkan runtime...");
 
-        // Save the current scene to a temp file so the game can load it
+        // Export scene + tilemap to temp file so Vulkan has full terrain data.
         std::string tempScene = std::string(BUILD_DIR) + "/_play_scene.json";
         std::string prevPath = scene_.filePath;
         bool prevMod = scene_.modified;
         if (scene_.saveToFile(tempScene)) {
+            std::ifstream in(tempScene);
+            json j;
+            if (in >> j) {
+                in.close();
+                std::vector<int> tilemap;
+                tilemap.reserve(WORLD_W * WORLD_H);
+                for (int y = 0; y < WORLD_H; ++y) {
+                    for (int x = 0; x < WORLD_W; ++x) {
+                        tilemap.push_back(static_cast<int>(world_.grid[y][x].type));
+                    }
+                }
+                j["tilemap"] = tilemap;
+                j["worldWidth"] = WORLD_W;
+                j["worldHeight"] = WORLD_H;
+                std::ofstream out(tempScene);
+                out << j.dump(2);
+                out.close();
+            }
+
             scene_.filePath = prevPath;
             scene_.modified = prevMod;
             addLog("[VOK] Scene exported to " + tempScene);
+            addLog("[VSTEP] Tilemap exported (" + std::to_string(WORLD_W * WORLD_H) + " tiles)");
         } else {
             addLog("[VFAIL] Could not export scene, launching with defaults.");
             tempScene.clear();
@@ -3253,7 +3273,7 @@ void EditorApp::buildAndRun()
             return;
         }
 
-        // Bring the Vulkan window to front on macOS
+        // Bring Vulkan window to front on macOS
         std::system("osascript -e 'delay 0.3' "
                     "-e 'tell application \"System Events\"' "
                     "-e '  set frontmost of (first process whose name is \"VulkanBootstrap\") to true' "

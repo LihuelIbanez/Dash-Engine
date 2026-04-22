@@ -41,7 +41,7 @@ El proyecto compila dos binarios desde un mismo código base compartido:
 | Binario | Descripción |
 |---|---|
 | `DashEngine` | Editor visual de niveles (Dear ImGui, estilo Unreal) |
-| `IsometricRPG` | Ejecutable del juego (SDL2, sin GUI de editor) |
+| `VulkanBootstrap` | Runtime 3D Vulkan standalone (sin GUI de editor) |
 
 Ambos comparten la librería estática `game_core` que contiene el mundo, las entidades, pathfinding y profiling.
 
@@ -161,7 +161,7 @@ Dash-Engine/
   - Snapshot automático al entrar, restauración completa al salir
 - **Herramientas:** Select, Paint Tile, Place Enemy, Erase
 - **Escenas:** New, Open (dialog), Save / Save As (JSON versionado)
-- **Build & Run:** compila y lanza `IsometricRPG` como proceso externo
+- **Build & Run:** compila y lanza `VulkanBootstrap` como proceso externo
 - **Dirty state:** modal "Unsaved Changes" (Save/Discard/Cancel), título con `*`
 - Tema oscuro estilo Unreal Engine, cursors personalizados por herramienta
 
@@ -231,8 +231,8 @@ make -j$(nproc)
 # Editor
 ./DashEngine
 
-# Juego standalone
-./IsometricRPG
+# Runtime standalone
+./VulkanBootstrap
 
 # Tests
 cmake .. -DBUILD_TESTING=ON && make -j$(nproc)

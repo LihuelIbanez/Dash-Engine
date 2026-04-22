@@ -36,9 +36,11 @@ install(TARGETS DashEngine
     BUNDLE  DESTINATION .
     RUNTIME DESTINATION .
 )
-install(TARGETS IsometricRPG
-    RUNTIME DESTINATION .
-)
+if(TARGET VulkanBootstrap)
+    install(TARGETS VulkanBootstrap
+        RUNTIME DESTINATION .
+    )
+endif()
 install(DIRECTORY "${CMAKE_SOURCE_DIR}/assets/"
     DESTINATION "DashEngine.app/Contents/Resources/assets"
 )

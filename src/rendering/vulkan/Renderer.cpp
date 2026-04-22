@@ -279,6 +279,33 @@ static dash::physics::Vec3 getTileColor(int tileType)
     }
 }
 
+static float getTileHeight(int tileType)
+{
+    // Match editor's isometric terrain elevation profile.
+    switch (tileType) {
+        case 0: return -0.30f; // DeepWater
+        case 1: return -0.16f; // Water
+        case 2: return  0.00f; // Sand
+        case 3: return  0.05f; // Grass
+        case 4: return  0.14f; // Forest
+        case 5: return  0.08f; // Dirt
+        case 6: return  0.22f; // Stone
+        case 7: return  0.42f; // Mountain
+        case 8: return  0.50f; // Snow
+        default: return 0.05f;
+    }
+}
+
+static float sampleTerrainHeight(const std::vector<float>& mapHeights, int mapWidth, int mapHeight, float x, float z)
+{
+    if (mapHeights.empty() || mapWidth <= 0 || mapHeight <= 0) return 0.0f;
+    int tx = static_cast<int>(std::round(x));
+    int tz = static_cast<int>(std::round(z));
+    tx = std::max(0, std::min(mapWidth - 1, tx));
+    tz = std::max(0, std::min(mapHeight - 1, tz));
+    return mapHeights[static_cast<size_t>(tz * mapWidth + tx)];
+}
+
 // Helper: Load player position from scene JSON
 static bool loadPlayerPosition(const std::string& scenePath, float& outX, float& outZ)
 {
@@ -308,9 +335,17 @@ static bool loadPlayerPosition(const std::string& scenePath, float& outX, float&
     return false;
 }
 
-static std::vector<Renderer::RenderInstance> loadTerrainInstances(const std::string& scenePath)
+static std::vector<Renderer::RenderInstance> loadTerrainInstances(
+    const std::string& scenePath,
+    std::vector<float>* outHeightMap,
+    int* outMapWidth,
+    int* outMapHeight)
 {
     std::vector<Renderer::RenderInstance> out;
+    if (outHeightMap) outHeightMap->clear();
+    if (outMapWidth) *outMapWidth = 0;
+    if (outMapHeight) *outMapHeight = 0;
+
     std::ifstream in(scenePath);
     if (!in.is_open()) return out;
 
@@ -325,6 +360,13 @@ static std::vector<Renderer::RenderInstance> loadTerrainInstances(const std::str
     if (j.contains("tilemap") && j["tilemap"].is_array()) {
         const auto& tilemap = j["tilemap"];
         const int worldWidth = j.value("worldWidth", 64);
+        const int worldHeight = j.value("worldHeight", worldWidth > 0 ? static_cast<int>(tilemap.size()) / worldWidth : 0);
+
+        if (outHeightMap && worldWidth > 0 && worldHeight > 0) {
+            outHeightMap->assign(static_cast<size_t>(worldWidth * worldHeight), 0.0f);
+            if (outMapWidth) *outMapWidth = worldWidth;
+            if (outMapHeight) *outMapHeight = worldHeight;
+        }
         
         // Render all tiles with their corresponding colors
         for (int idx = 0; idx < static_cast<int>(tilemap.size()); ++idx) {
@@ -333,9 +375,14 @@ static std::vector<Renderer::RenderInstance> loadTerrainInstances(const std::str
             
             const int tileType = tilemap[idx].is_number() ? tilemap[idx].get<int>() : 3;  // Default to Grass
             const dash::physics::Vec3 color = getTileColor(tileType);
+            const float h = getTileHeight(tileType);
+
+            if (outHeightMap && idx < static_cast<int>(outHeightMap->size())) {
+                (*outHeightMap)[static_cast<size_t>(idx)] = h;
+            }
             
             out.push_back({
-                {static_cast<float>(x), -1.05f, static_cast<float>(y)},
+                {static_cast<float>(x), h, static_cast<float>(y)},
                 {0.48f, 0.03f, 0.48f},
                 color
             });
@@ -791,18 +838,23 @@ bool Renderer::init(WindowContext& window)
         }
 
         sceneInstances_ = loadSceneInstances(scenePath_);
-        terrainInstances_ = loadTerrainInstances(scenePath_);
+        terrainInstances_ = loadTerrainInstances(scenePath_, &terrainHeightMap_, &terrainMapWidth_, &terrainMapHeight_);
         std::fprintf(stderr, "[VSTEP] scene instances loaded: %zu\n", sceneInstances_.size());
         std::fprintf(stderr, "[VSTEP] terrain instances loaded: %zu\n", terrainInstances_.size());
 
             // Load player position for WASD movement
             if (loadPlayerPosition(scenePath_, playerX_, playerZ_)) {
                 playerLoaded_ = true;
+                const float playerHalfHeight = 0.52f;
+                playerY_ = sampleTerrainHeight(terrainHeightMap_, terrainMapWidth_, terrainMapHeight_, playerX_, playerZ_) + playerHalfHeight;
+                playerVelY_ = 0.0f;
                 std::fprintf(stderr, "[VSTEP] Player position loaded: (%.2f, %.2f)\n", playerX_, playerZ_);
             } else {
                 playerLoaded_ = false;
                 playerX_ = 32.0f;
                 playerZ_ = 32.0f;
+                playerY_ = 1.0f;
+                playerVelY_ = 0.0f;
                 std::fprintf(stderr, "[VSTEP] Player position not found, using default (32, 32)\n");
             }
     }
@@ -960,9 +1012,29 @@ bool Renderer::runSmoke(WindowContext& window, uint32_t targetFrames)
                 playerZ_ += (inputZ / len) * moveSpeed * dt;
             }
 
+            // Keep movement inside terrain bounds when map dimensions are known.
+            if (terrainMapWidth_ > 0) {
+                playerX_ = std::max(0.0f, std::min(static_cast<float>(terrainMapWidth_ - 1), playerX_));
+            }
+            if (terrainMapHeight_ > 0) {
+                playerZ_ = std::max(0.0f, std::min(static_cast<float>(terrainMapHeight_ - 1), playerZ_));
+            }
+
+            // Apply gravity against terrain height.
+            const float playerHalfHeight = 0.52f;
+            const float gravity = -9.8f;
+            playerVelY_ += gravity * dt;
+            playerY_ += playerVelY_ * dt;
+            const float groundY = sampleTerrainHeight(terrainHeightMap_, terrainMapWidth_, terrainMapHeight_, playerX_, playerZ_) + playerHalfHeight;
+            if (playerY_ < groundY) {
+                playerY_ = groundY;
+                if (playerVelY_ < 0.0f) playerVelY_ = 0.0f;
+            }
+
             for (auto& instance : sceneInstances_) {
                 if (instance.isPlayer) {
                     instance.position.x = playerX_;
+                    instance.position.y = playerY_;
                     instance.position.z = playerZ_;
                 }
             }
@@ -975,7 +1047,7 @@ bool Renderer::runSmoke(WindowContext& window, uint32_t targetFrames)
             const float fy = std::sin(pitchRad);
             const float fz = std::sin(yawRad) * std::cos(pitchRad);
 
-            const float targetY = 1.0f;
+            const float targetY = playerY_;
             cameraX_ = playerX_ - fx * followDistance_;
             cameraY_ = targetY - fy * followDistance_ + followHeight_;
             cameraZ_ = playerZ_ - fz * followDistance_;

@@ -84,8 +84,8 @@ playSession_.restore(scene_, world_);
 
 #### Antes:
 ```cpp
-// Compilar IsometricRPG (SDL game)
-std::string cmd = "... && /usr/bin/make IsometricRPG 2>&1";
+// Compilar VulkanBootstrap (Vulkan runtime)
+std::string cmd = "... && /usr/bin/make VulkanBootstrap 2>&1";
 
 // Lanzar ejecutable con escena como argumento
 const fs::path executablePath = resolveBuiltGameExecutable(BUILD_DIR);
@@ -110,7 +110,7 @@ spawnTrackedProcess(executablePath, runArgs, pid, launchError);
 ```
 
 **Cambios principales**:
-- Target de compilación: `IsometricRPG` → `VulkanBootstrap`
+- Target de compilación: `VulkanBootstrap`
 - Búsqueda de executable: eliminada `resolveBuiltGameExecutable()`
 - Lanzamiento: `launchDetachedProcess()` → `spawnTrackedProcess()`
 - Args: scene file → `--scene <file>`
@@ -194,7 +194,7 @@ if (editorMode_ == EditorMode::Play && playGame_ && vpHovered) {
 Dos funciones que ya no son necesarias fueron eliminadas:
 
 1. **`resolveBuiltGameExecutable()`**
-   - Buscaba executable `IsometricRPG` en múltiples ubicaciones
+    - Buscaba executable `VulkanBootstrap` en múltiples ubicaciones
    - Ahora usamos `spawnTrackedProcess()` que busca cualquier executable
 
 2. **`launchDetachedProcess()`**
@@ -313,7 +313,7 @@ src/editor/EditorApp.cpp
 | Aspecto | Antes | Después |
 |---------|-------|---------|
 | **Play Mode** | Juego 2D SDL embebido renderiza en viewport | Vulkan 3D en window embebida en viewport |
-| **Build & Run** | Compila IsometricRPG (SDL game) | Compila VulkanBootstrap (Vulkan 3D) |
+| **Build & Run** | Compila VulkanBootstrap (Vulkan runtime) | Compila VulkanBootstrap (Vulkan 3D) |
 | **Rendering** | Merged (game + editor en mismo texture) | Separated (Vulkan en window, editor en ImGui) |
 | **Input** | Editor inyecta clicks a Game | Vulkan maneja su propio input |
 | **Backend** | SDL2 Renderer | Vulkan experimental backend |

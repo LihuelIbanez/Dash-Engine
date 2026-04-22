@@ -1,9 +1,9 @@
 {
   "sessions": [
     {
-      "endedAt": "2026-04-09T23:10:29",
+      "endedAt": "2026-04-10T10:10:21",
       "logs": [
-        "[AUDIT] Play session started at 2026-04-09T23:10:05",
+        "[AUDIT] Play session started at 2026-04-10T10:10:15",
         "[VSTEP] enterPlayMode begin",
         "[VSTEP] Current scene name: Default Scene",
         "[VSTEP] Current scene entities: 6",
@@ -14,23 +14,23 @@
         "[VSTEP]   Entity[4]: Zombie (type=Enemy)",
         "[VSTEP]   Entity[5]: Skeleton (type=Enemy)",
         "[VSTEP] play scene export ok: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/_play_scene.json",
-        "[VSTEP] Tilemap exported (4096 tiles)",
+        "[VSTEP] Tilemap exported (65536 tiles)",
         "[VOK] Entered Play mode (Vulkan 3D starting...).",
         "[VSTEP] startVulkanPreview begin",
         "[VSTEP] checking preview candidate: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/VulkanBootstrap",
         "[VSTEP] using VulkanBootstrap executable: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/VulkanBootstrap",
         "[Vulkan] Launch args: --editor-preview --embedded-window --scene /Users/lihuelibanez/Development/proyects/Dash-Engine/build/_play_scene.json --state /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json",
         "[VSTEP] preview log path: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_preview.log",
-        "[VOK] Preview started (pid=46596) [embedded].",
+        "[VOK] Preview started (pid=62729) [embedded].",
         "[AUDIT] Session end reason: play_stopped"
       ],
       "reason": "play_stopped",
-      "startedAt": "2026-04-09T23:10:05"
+      "startedAt": "2026-04-10T10:10:15"
     },
     {
-      "endedAt": "2026-04-10T08:54:45",
+      "endedAt": "2026-04-22T16:08:05",
       "logs": [
-        "[AUDIT] Play session started at 2026-04-10T08:54:30",
+        "[AUDIT] Play session started at 2026-04-22T16:07:51",
         "[VSTEP] enterPlayMode begin",
         "[VSTEP] Current scene name: Default Scene",
         "[VSTEP] Current scene entities: 6",
@@ -41,18 +41,18 @@
         "[VSTEP]   Entity[4]: Zombie (type=Enemy)",
         "[VSTEP]   Entity[5]: Skeleton (type=Enemy)",
         "[VSTEP] play scene export ok: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/_play_scene.json",
-        "[VSTEP] Tilemap exported (4096 tiles)",
+        "[VSTEP] Tilemap exported (65536 tiles)",
         "[VOK] Entered Play mode (Vulkan 3D starting...).",
         "[VSTEP] startVulkanPreview begin",
         "[VSTEP] checking preview candidate: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/VulkanBootstrap",
         "[VSTEP] using VulkanBootstrap executable: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/VulkanBootstrap",
         "[Vulkan] Launch args: --editor-preview --embedded-window --scene /Users/lihuelibanez/Development/proyects/Dash-Engine/build/_play_scene.json --state /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_viewport_state.json",
         "[VSTEP] preview log path: /Users/lihuelibanez/Development/proyects/Dash-Engine/build/generated/vulkan_preview.log",
-        "[VOK] Preview started (pid=49276) [embedded].",
+        "[VOK] Preview started (pid=93643) [embedded].",
         "[AUDIT] Session end reason: play_stopped"
       ],
       "reason": "play_stopped",
-      "startedAt": "2026-04-10T08:54:30"
+      "startedAt": "2026-04-22T16:07:51"
     }
   ]
 }

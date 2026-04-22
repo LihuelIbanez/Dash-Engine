@@ -17,7 +17,7 @@ Los aliases se agregan automáticamente al `.zshrc`. Después de cada nueva term
 |---|---|
 | `dash-build` | Configura CMake (si no existe el build) y compila todos los targets |
 | `dash-editor` | Compila y abre el **editor DashEngine** |
-| `dash-game` | Compila y ejecuta el **juego IsometricRPG** standalone |
+| `dash-game` | Compila y ejecuta el **runtime VulkanBootstrap** standalone |
 | `dash-update` | Hace `git pull` y recompila con los últimos cambios |
 | `dash-clean` | Elimina el directorio `build/` para hacer un build desde cero |
 
@@ -76,8 +76,8 @@ cmake --build build --parallel
 # Solo el editor
 cmake --build build --target DashEngine --parallel
 
-# Solo el juego
-cmake --build build --target IsometricRPG --parallel
+# Solo runtime standalone
+cmake --build build --target VulkanBootstrap --parallel
 ```
 
 ---
@@ -87,7 +87,7 @@ cmake --build build --target IsometricRPG --parallel
 | Archivo | Descripción |
 |---|---|
 | `build/DashEngine` | Editor de niveles (Dear ImGui, estilo Unreal) |
-| `build/IsometricRPG` | Juego standalone (SDL2, sin UI de editor) |
+| `build/VulkanBootstrap` | Runtime standalone (Vulkan 3D, sin UI de editor) |
 
 ---
 

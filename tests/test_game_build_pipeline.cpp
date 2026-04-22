@@ -42,7 +42,7 @@ int main()
     writeText(projectRoot / "scenes" / "default.json", "{}");
 
     // Fake build output executable so pipeline can run in test mode.
-    fs::path fakeExe = buildDir / "src" / "game" / "IsometricRPG";
+    fs::path fakeExe = buildDir / "VulkanBootstrap";
     writeText(fakeExe, "#!/bin/sh\necho fake\n");
     fs::permissions(fakeExe,
                     fs::perms::owner_exec | fs::perms::owner_read | fs::perms::owner_write,
@@ -69,7 +69,7 @@ int main()
     ASSERT(fs::exists(app / "Contents" / "Resources" / "project.json"), "project json written");
 #else
     fs::path bundle = fs::path(res.outputPath);
-    ASSERT(fs::exists(bundle / "bin" / "IsometricRPG"), "bin executable copied");
+    ASSERT(fs::exists(bundle / "bin" / "VulkanBootstrap"), "bin executable copied");
     ASSERT(fs::exists(bundle / "assets" / "sprites" / "hero.png"), "assets copied");
     ASSERT(fs::exists(bundle / "scenes" / "default.json"), "scenes copied");
     ASSERT(fs::exists(bundle / "project.json"), "project json written");
