@@ -34,35 +34,74 @@ set(CMAKE_INSTALL_PREFIX "${CMAKE_BINARY_DIR}/install" CACHE PATH "Install prefi
 
 install(TARGETS DashEngine
     BUNDLE  DESTINATION .
-    RUNTIME DESTINATION .
+    RUNTIME DESTINATION bin
 )
 if(TARGET VulkanBootstrap)
     install(TARGETS VulkanBootstrap
-        RUNTIME DESTINATION .
+        RUNTIME DESTINATION bin
     )
 endif()
-install(DIRECTORY "${CMAKE_SOURCE_DIR}/assets/"
-    DESTINATION "DashEngine.app/Contents/Resources/assets"
-)
-install(DIRECTORY "${CMAKE_SOURCE_DIR}/library/"
-    OPTIONAL
-    DESTINATION "DashEngine.app/Contents/Resources/library"
-)
-install(DIRECTORY "${CMAKE_SOURCE_DIR}/scenes/"
-    DESTINATION "DashEngine.app/Contents/Resources/scenes"
-)
+if(TARGET IsometricRPG)
+    install(TARGETS IsometricRPG
+        RUNTIME DESTINATION bin
+    )
+endif()
 
-# ── CPack (macOS DragNDrop → .dmg) ───────────────────────────────────────────
-set(CPACK_GENERATOR "DragNDrop")
+if(WIN32)
+    # Windows: flat layout — executables and resources in bin/
+    install(DIRECTORY "${CMAKE_SOURCE_DIR}/assets/"
+        DESTINATION "bin/assets"
+    )
+    install(DIRECTORY "${CMAKE_SOURCE_DIR}/library/"
+        OPTIONAL
+        DESTINATION "bin/library"
+    )
+    install(DIRECTORY "${CMAKE_SOURCE_DIR}/scenes/"
+        DESTINATION "bin/scenes"
+    )
+else()
+    # macOS: resources inside .app bundle
+    install(DIRECTORY "${CMAKE_SOURCE_DIR}/assets/"
+        DESTINATION "DashEngine.app/Contents/Resources/assets"
+    )
+    install(DIRECTORY "${CMAKE_SOURCE_DIR}/library/"
+        OPTIONAL
+        DESTINATION "DashEngine.app/Contents/Resources/library"
+    )
+    install(DIRECTORY "${CMAKE_SOURCE_DIR}/scenes/"
+        DESTINATION "DashEngine.app/Contents/Resources/scenes"
+    )
+endif()
+
+# ── CPack ─────────────────────────────────────────────────────────────────────
 set(CPACK_PACKAGE_NAME "DashEngine")
 set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
 set(CPACK_PACKAGE_VERSION_MAJOR "${PROJECT_VERSION_MAJOR}")
 set(CPACK_PACKAGE_VERSION_MINOR "${PROJECT_VERSION_MINOR}")
 set(CPACK_PACKAGE_VERSION_PATCH "${PROJECT_VERSION_PATCH}")
-set(CPACK_PACKAGE_FILE_NAME "DashEngine-${PROJECT_VERSION}-macOS")
-set(CPACK_DMG_VOLUME_NAME "DashEngine ${PROJECT_VERSION}")
-set(CPACK_BUNDLE_NAME "DashEngine")
-set(CPACK_BUNDLE_PLIST "${CMAKE_SOURCE_DIR}/packaging/Info.plist")
-set(CPACK_BUNDLE_ICON "${CMAKE_SOURCE_DIR}/packaging/DashEngine.icns")
+
+if(WIN32)
+    # Windows: ZIP portable + NSIS installer
+    set(CPACK_GENERATOR "ZIP;NSIS")
+    set(CPACK_PACKAGE_FILE_NAME "DashEngine-${PROJECT_VERSION}-Windows")
+    set(CPACK_NSIS_DISPLAY_NAME "DashEngine ${PROJECT_VERSION}")
+    set(CPACK_NSIS_PACKAGE_NAME "DashEngine")
+    set(CPACK_NSIS_INSTALL_ROOT "$PROGRAMFILES64")
+    set(CPACK_NSIS_ENABLE_UNINSTALL_BEFORE_INSTALL ON)
+    set(CPACK_NSIS_CREATE_ICONS_EXTRA
+        "CreateShortCut '$SMPROGRAMS\\\\$STARTMENU_FOLDER\\\\DashEngine.lnk' '$INSTDIR\\\\bin\\\\DashEngine.exe'"
+    )
+    set(CPACK_NSIS_DELETE_ICONS_EXTRA
+        "Delete '$SMPROGRAMS\\\\$START_MENU\\\\DashEngine.lnk'"
+    )
+else()
+    # macOS: DragNDrop → .dmg
+    set(CPACK_GENERATOR "DragNDrop")
+    set(CPACK_PACKAGE_FILE_NAME "DashEngine-${PROJECT_VERSION}-macOS")
+    set(CPACK_DMG_VOLUME_NAME "DashEngine ${PROJECT_VERSION}")
+    set(CPACK_BUNDLE_NAME "DashEngine")
+    set(CPACK_BUNDLE_PLIST "${CMAKE_SOURCE_DIR}/packaging/Info.plist")
+    set(CPACK_BUNDLE_ICON "${CMAKE_SOURCE_DIR}/packaging/DashEngine.icns")
+endif()
 
 include(CPack)

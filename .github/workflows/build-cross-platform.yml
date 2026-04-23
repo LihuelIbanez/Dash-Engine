@@ -1,0 +1,85 @@
+name: Build Cross-Platform
+
+on:
+  push:
+    branches: [main, feat/vulkan]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-macos:
+    name: macOS (AppleClang)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          brew install sdl2 glfw glm assimp molten-vk vulkan-headers
+
+      - name: Configure CMake
+        run: |
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_TESTING=ON
+
+      - name: Build
+        run: cmake --build build --parallel $(sysctl -n hw.ncpu)
+
+      - name: Run tests
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Upload binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: DashEngine-macOS
+          path: |
+            build/DashEngine
+            build/VulkanBootstrap
+            build/IsometricRPG
+          if-no-files-found: warn
+          retention-days: 14
+
+  build-windows:
+    name: Windows (MSVC)
+    runs-on: windows-latest
+    env:
+      VCPKG_DEFAULT_TRIPLET: x64-windows
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgGitCommitId: '01f602195983451bc83e72f4214af2cbc495aa94'
+          runVcpkgInstall: true
+
+      - name: Install Vulkan SDK
+        uses: humbletim/install-vulkan-sdk@v1.2.1
+        with:
+          version: latest
+          cache: true
+
+      - name: Configure CMake
+        run: |
+          cmake -B build `
+            -DCMAKE_TOOLCHAIN_FILE="${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake" `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DBUILD_TESTING=ON
+
+      - name: Build
+        run: cmake --build build --config Release --parallel
+
+      - name: Run tests
+        run: ctest --test-dir build --build-config Release --output-on-failure
+
+      - name: Upload binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: DashEngine-Windows
+          path: |
+            build/Release/DashEngine.exe
+            build/Release/VulkanBootstrap.exe
+            build/Release/IsometricRPG.exe
+          if-no-files-found: warn
+          retention-days: 14

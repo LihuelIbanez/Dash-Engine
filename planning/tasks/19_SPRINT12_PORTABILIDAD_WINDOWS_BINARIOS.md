@@ -4,10 +4,16 @@
 
 Conseguir build reproducible en Windows sin romper macOS, con ejecutable empaquetado y flujo CI basico.
 
-**Estado: 🔧 PARCIAL (80%)**
+**Estado: ✅ COMPLETADO**
 
-D106-D109 completados (CMake cross-platform, MSVC flags, AppPaths, build scripts).
-D110 pendiente (CI/CD con GitHub Actions).
+### Implementacion
+- CMakePresets.json con presets macOS/Windows (release + debug)
+- Packaging.cmake cross-platform: DMG en macOS, ZIP+NSIS en Windows
+- VulkanPlatformConfig no fue necesario: GLFW abstrae plataforma, portability extensions detectadas dinamicamente
+- MSVC flags (/W4 /O2 /wd4996) + AppPaths.h con _WIN32 guards
+- GitHub Actions CI/CD dual (macOS + Windows) con vcpkg + Vulkan SDK
+- packaging/windows/install_app.bat para empaquetado portable
+- build_windows.ps1 + dash.ps1 para build y CLI en Windows
 
 ---
 
