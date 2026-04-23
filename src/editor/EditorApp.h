@@ -116,6 +116,9 @@ private:
         float zoom = 1.0f;
         float heightScale = 32.0f;
         float gridOpacity = 0.22f;
+        bool  fogEnabled = true;
+        float fogStart = 40.0f;
+        float fogEnd = 80.0f;
     } viewport3D_;
 
     bool vulkanPreviewAvailable_ = false;
@@ -133,9 +136,16 @@ private:
     float vpScreenY_ = 0.f;
 
     // ── Tools ────────────────────────────────────────────────────────────────
-    enum class Tool { Select, PaintTile, PlaceEnemy, Erase };
+    enum class Tool { Select, PaintTile, FillTile, EyeDropper, HeightBrush, PlaceEnemy, Erase };
     Tool     currentTool_      = Tool::Select;
     TileType selectedTileType_ = TileType::Grass;
+    int      brushSize_        = 1;
+
+    // Height brush settings
+    enum class HeightBrushMode { Raise, Lower, Smooth, Flatten };
+    HeightBrushMode heightBrushMode_     = HeightBrushMode::Raise;
+    float           heightBrushStrength_ = 0.05f;
+    int             heightBrushRadius_   = 2;
 
     // ── File dialogs ─────────────────────────────────────────────────────────
     std::string              scenesDir_;
@@ -253,6 +263,8 @@ private:
     bool viewportScreenToWorld(float vx, float vy, float& wx, float& wy);
     void handleToolClick(float wx, float wy);
     void paintTileAt(float wx, float wy);
+    void floodFillAt(float wx, float wy);
+    void heightBrushAt(float wx, float wy);
 
     void addLog(const std::string& msg);
     void beginPlayAuditSession();

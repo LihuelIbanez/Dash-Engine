@@ -88,6 +88,8 @@ void Game::initSystems()
     ctx_.score   = &score_;
     ctx_.events  = &dispatcher_;
 
+    player_.setWorld(&world_);
+
     scheduler_.addSystem(std::make_unique<MovementSystem>());
     scheduler_.addSystem(std::make_unique<AISystem>());
     scheduler_.addSystem(std::make_unique<CombatSystem>());
@@ -141,8 +143,8 @@ bool Game::screenToWorld(int mx, int my, float& wx, float& wy) const
     float sx = static_cast<float>(mx);
     float sy = static_cast<float>(my);
 
-    float u = (sx - SCREEN_W * 0.5f) * 2.f / TILE_W;  // rx - ry
-    float v = (sy - SCREEN_H * 0.5f) * 2.f / TILE_H;  // rx + ry
+    float u = (sx - SCREEN_W * 0.5f) * 2.f / (TILE_W * TILE_SCALE);  // rx - ry
+    float v = (sy - SCREEN_H * 0.5f) * 2.f / (TILE_H * TILE_SCALE);  // rx + ry
 
     float rx = (u + v) * 0.5f;
     float ry = (v - u) * 0.5f;
@@ -334,12 +336,15 @@ void Game::getSpritePivot(const std::string& spriteName, float& outPivotX, float
     outPivotY = meta.pivotY;
 }
 
-bool Game::drawSpriteAtWorld(float wx, float wy, const std::string& spriteName, bool visible,
+bool Game::drawSpriteAtWorld(float wx, float wy, float wz, const std::string& spriteName, bool visible,
                              float camX, float camY)
 {
     if (!visible || spriteName.empty() || spriteName == "default") return false;
 
     Vec2f s = worldToScreen(wx, wy, camX, camY);
+    const float heightPixels = TILE_SCALE * 32.0f;
+    s.y -= wz * heightPixels;
+
     float pivotX = 0.5f;
     float pivotY = 1.0f;
     getSpritePivot(spriteName, pivotX, pivotY);
@@ -352,6 +357,8 @@ void Game::drawSpriteOverlays(const Entity& entity, bool isAttacking,
                               float camX, float camY)
 {
     Vec2f s = worldToScreen(entity.x, entity.y, camX, camY);
+    const float heightPixels = TILE_SCALE * 32.0f;
+    s.y -= entity.z * heightPixels;
     entity.drawHealthBar(renderer_, s.x, s.y);
 
     if (isAttacking) {
@@ -667,14 +674,14 @@ void Game::tickRender()
         if (!e->isAlive()) continue;
         bool visible = i < enemySpriteVisible_.size() ? enemySpriteVisible_[i] : true;
         std::string sprite = i < enemySprites_.size() ? enemySprites_[i] : "default";
-        if (!drawSpriteAtWorld(e->x, e->y, sprite, visible, camX, camY)) {
+        if (!drawSpriteAtWorld(e->x, e->y, e->z, sprite, visible, camX, camY)) {
             e->draw(renderer_, camX, camY);
         } else {
             drawSpriteOverlays(*e, e->isAttacking, false, 0.f, 0.f, camX, camY);
         }
     }
 
-    if (!drawSpriteAtWorld(player_.x, player_.y, playerSprite_, playerSpriteVisible_, camX, camY)) {
+    if (!drawSpriteAtWorld(player_.x, player_.y, player_.z, playerSprite_, playerSpriteVisible_, camX, camY)) {
         player_.draw(renderer_, camX, camY);
     } else {
         drawSpriteOverlays(player_, player_.isAttacking,
@@ -838,14 +845,14 @@ void Game::render()
         if (!e->isAlive()) continue;
         bool visible = i < enemySpriteVisible_.size() ? enemySpriteVisible_[i] : true;
         std::string sprite = i < enemySprites_.size() ? enemySprites_[i] : "default";
-        if (!drawSpriteAtWorld(e->x, e->y, sprite, visible, camX, camY)) {
+        if (!drawSpriteAtWorld(e->x, e->y, e->z, sprite, visible, camX, camY)) {
             e->draw(renderer_, camX, camY);
         } else {
             drawSpriteOverlays(*e, e->isAttacking, false, 0.f, 0.f, camX, camY);
         }
     }
 
-    if (!drawSpriteAtWorld(player_.x, player_.y, playerSprite_, playerSpriteVisible_, camX, camY)) {
+    if (!drawSpriteAtWorld(player_.x, player_.y, player_.z, playerSprite_, playerSpriteVisible_, camX, camY)) {
         player_.draw(renderer_, camX, camY);
     } else {
         drawSpriteOverlays(player_, player_.isAttacking,

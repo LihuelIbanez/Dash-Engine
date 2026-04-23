@@ -14,6 +14,13 @@ bool PaintTileCommand::isUnwalkable(TileType t)
 void PaintTileCommand::writeTile(SceneData& scene, World& world,
                                   TileType type, bool walkable)
 {
+    // Update terrain mesh face
+    TerrainFace& f = world.terrain().face(tx_, ty_);
+    f.type     = type;
+    f.walkable = walkable;
+    world.terrain().markDirty();
+
+    // Keep legacy grid in sync
     world.grid[ty_][tx_].type     = type;
     world.grid[ty_][tx_].walkable = walkable;
 
@@ -31,8 +38,8 @@ void PaintTileCommand::apply(SceneData& scene, World& world)
     if (tx_ < 0 || tx_ >= WORLD_W || ty_ < 0 || ty_ >= WORLD_H) return;
 
     if (!captured_) {
-        oldType_     = world.grid[ty_][tx_].type;
-        oldWalkable_ = world.grid[ty_][tx_].walkable;
+        oldType_     = world.terrain().face(tx_, ty_).type;
+        oldWalkable_ = world.terrain().face(tx_, ty_).walkable;
         captured_    = true;
     }
 

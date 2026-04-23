@@ -15,6 +15,26 @@ constexpr int SCREEN_H = 720;
 constexpr int WORLD_W = 256;
 constexpr int WORLD_H = 256;
 
+// ─── Tile scale ──────────────────────────────────────────────────────────────
+// Each tile/face occupies TILE_SCALE world-units in both renderers.
+// Increase for a larger, more manageable map; decrease for tighter grids.
+constexpr float TILE_SCALE = 2.0f;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TileType – easy to extend with more biomes / dungeon types
+// ─────────────────────────────────────────────────────────────────────────────
+enum class TileType {
+    DeepWater,
+    Water,
+    Sand,
+    Grass,
+    Forest,
+    Dirt,
+    Stone,
+    Mountain,
+    Snow
+};
+
 // ─── 2-D vector helpers ───────────────────────────────────────────────────────
 struct Vec2f { float x, y; };
 struct Vec2i { int   x, y; };
@@ -32,8 +52,8 @@ inline Vec2f vec2fNorm(Vec2f v) {
 //   screenY = (relX + relY) * TILE_H/2  + SCREEN_H/2
 inline Vec2f worldToScreen(float wx, float wy, float camX, float camY)
 {
-    float rx = wx - camX;
-    float ry = wy - camY;
+    float rx = (wx - camX) * TILE_SCALE;
+    float ry = (wy - camY) * TILE_SCALE;
     return {
         (rx - ry) * (TILE_W * 0.5f) + SCREEN_W * 0.5f,
         (rx + ry) * (TILE_H * 0.5f) + SCREEN_H * 0.5f

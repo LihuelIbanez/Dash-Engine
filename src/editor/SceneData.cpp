@@ -20,6 +20,7 @@ void SceneData::createDefault()
     render3d = Render3DSettings{};
     nextEntityId = 1;
     tileOverrides.clear();
+    vertexHeightOverrides.clear();
     entities.clear();
 
     EntityData player;
@@ -70,6 +71,15 @@ nlohmann::json SceneData::toJson() const
         });
     }
     j["tileOverrides"] = tilesArr;
+
+    // Vertex height overrides (v4+)
+    json heightArr = json::array();
+    for (auto& vh : vertexHeightOverrides) {
+        heightArr.push_back({
+            {"vx", vh.vx}, {"vy", vh.vy}, {"height", vh.height}
+        });
+    }
+    j["vertexHeightOverrides"] = heightArr;
 
     json entsArr = json::array();
     for (auto& e : entities) {
@@ -194,6 +204,21 @@ bool SceneData::loadFromJson(const nlohmann::json& j, const std::string& assetsR
                 tileOverrides.push_back({tx, ty, tileType, t.value("walkable", true)});
                 ++idx;
             }
+        }
+    }
+
+    // ── Vertex height overrides (v4+) ───────────────────────────────────────
+    vertexHeightOverrides.clear();
+    if (j.contains("vertexHeightOverrides") && j["vertexHeightOverrides"].is_array()) {
+        constexpr int VW = WORLD_W + 1;
+        constexpr int VH = WORLD_H + 1;
+        for (auto& vh : j["vertexHeightOverrides"]) {
+            if (!vh.is_object()) continue;
+            int vx = vh.value("vx", -1);
+            int vy = vh.value("vy", -1);
+            if (vx < 0 || vx >= VW || vy < 0 || vy >= VH) continue;
+            float h = vh.value("height", 0.0f);
+            vertexHeightOverrides.push_back({vx, vy, h});
         }
     }
 

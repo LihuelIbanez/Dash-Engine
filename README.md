@@ -9,7 +9,7 @@
 ## Estado del Proyecto
 
 ```
-Overall  [██████████████████████████████]  100%  v13.0-alpha (Sprint 13)
+Overall  [██████████████████████████████]  100%  v14.0-alpha (Sprint 14)
 
 Core Engine Foundation  [██████████████████████████████]  100%
 Level Editor (DashEngine)  [██████████████████████████████]  100%
@@ -23,6 +23,7 @@ Audio e Interfaz   [████████████████████
 Importacion 3D     [██████████████████████████████]  100%  (D97-D101)
 Windows Port       [██████████████████████████████]  100%  (D106-D110)
 Visual Polish      [██████████████████████████████]  100%  (Sprint 13)
+Terrain 3D + Gravity [██████████████████████████████]  100%  (Sprint 14)
 ```
 
 | Modulo | Estado | Detalle |
@@ -39,8 +40,9 @@ Visual Polish      [████████████████████
 | Importacion 3D | ✅ Completo | Assimp (.obj/.gltf/.glb), vertex extendido (pos+normal+uv), depth buffer, TextureLoader (stb_image), textured pipeline, AssetCache3D |
 | Windows Port | ✅ Completo | CMake MSVC + CMakePresets.json, build_windows.ps1, Packaging cross-platform (DMG/ZIP+NSIS), CI/CD GitHub Actions dual |
 | Visual Polish | ✅ Completo | Tema VS Code Dark+, status bar con modo/escena/FPS, separadores verticales, audit funcional completo |
+| Terrain 3D + Gravity | ✅ Completo | TILE_SCALE configurable, smooth normals, paleta mejorada, AO, Blinn-Phong shaders, niebla, animacion de agua, terrain-following para personajes |
 
-**Sprint 13 completado:** restyling visual estilo VS Code Dark+, status bar, verificacion funcional de todos los controles del editor.
+**Sprint 14 completado:** terreno 3D con visual polish avanzado (smooth shading, iluminacion Blinn-Phong, AO, niebla) y gravedad/terrain-following para personajes.
 
 ---
 
@@ -302,6 +304,10 @@ ctest --output-on-failure
 ---
 
 ## Versión Actual
+
+**v14.0-alpha** — Sprint 14 completado (Terreno 3D y Gravedad). Incluye TILE_SCALE configurable, smooth normals per-vertex, paleta de biomas mejorada con blending, ambient occlusion, shaders Vulkan con Blinn-Phong/hemispheric ambient/niebla/animacion de agua, y terrain-following para Player y Enemy via heightmap sampling.
+
+**v13.0-alpha** — Sprint 13 completado (Visual Polish). Tema VS Code Dark+ completo, status bar, separadores verticales, audit funcional de todos los controles.
 
 **v7.0-alpha** — Sprint 7 completado (SQLite Cutover). Incluye base de datos SQLite como backend principal para proyecto/editor/runtime, migraciones versionadas, migrador de datos con fallback y validaciones de integridad.
 

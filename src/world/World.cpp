@@ -151,6 +151,9 @@ World::World()
 // ═════════════════════════════════════════════════════════════════════════════
 void World::generate(unsigned int seed)
 {
+    // Generate the polygon terrain mesh
+    terrain_.generate(seed);
+
     // ── Elevation noise ──────────────────────────────────────────────────────
     initPerm(seed);
     std::vector<float> elev(WORLD_H * WORLD_W);
@@ -374,6 +377,65 @@ void World::draw(SDL_Renderer* renderer, float camX, float camY) const
                 if ((dx + dy) > maxIsoReach) continue;
                 drawTile(renderer, col, row, camX, camY);
             }
+        }
+    }
+}
+
+// ─── Mesh-based terrain rendering (SDL2) ─────────────────────────────────────
+void World::drawMesh(SDL_Renderer* renderer, float camX, float camY) const
+{
+    const float hw = TILE_W * 0.5f;
+    const float hh = TILE_H * 0.5f;
+    const float maxIsoReach = (static_cast<float>(SCREEN_W) / TILE_W)
+                            + (static_cast<float>(SCREEN_H) / TILE_H)
+                            + 10.0f;
+
+    // Lambda: project a mesh vertex to screen coordinates
+    auto project = [&](int vx, int vy) -> SDL_FPoint {
+        float h = terrain_.vert(vx, vy).height;
+        float rx = (static_cast<float>(vx) - camX) * TILE_SCALE;
+        float ry = (static_cast<float>(vy) - camY) * TILE_SCALE;
+        float sx = (rx - ry) * hw + SCREEN_W * 0.5f;
+        float sy = (rx + ry) * hh - (h * TILE_SCALE * 32.f) + SCREEN_H * 0.5f;
+        return {sx, sy};
+    };
+
+    // Painter's order: iterate by depth (row + col)
+    for (int depth = 0; depth < WORLD_W + WORLD_H - 1; ++depth) {
+        int colStart = std::max(0, depth - (WORLD_H - 1));
+        int colEnd   = std::min(WORLD_W - 1, depth);
+        for (int col = colStart; col <= colEnd; ++col) {
+            int row = depth - col;
+            if (row < 0 || row >= WORLD_H) continue;
+
+            float dx = std::fabs((col + 0.5f) - camX);
+            float dy = std::fabs((row + 0.5f) - camY);
+            if ((dx + dy) > maxIsoReach) continue;
+
+            const TerrainFace& f = terrain_.face(col, row);
+            SDL_Color top = f.topColor();
+            SDL_Color dark = colDarken(top, 20);
+
+            SDL_FPoint pTL = project(col,     row);
+            SDL_FPoint pTR = project(col + 1, row);
+            SDL_FPoint pBL = project(col,     row + 1);
+            SDL_FPoint pBR = project(col + 1, row + 1);
+
+            // Triangle 1: TL-TR-BL (lighter)
+            SDL_Vertex tri1[3] = {
+                {pTL, top,  {0, 0}},
+                {pTR, top,  {0, 0}},
+                {pBL, dark, {0, 0}},
+            };
+            SDL_RenderGeometry(renderer, nullptr, tri1, 3, nullptr, 0);
+
+            // Triangle 2: TR-BR-BL (darker)
+            SDL_Vertex tri2[3] = {
+                {pTR, dark, {0, 0}},
+                {pBR, dark, {0, 0}},
+                {pBL, dark, {0, 0}},
+            };
+            SDL_RenderGeometry(renderer, nullptr, tri2, 3, nullptr, 0);
         }
     }
 }

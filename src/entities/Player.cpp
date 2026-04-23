@@ -1,4 +1,5 @@
 #include "Player.h"
+#include "World.h"
 #include <cmath>
 #include <algorithm>
 
@@ -94,6 +95,11 @@ void Player::update(float dt)
 
     x = std::clamp(x, 0.5f, static_cast<float>(WORLD_W) - 1.5f);
     y = std::clamp(y, 0.5f, static_cast<float>(WORLD_H) - 1.5f);
+
+    // Snap to terrain height
+    if (world_) {
+        z = world_->terrain().sampleHeight(x, y);
+    }
 }
 
 // ─── Draw ─────────────────────────────────────────────────────────────────────
@@ -101,6 +107,10 @@ void Player::draw(SDL_Renderer* renderer, float camX, float camY) const
 {
     Vec2f s = worldToScreen(x, y, camX, camY);
     float sx = s.x, sy = s.y;
+
+    // Offset for terrain height
+    const float heightPixels = TILE_SCALE * 32.0f;  // matches editor heightScale
+    sy -= z * heightPixels;
 
     SDL_Color col  = classColor(charClass);
     SDL_Color dark = colDarken(col, 60);

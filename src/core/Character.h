@@ -46,6 +46,7 @@ public:
     // Current desired velocity in world-space (set each frame)
     float vx = 0.f;
     float vy = 0.f;
+    float vz = 0.f;   // vertical velocity (for gravity / jumping)
 
     // Attack state
     float attackCooldown    = 0.f;  // seconds remaining until next attack

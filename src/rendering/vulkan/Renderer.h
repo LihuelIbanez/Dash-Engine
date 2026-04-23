@@ -71,6 +71,10 @@ private:
     VkPipeline texturedPipeline_ = VK_NULL_HANDLE;
     TextureResource defaultTexture_{};
 
+    VkPipelineLayout terrainPipelineLayout_ = VK_NULL_HANDLE;
+    VkPipeline terrainPipeline_ = VK_NULL_HANDLE;
+    MeshBuffers terrainMeshBuffers_;
+
     bool initialized_ = false;
 
     AssetCache3D assetCache_;
@@ -106,6 +110,9 @@ private:
     float followHeight_ = 2.5f;
 
     bool embeddedPreview_ = false;
+    float elapsedSeconds_ = 0.0f;
+    float fogStart_ = 80.0f;
+    float fogEnd_ = 160.0f;
     std::string scenePath_;
     std::string editorStatePath_;
     std::chrono::steady_clock::time_point lastEditorStateRead_{};

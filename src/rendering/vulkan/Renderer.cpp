@@ -13,6 +13,8 @@
 
 #include "game/physics/DebugPhysicsDraw.h"
 #include "rendering/vulkan/PipelineBuilder.h"
+#include "rendering/mesh/TerrainVertex.h"
+#include "world/TerrainMesh.h"
 
 #ifndef VULKAN_SHADER_DIR
 #define VULKAN_SHADER_DIR ""
@@ -542,9 +544,9 @@ void Renderer::applyEditorStateIfNeeded(GLFWwindow* window)
 
             // Zoom in editor means "closer", so reduce distance with higher zoom.
             const float distance = 22.0f / zoom;
-            cameraX_ = targetX - fx * distance;
+            cameraX_ = targetX * TILE_SCALE - fx * distance;
             cameraY_ = std::max(1.2f, 6.0f - fy * distance);
-            cameraZ_ = targetZ - fz * distance;
+            cameraZ_ = targetZ * TILE_SCALE - fz * distance;
 
             static int s_camConvLogCount = 0;
             if (s_camConvLogCount < 3) {
@@ -583,6 +585,12 @@ void Renderer::applyEditorStateIfNeeded(GLFWwindow* window)
 
     if (embeddedPreview_ && window && j.contains("viewport") && j["viewport"].is_object()) {
         const auto& vp = j["viewport"];
+
+        // Read fog parameters
+        bool fogEnabled = vp.value("fogEnabled", true);
+        fogStart_ = fogEnabled ? vp.value("fogStart", 80.0f) : 9999.0f;
+        fogEnd_   = fogEnabled ? vp.value("fogEnd", 160.0f) : 9999.0f;
+
         int sx = static_cast<int>(vp.value("screenX", 0.0f));
         int sy = static_cast<int>(vp.value("screenY", 0.0f));
         int sw = std::max(64, static_cast<int>(vp.value("screenW", 640.0f)));
@@ -839,6 +847,26 @@ bool Renderer::createPipeline()
         // Non-fatal — fall back to basic pipeline
     }
 
+    // Create terrain pipeline for heightmap mesh rendering
+    const std::string terrainVert = std::string(VULKAN_SHADER_DIR) + "/terrain.vert.spv";
+    const std::string terrainFrag = std::string(VULKAN_SHADER_DIR) + "/terrain.frag.spv";
+
+    std::string terrainPipelineError;
+    if (!PipelineBuilder::createTerrainPipeline(
+            deviceContext_.device(),
+            swapchain_.extent(),
+            swapchain_.renderPass(),
+            descriptorSetLayout_,
+            terrainVert,
+            terrainFrag,
+            terrainPipelineLayout_,
+            terrainPipeline_,
+            terrainPipelineError)) {
+        std::fprintf(stderr, "[D78] Terrain pipeline creation failed: %s (non-fatal)\n",
+                     terrainPipelineError.c_str());
+        // Non-fatal — terrain will fall back to per-tile cube instances
+    }
+
     return true;
 }
 
@@ -904,6 +932,33 @@ bool Renderer::init(WindowContext& window)
         std::fprintf(stderr, "[VSTEP] scene instances loaded: %zu\n", sceneInstances_.size());
         std::fprintf(stderr, "[VSTEP] terrain instances loaded: %zu\n", terrainInstances_.size());
 
+        // Build heightmap polygon mesh for Vulkan terrain rendering
+        if (terrainPipeline_ != VK_NULL_HANDLE) {
+            TerrainMesh terrainMesh;
+            terrainMesh.generate(42);
+            std::vector<TerrainVkVertex> terrainVerts;
+            std::vector<uint32_t> terrainIndices;
+            terrainMesh.buildVulkanMesh(terrainVerts, terrainIndices);
+
+            if (!terrainVerts.empty() && !terrainIndices.empty()) {
+                if (terrainMeshBuffers_.initFromData(
+                        deviceContext_.physicalDevice(),
+                        deviceContext_.device(),
+                        terrainVerts.data(),
+                        static_cast<uint32_t>(terrainVerts.size() * sizeof(TerrainVkVertex)),
+                        terrainIndices.data(),
+                        static_cast<uint32_t>(terrainIndices.size() * sizeof(uint32_t)),
+                        static_cast<uint32_t>(terrainIndices.size()))) {
+                    std::fprintf(stderr, "[VSTEP] Terrain mesh uploaded: %zu verts, %zu indices\n",
+                                 terrainVerts.size(), terrainIndices.size());
+                    // Clear old tile instances — terrain mesh replaces them
+                    terrainInstances_.clear();
+                } else {
+                    std::fprintf(stderr, "[VSTEP] Failed to upload terrain mesh buffers\n");
+                }
+            }
+        }
+
             // Load player position for WASD movement
             if (loadPlayerPosition(scenePath_, playerX_, playerZ_)) {
                 playerLoaded_ = true;
@@ -946,9 +1001,9 @@ bool Renderer::init(WindowContext& window)
     // In standalone mode there is no editor camera sync file, so align camera
     // to the loaded scene spawn to avoid starting with an empty/black view.
     if (loadedSceneSpawn) {
-        cameraX_ = spawn.x + 3.0f;
+        cameraX_ = spawn.x * TILE_SCALE + 3.0f;
         cameraY_ = spawn.y + 2.5f;
-        cameraZ_ = spawn.z + 3.0f;
+        cameraZ_ = spawn.z * TILE_SCALE + 3.0f;
         yawDegrees_ = -135.0f;
         pitchDegrees_ = -28.0f;
         pendingAutoFocus_ = true;
@@ -1024,6 +1079,7 @@ bool Renderer::runSmoke(WindowContext& window, uint32_t targetFrames)
         const auto now = std::chrono::steady_clock::now();
         const float dt = std::chrono::duration<float>(now - lastTime).count();
         lastTime = now;
+        elapsedSeconds_ += dt;
 
         if (!(infiniteRun && hasExternalSelection_)) {
             fixedAccumulator_ += dt;
@@ -1132,9 +1188,9 @@ bool Renderer::runSmoke(WindowContext& window, uint32_t targetFrames)
             const float fz = std::sin(yawRad) * std::cos(pitchRad);
 
             const float targetY = playerY_;
-            cameraX_ = playerX_ - fx * followDistance_;
+            cameraX_ = playerX_ * TILE_SCALE - fx * followDistance_;
             cameraY_ = targetY - fy * followDistance_ + followHeight_;
-            cameraZ_ = playerZ_ - fz * followDistance_;
+            cameraZ_ = playerZ_ * TILE_SCALE - fz * followDistance_;
         }
         // ── Mouse look with right-click (legacy mode) ──────────────────────
         if (glfwGetMouseButton(window.handle(), inputBindings_.mouseButtonLook) == GLFW_PRESS) {
@@ -1202,9 +1258,9 @@ bool Renderer::runSmoke(WindowContext& window, uint32_t targetFrames)
 
         if (!embeddedPreview_) {
             const float pc[12] = {
-                cubeTransform_.position.x,
+                cubeTransform_.position.x * TILE_SCALE,
                 cubeTransform_.position.y,
-                cubeTransform_.position.z,
+                cubeTransform_.position.z * TILE_SCALE,
                 0.0f,
                 0.30f, 0.30f, 0.30f, 0.0f,
                 0.86f, 0.34f, 0.34f, 1.0f
@@ -1215,9 +1271,9 @@ bool Renderer::runSmoke(WindowContext& window, uint32_t targetFrames)
 
         for (const auto& tile : terrainInstances_) {
             const float pc[12] = {
-                tile.position.x,
+                tile.position.x * TILE_SCALE,
                 tile.position.y,
-                tile.position.z,
+                tile.position.z * TILE_SCALE,
                 0.0f,
                 tile.scale.x,
                 tile.scale.y,
@@ -1232,11 +1288,55 @@ bool Renderer::runSmoke(WindowContext& window, uint32_t targetFrames)
             vkCmdDrawIndexed(cmd, meshBuffers_.indexCount(), 1, 0, 0, 0);
         }
 
+        // ── Terrain heightmap mesh (single draw call) ─────────────────────
+        if (terrainPipeline_ != VK_NULL_HANDLE && terrainMeshBuffers_.indexCount() > 0) {
+            vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, terrainPipeline_);
+            vkCmdBindDescriptorSets(
+                cmd,
+                VK_PIPELINE_BIND_POINT_GRAPHICS,
+                terrainPipelineLayout_,
+                0, 1,
+                &descriptorSets_[imageIndex],
+                0, nullptr);
+
+            VkBuffer terrainVB[] = { terrainMeshBuffers_.vertexBuffer() };
+            VkDeviceSize terrainOffsets[] = { 0 };
+            vkCmdBindVertexBuffers(cmd, 0, 1, terrainVB, terrainOffsets);
+            vkCmdBindIndexBuffer(cmd, terrainMeshBuffers_.indexBuffer(), 0, VK_INDEX_TYPE_UINT32);
+
+            // Push constants: eyePos, time, fog params
+            const float terrainPC[8] = {
+                cameraX_, cameraY_, cameraZ_,
+                elapsedSeconds_,
+                fogStart_, fogEnd_,
+                0.0f, 0.0f
+            };
+            vkCmdPushConstants(cmd, terrainPipelineLayout_,
+                VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+                0, sizeof(terrainPC), terrainPC);
+
+            vkCmdDrawIndexed(cmd, terrainMeshBuffers_.indexCount(), 1, 0, 0, 0);
+
+            // Re-bind the basic pipeline for scene entities that follow
+            vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                              texturedPipeline_ != VK_NULL_HANDLE ? texturedPipeline_ : pipeline_);
+            vkCmdBindDescriptorSets(
+                cmd,
+                VK_PIPELINE_BIND_POINT_GRAPHICS,
+                pipelineLayout_,
+                0, 1,
+                &descriptorSets_[imageIndex],
+                0, nullptr);
+            VkBuffer cubeVB[] = { meshBuffers_.vertexBuffer() };
+            vkCmdBindVertexBuffers(cmd, 0, 1, cubeVB, terrainOffsets);
+            vkCmdBindIndexBuffer(cmd, meshBuffers_.indexBuffer(), 0, VK_INDEX_TYPE_UINT16);
+        }
+
         for (const auto& instance : sceneInstances_) {
             const float pc[12] = {
-                instance.position.x,
+                instance.position.x * TILE_SCALE,
                 instance.position.y,
-                instance.position.z,
+                instance.position.z * TILE_SCALE,
                 0.0f,
                 instance.scale.x,
                 instance.scale.y,
@@ -1313,6 +1413,7 @@ void Renderer::shutdown()
     }
 
     meshBuffers_.shutdown(deviceContext_.device());
+    terrainMeshBuffers_.shutdown(deviceContext_.device());
     PipelineBuilder::destroy(deviceContext_.device(), pipelineLayout_, pipeline_);
     pipelineLayout_ = VK_NULL_HANDLE;
     pipeline_ = VK_NULL_HANDLE;
@@ -1320,6 +1421,10 @@ void Renderer::shutdown()
     PipelineBuilder::destroy(deviceContext_.device(), texturedPipelineLayout_, texturedPipeline_);
     texturedPipelineLayout_ = VK_NULL_HANDLE;
     texturedPipeline_ = VK_NULL_HANDLE;
+
+    PipelineBuilder::destroy(deviceContext_.device(), terrainPipelineLayout_, terrainPipeline_);
+    terrainPipelineLayout_ = VK_NULL_HANDLE;
+    terrainPipeline_ = VK_NULL_HANDLE;
 
     TextureLoader::destroy(deviceContext_.device(), defaultTexture_);
 

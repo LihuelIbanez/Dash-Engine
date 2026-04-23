@@ -10,6 +10,7 @@ class Entity {
 public:
     // World-space position (float for smooth sub-tile movement)
     float x, y;
+    float z = 0.0f;   // terrain height (set by gravity / terrain snapping)
 
     int         health;
     int         maxHealth;

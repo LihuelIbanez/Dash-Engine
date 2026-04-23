@@ -244,15 +244,21 @@ if(ENABLE_VULKAN_EXPERIMENTAL AND NOT IOS)
                     "${VULKAN_SHADER_BIN_DIR}/basic.frag.spv"
                     "${VULKAN_SHADER_BIN_DIR}/textured.vert.spv"
                     "${VULKAN_SHADER_BIN_DIR}/textured.frag.spv"
+                    "${VULKAN_SHADER_BIN_DIR}/terrain.vert.spv"
+                    "${VULKAN_SHADER_BIN_DIR}/terrain.frag.spv"
                 COMMAND ${GLSLC_EXECUTABLE} "${VULKAN_SHADER_SRC_DIR}/basic.vert" -o "${VULKAN_SHADER_BIN_DIR}/basic.vert.spv"
                 COMMAND ${GLSLC_EXECUTABLE} "${VULKAN_SHADER_SRC_DIR}/basic.frag" -o "${VULKAN_SHADER_BIN_DIR}/basic.frag.spv"
                 COMMAND ${GLSLC_EXECUTABLE} "${VULKAN_SHADER_SRC_DIR}/textured.vert" -o "${VULKAN_SHADER_BIN_DIR}/textured.vert.spv"
                 COMMAND ${GLSLC_EXECUTABLE} "${VULKAN_SHADER_SRC_DIR}/textured.frag" -o "${VULKAN_SHADER_BIN_DIR}/textured.frag.spv"
+                COMMAND ${GLSLC_EXECUTABLE} "${VULKAN_SHADER_SRC_DIR}/terrain.vert" -o "${VULKAN_SHADER_BIN_DIR}/terrain.vert.spv"
+                COMMAND ${GLSLC_EXECUTABLE} "${VULKAN_SHADER_SRC_DIR}/terrain.frag" -o "${VULKAN_SHADER_BIN_DIR}/terrain.frag.spv"
                 DEPENDS
                     "${VULKAN_SHADER_SRC_DIR}/basic.vert"
                     "${VULKAN_SHADER_SRC_DIR}/basic.frag"
                     "${VULKAN_SHADER_SRC_DIR}/textured.vert"
                     "${VULKAN_SHADER_SRC_DIR}/textured.frag"
+                    "${VULKAN_SHADER_SRC_DIR}/terrain.vert"
+                    "${VULKAN_SHADER_SRC_DIR}/terrain.frag"
                 COMMENT "Compiling Vulkan shaders (GLSL -> SPIR-V)"
                 VERBATIM
             )
@@ -262,6 +268,8 @@ if(ENABLE_VULKAN_EXPERIMENTAL AND NOT IOS)
                     "${VULKAN_SHADER_BIN_DIR}/basic.frag.spv"
                     "${VULKAN_SHADER_BIN_DIR}/textured.vert.spv"
                     "${VULKAN_SHADER_BIN_DIR}/textured.frag.spv"
+                    "${VULKAN_SHADER_BIN_DIR}/terrain.vert.spv"
+                    "${VULKAN_SHADER_BIN_DIR}/terrain.frag.spv"
             )
         else()
             message(WARNING "glslc not found. VulkanBootstrap will build, but pipeline creation (D74) will fail at runtime.")

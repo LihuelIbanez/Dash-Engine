@@ -1,6 +1,8 @@
 #pragma once
 #include "Character.h"
 
+class World;  // forward declaration for terrain snapping
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Player – controlled by keyboard + mouse (Diablo-style point & click)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -26,4 +28,10 @@ public:
     float targetX = -1.f;
     float targetY = -1.f;
     bool  hasTarget = false;
+
+    // Terrain snapping
+    void setWorld(const World* w) { world_ = w; }
+
+private:
+    const World* world_ = nullptr;
 };

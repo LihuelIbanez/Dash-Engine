@@ -38,10 +38,18 @@ struct TileOverride {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
+// VertexHeightOverride – a vertex whose height differs from procedural baseline
+// ─────────────────────────────────────────────────────────────────────────────
+struct VertexHeightOverride {
+    int   vx, vy;
+    float height;
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 // SceneData – everything needed to describe one scenario / level
 // ─────────────────────────────────────────────────────────────────────────────
 struct SceneData {
-    static constexpr int kCurrentVersion = 3;
+    static constexpr int kCurrentVersion = 4;
 
     struct Render3DSettings {
         bool  useVulkan3D = true;
@@ -61,6 +69,7 @@ struct SceneData {
     Render3DSettings render3d;
 
     std::vector<TileOverride> tileOverrides;
+    std::vector<VertexHeightOverride> vertexHeightOverrides;
     std::vector<EntityData>   entities;
 
     uint64_t    nextEntityId = 1;        // monotonic ID generator
