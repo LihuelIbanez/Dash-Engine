@@ -19,5 +19,3 @@ imgui.ini
 # macOS
 .DS_Store
 
-# VS Code
-.vscode/

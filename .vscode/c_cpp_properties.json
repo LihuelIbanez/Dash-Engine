@@ -1,0 +1,37 @@
+{
+    "configurations": [
+        {
+            "name": "Mac",
+            "compileCommands": "${workspaceFolder}/compile_commands.json",
+            "includePath": [
+                "${workspaceFolder}/src",
+                "${workspaceFolder}/src/core",
+                "${workspaceFolder}/src/entities",
+                "${workspaceFolder}/src/world",
+                "${workspaceFolder}/src/rendering",
+                "${workspaceFolder}/src/game",
+                "${workspaceFolder}/src/editor",
+                "${workspaceFolder}/build/_deps/imgui-src",
+                "${workspaceFolder}/build/_deps/imgui-src/backends",
+                "${workspaceFolder}/build/_deps/json-src/include",
+                "/opt/homebrew/include",
+                "/opt/homebrew/include/SDL2",
+                "/opt/homebrew/Cellar/sdl2/2.32.10/include",
+                "/opt/homebrew/Cellar/sdl2/2.32.10/include/SDL2"
+            ],
+            "defines": [
+                "PROJECT_DIR=\"${workspaceFolder}\"",
+                "BUILD_DIR=\"${workspaceFolder}/build\""
+            ],
+            "macFrameworkPath": [
+                "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/System/Library/Frameworks"
+            ],
+            "compilerPath": "/usr/bin/clang++",
+            "cStandard": "c17",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "macos-clang-arm64",
+            "configurationProvider": "ms-vscode.cmake-tools"
+        }
+    ],
+    "version": 4
+}
