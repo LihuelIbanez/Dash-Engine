@@ -2,12 +2,14 @@
 
 > Isometric RPG engine and level editor written in C++17 with SDL2 and Dear ImGui.
 
+[![Build Cross-Platform](https://github.com/ueno/Dash-Engine/actions/workflows/build-cross-platform.yml/badge.svg)](https://github.com/ueno/Dash-Engine/actions/workflows/build-cross-platform.yml)
+
 ---
 
 ## Estado del Proyecto
 
 ```
-Overall  [██████████████████████████████]  100%  v7.0-alpha (Sprint 7)
+Overall  [██████████████████████████████]  100%  v12.0-alpha (Sprint 12)
 
 Core Engine Foundation  [██████████████████████████████]  100%
 Level Editor (DashEngine)  [██████████████████████████████]  100%
@@ -15,28 +17,28 @@ Asset Pipeline  [█████████████████████
 Game Runtime    [██████████████████████████████]  100%
 Production / QA [██████████████████████████████]  100%
 SQLite Persistence [██████████████████████████████]  100%
-Vulkan 3D Render   [██████████████████████████████]  100%  (D70-D76 completo)
-Mundo Fisico       [██████████████████████████████]  100%  (D80-D84 completo)
-Windows Port       [████████████████████████......]   80%  (falta CI/CD)
-Audio e Interfaz   [..............................]    0%  (D89-D93 planificado)
-Importacion 3D     [..............................]    0%  (D97-D101 planificado)
+Vulkan 3D Render   [██████████████████████████████]  100%  (D70-D76)
+Mundo Fisico       [██████████████████████████████]  100%  (D80-D84)
+Audio e Interfaz   [██████████████████████████████]  100%  (D89-D93)
+Importacion 3D     [██████████████████████████████]  100%  (D97-D101)
+Windows Port       [██████████████████████████████]  100%  (D106-D110)
 ```
 
-| Módulo | Estado | Detalle |
+| Modulo | Estado | Detalle |
 |---|---|---|
-| Core Engine Foundation | ✅ Completo | Build system, SDL2, ImGui docking, renderer isométrico, generación procedural, entidades, combate, profiling, EventDispatcher |
+| Core Engine Foundation | ✅ Completo | Build system, SDL2, ImGui docking, renderer isometrico, generacion procedural, entidades, combate, profiling, EventDispatcher |
 | Level Editor (DashEngine) | ✅ Completo | 10+ paneles dockables, Undo/Redo por comandos, Play Mode embebido en viewport, Asset Browser/Inspector, dirty state, ValidationPanel, About modal |
-| Asset Pipeline | ✅ Completo | AssetDatabase con GUID v4, ImportManager con hash incremental, 5 importers (Scene, TileSet, GameplayConfig, Prefab, PrefabImporter), FileWatcher hot-reload |
+| Asset Pipeline | ✅ Completo | AssetDatabase con GUID v4, ImportManager con hash incremental, 6 importers (Scene, TileSet, GameplayConfig, Prefab, Sprite, Model), FileWatcher hot-reload |
 | Game Runtime | ✅ Completo | 4 sistemas independientes, data-driven desde JSON, A* pathfinding, save/load versionado, EventDispatcher integrado |
 | Production / QA | ✅ Completo | Suite ctest automatizada, ContentValidator, Packaging cmake, VersionInfo embebida |
 | SQLite Persistence | ✅ Completo | Migraciones versionadas, repositorios de assets/scenes/savegame en SQLite, fallback JSON/hybrid/sqlite |
 | Vulkan 3D Render | ✅ Completo | MoltenVK/macOS, GLFW window, DeviceContext, SwapchainContext, PipelineBuilder, shaders SPIR-V, MeshBuffers, cubo renderizado, FrameGraphLite |
 | Mundo Fisico | ✅ Completo | PhysicsWorld con backend builtin, fixed timestep (60/120 FPS), AABB colliders, gravedad, TransformProxy, DebugPhysicsDraw, tests de determinismo |
-| Windows Port | 🔧 Parcial (80%) | CMake MSVC, build_windows.ps1, dash.ps1, AppPaths multiplataforma — falta CI/CD GitHub Actions |
-| Audio e Interfaz | 🧭 Planificado | D89-D93: miniaudio, audio events, input mapping 3D |
-| Importacion 3D | 🧭 Planificado | D97-D101: assimp (.obj/.gltf), texturas, cache |
+| Audio e Interfaz | ✅ Completo | miniaudio backend, canales master/music/sfx, triggers de colision/ataque, input mapping persistente, config en SQLite |
+| Importacion 3D | ✅ Completo | Assimp (.obj/.gltf/.glb), vertex extendido (pos+normal+uv), depth buffer, TextureLoader (stb_image), textured pipeline, AssetCache3D |
+| Windows Port | ✅ Completo | CMake MSVC + CMakePresets.json, build_windows.ps1, Packaging cross-platform (DMG/ZIP+NSIS), CI/CD GitHub Actions dual |
 
-**Sprint 7 completado:** migracion SQLite consolidada (foundation + cutover), migrador de datos, runbook y pruebas de integridad.
+**Sprint 12 completado:** portabilidad Windows completa con CI/CD, CMake presets, packaging cross-platform.
 
 ---
 

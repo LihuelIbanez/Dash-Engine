@@ -22,9 +22,9 @@ Este directorio separa las tareas por semana para ejecutar el escalado del edito
 | Sprint 9 - Mundo Fisico | ✅ Completada | D80-D84 (PhysicsWorld, colliders, gravedad, determinismo) |
 | Sprint 10 - Audio e Interfaz | ✅ Completada | D89-D93 (audio, input, persistencia) |
 | Sprint 11 - Importacion 3D | ✅ Completada | D97-D101 (Assimp, vertex, depth, texturas, cache) |
-| Sprint 12 - Portabilidad Windows | 🔧 Parcial (80%) | D106-D109 completados, D110 pendiente (CI/CD) |
+| Sprint 12 - Portabilidad Windows | ✅ Completada | D106-D110 (CMakePresets, Packaging, CI/CD, docs) |
 
-**Proximo paso:** Completar Sprint 12 (CI/CD Windows).
+**Estado:** Todos los sprints completados (1-12).
 
 ## Funcionalidades ya implementadas (fuera del plan)
 

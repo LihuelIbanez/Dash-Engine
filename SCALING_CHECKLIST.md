@@ -166,7 +166,7 @@ Marca como completado cuando se cumpla todo:
 | Sprint 9 - Mundo Fisico | ✅ Completada | 100% (D80-D84) |
 | Sprint 10 - Audio e Interfaz | ✅ Completada | 100% (D89-D93) |
 | Sprint 11 - Importacion 3D | ✅ Completada | 100% (D97-D101) |
-| Sprint 12 - Portabilidad Windows | 🔧 Parcial | 80% (D106-D109, falta CI) |
+| Sprint 12 - Portabilidad Windows | ✅ Completada | 100% (D106-D110) |
 
 ## Notas
 

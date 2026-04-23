@@ -145,10 +145,10 @@ Meta: cargar modelos complejos y texturas.
 - Criterios de aceptacion: casos edge (.gltf incompleto) manejados.
 ---
 
-## Sprint 12 - Portabilidad Windows + release (D106-D110) — 🔧 PARCIAL (80%)
+## Sprint 12 - Portabilidad Windows + release (D106-D110) — ✅ COMPLETADO
 
 Meta: build cruzado robusto y paquete ejecutable final.
-Nota: D106-D109 completados (CMake MSVC, build scripts, AppPaths). Falta D110 (CI/CD GitHub Actions).
+Nota: CMakePresets.json, Packaging.cmake cross-platform, CI/CD GitHub Actions, packaging scripts completados. VulkanPlatformConfig no fue necesario (GLFW abstrae plataforma).
 
 ### D106 - CMake cross-platform cleanup
 - Descripcion: Flags y deteccion por plataforma (Apple/Windows/Linux).
