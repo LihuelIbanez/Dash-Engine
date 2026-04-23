@@ -115,7 +115,7 @@ Meta: feedback sonoro y configuracion persistente.
 - Criterios de aceptacion: sin leaks ni crash al cerrar.
 ---
 
-## Sprint 11 - Importacion de activos 3D (D97-D101)
+## Sprint 11 - Importacion de activos 3D (D97-D101) ✅ COMPLETADO
 
 Meta: cargar modelos complejos y texturas.
 

@@ -27,6 +27,15 @@ else()
 endif()
 find_package(Vulkan QUIET)
 find_package(glfw3 QUIET)
+find_package(assimp CONFIG QUIET)
+# Fix Homebrew assimp linking against wrong SDK path for zlib
+if(TARGET assimp::assimp AND APPLE)
+    get_target_property(_assimp_libs assimp::assimp INTERFACE_LINK_LIBRARIES)
+    if(_assimp_libs)
+        string(REGEX REPLACE "/Library/Developer/CommandLineTools/SDKs/[^/]+/usr/lib/libz\\.tbd" "-lz" _assimp_libs "${_assimp_libs}")
+        set_target_properties(assimp::assimp PROPERTIES INTERFACE_LINK_LIBRARIES "${_assimp_libs}")
+    endif()
+endif()
 
 # ── Dear ImGui (downloaded on first build) ───────────────────────────────────
 FetchContent_Declare(
@@ -176,6 +185,9 @@ target_include_directories(game_core PUBLIC
 )
 target_link_libraries(game_core PUBLIC ${SDL2_LIBRARIES} nlohmann_json::nlohmann_json)
 target_link_libraries(game_core PUBLIC SQLite3::SQLite3)
+if(TARGET assimp::assimp)
+    target_link_libraries(game_core PUBLIC assimp::assimp)
+endif()
 
 add_subdirectory(src/game)
 # The editor is a desktop-only tool; skip it when cross-compiling for iOS.
@@ -197,6 +209,10 @@ if(ENABLE_VULKAN_EXPERIMENTAL AND NOT IOS)
         set(VULKAN_EXPERIMENTAL_SOURCES
             ${CMAKE_SOURCE_DIR}/src/rendering/platform/WindowContext.cpp
             ${CMAKE_SOURCE_DIR}/src/rendering/mesh/MeshBuffers.cpp
+            ${CMAKE_SOURCE_DIR}/src/rendering/mesh/MeshUploader.cpp
+            ${CMAKE_SOURCE_DIR}/src/rendering/textures/TextureLoader.cpp
+            ${CMAKE_SOURCE_DIR}/src/rendering/textures/stb_image_vk_impl.cpp
+            ${CMAKE_SOURCE_DIR}/src/assets/cache/AssetCache3D.cpp
             ${CMAKE_SOURCE_DIR}/src/rendering/vulkan/VulkanDiagnostics.cpp
             ${CMAKE_SOURCE_DIR}/src/rendering/vulkan/DeviceContext.cpp
             ${CMAKE_SOURCE_DIR}/src/rendering/vulkan/SwapchainContext.cpp
@@ -226,11 +242,17 @@ if(ENABLE_VULKAN_EXPERIMENTAL AND NOT IOS)
                 OUTPUT
                     "${VULKAN_SHADER_BIN_DIR}/basic.vert.spv"
                     "${VULKAN_SHADER_BIN_DIR}/basic.frag.spv"
+                    "${VULKAN_SHADER_BIN_DIR}/textured.vert.spv"
+                    "${VULKAN_SHADER_BIN_DIR}/textured.frag.spv"
                 COMMAND ${GLSLC_EXECUTABLE} "${VULKAN_SHADER_SRC_DIR}/basic.vert" -o "${VULKAN_SHADER_BIN_DIR}/basic.vert.spv"
                 COMMAND ${GLSLC_EXECUTABLE} "${VULKAN_SHADER_SRC_DIR}/basic.frag" -o "${VULKAN_SHADER_BIN_DIR}/basic.frag.spv"
+                COMMAND ${GLSLC_EXECUTABLE} "${VULKAN_SHADER_SRC_DIR}/textured.vert" -o "${VULKAN_SHADER_BIN_DIR}/textured.vert.spv"
+                COMMAND ${GLSLC_EXECUTABLE} "${VULKAN_SHADER_SRC_DIR}/textured.frag" -o "${VULKAN_SHADER_BIN_DIR}/textured.frag.spv"
                 DEPENDS
                     "${VULKAN_SHADER_SRC_DIR}/basic.vert"
                     "${VULKAN_SHADER_SRC_DIR}/basic.frag"
+                    "${VULKAN_SHADER_SRC_DIR}/textured.vert"
+                    "${VULKAN_SHADER_SRC_DIR}/textured.frag"
                 COMMENT "Compiling Vulkan shaders (GLSL -> SPIR-V)"
                 VERBATIM
             )
@@ -238,6 +260,8 @@ if(ENABLE_VULKAN_EXPERIMENTAL AND NOT IOS)
                 DEPENDS
                     "${VULKAN_SHADER_BIN_DIR}/basic.vert.spv"
                     "${VULKAN_SHADER_BIN_DIR}/basic.frag.spv"
+                    "${VULKAN_SHADER_BIN_DIR}/textured.vert.spv"
+                    "${VULKAN_SHADER_BIN_DIR}/textured.frag.spv"
             )
         else()
             message(WARNING "glslc not found. VulkanBootstrap will build, but pipeline creation (D74) will fail at runtime.")

@@ -23,7 +23,8 @@ public:
         VkSwapchainKHR swapchain,
         VkExtent2D extent,
         VkRenderPass renderPass,
-        const std::vector<VkImageView>& imageViews);
+        const std::vector<VkImageView>& imageViews,
+        VkImageView depthImageView = VK_NULL_HANDLE);
 
     void shutdown();
 
@@ -32,6 +33,7 @@ public:
 
     VkCommandBuffer commandBuffer(uint32_t imageIndex) const { return commandBuffers_[imageIndex]; }
     VkFramebuffer framebuffer(uint32_t imageIndex) const { return framebuffers_[imageIndex]; }
+    VkCommandPool commandPool() const { return commandPool_; }
 
 private:
     VkDevice device_ = VK_NULL_HANDLE;

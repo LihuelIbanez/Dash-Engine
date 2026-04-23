@@ -13,8 +13,14 @@ public:
 
     MeshBuffers(const MeshBuffers&) = delete;
     MeshBuffers& operator=(const MeshBuffers&) = delete;
+    MeshBuffers(MeshBuffers&& other) noexcept;
+    MeshBuffers& operator=(MeshBuffers&& other) noexcept;
 
     bool initCube(VkPhysicalDevice physicalDevice, VkDevice device);
+    bool initFromData(VkPhysicalDevice physicalDevice, VkDevice device,
+                      const void* vertexData, uint32_t vertexDataSize,
+                      const void* indexData, uint32_t indexDataSize,
+                      uint32_t indexCount);
     void shutdown(VkDevice device);
 
     VkBuffer vertexBuffer() const { return vertexBuffer_; }

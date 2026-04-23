@@ -21,10 +21,10 @@ Este directorio separa las tareas por semana para ejecutar el escalado del edito
 | Sprint 8 - Vulkan Base | ✅ Completada | D70-D76 (render bootstrap, pipeline, cubo, shaders) |
 | Sprint 9 - Mundo Fisico | ✅ Completada | D80-D84 (PhysicsWorld, colliders, gravedad, determinismo) |
 | Sprint 10 - Audio e Interfaz | ✅ Completada | D89-D93 (audio, input, persistencia) |
-| Sprint 11 - Importacion 3D | 🧭 Planificado | D97-D101 (assets y cache) |
+| Sprint 11 - Importacion 3D | ✅ Completada | D97-D101 (Assimp, vertex, depth, texturas, cache) |
 | Sprint 12 - Portabilidad Windows | 🔧 Parcial (80%) | D106-D109 completados, D110 pendiente (CI/CD) |
 
-**Proximo paso:** Sprint 11 (Importacion 3D) o completar Sprint 12 (CI/CD Windows).
+**Proximo paso:** Completar Sprint 12 (CI/CD Windows).
 
 ## Funcionalidades ya implementadas (fuera del plan)
 

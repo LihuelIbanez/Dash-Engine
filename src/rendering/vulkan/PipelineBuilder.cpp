@@ -91,12 +91,24 @@ bool PipelineBuilder::createBasicPipeline(
         VK_VERTEX_INPUT_RATE_VERTEX
     };
 
-    const std::array<VkVertexInputAttributeDescription, 1> attrDescs = {{
+    const std::array<VkVertexInputAttributeDescription, 3> attrDescs = {{
         {
             0,
             0,
             VK_FORMAT_R32G32B32_SFLOAT,
             static_cast<uint32_t>(offsetof(Vertex, position))
+        },
+        {
+            1,
+            0,
+            VK_FORMAT_R32G32B32_SFLOAT,
+            static_cast<uint32_t>(offsetof(Vertex, normal))
+        },
+        {
+            2,
+            0,
+            VK_FORMAT_R32G32_SFLOAT,
+            static_cast<uint32_t>(offsetof(Vertex, texCoord))
         }
     }};
 
@@ -158,6 +170,14 @@ bool PipelineBuilder::createBasicPipeline(
     colorBlending.attachmentCount = 1;
     colorBlending.pAttachments = &colorBlendAttachment;
 
+    VkPipelineDepthStencilStateCreateInfo depthStencil{};
+    depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+    depthStencil.depthTestEnable = VK_TRUE;
+    depthStencil.depthWriteEnable = VK_TRUE;
+    depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
+    depthStencil.depthBoundsTestEnable = VK_FALSE;
+    depthStencil.stencilTestEnable = VK_FALSE;
+
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
     pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     if (descriptorSetLayout != VK_NULL_HANDLE) {
@@ -188,6 +208,7 @@ bool PipelineBuilder::createBasicPipeline(
     pipelineInfo.pViewportState = &viewportState;
     pipelineInfo.pRasterizationState = &rasterizer;
     pipelineInfo.pMultisampleState = &multisampling;
+    pipelineInfo.pDepthStencilState = &depthStencil;
     pipelineInfo.pColorBlendState = &colorBlending;
     pipelineInfo.layout = outPipelineLayout;
     pipelineInfo.renderPass = renderPass;

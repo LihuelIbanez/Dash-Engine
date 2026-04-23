@@ -192,6 +192,7 @@ add_executable(test_hot_reload
     ${CMAKE_SOURCE_DIR}/src/assets/importers/GameplayConfigImporter.cpp
     ${CMAKE_SOURCE_DIR}/src/assets/importers/PrefabImporter.cpp
     ${CMAKE_SOURCE_DIR}/src/assets/importers/SpriteImporter.cpp
+    ${CMAKE_SOURCE_DIR}/src/assets/importers/ModelImporter.cpp
 )
 target_include_directories(test_hot_reload PRIVATE
     ${CMAKE_SOURCE_DIR}/src
@@ -208,6 +209,9 @@ target_include_directories(test_hot_reload PRIVATE
 target_link_libraries(test_hot_reload PRIVATE
     game_core nlohmann_json::nlohmann_json SQLite3::SQLite3 ${SDL2_LIBRARIES}
 )
+if(TARGET assimp::assimp)
+    target_link_libraries(test_hot_reload PRIVATE assimp::assimp)
+endif()
 target_compile_options(test_hot_reload PRIVATE ${DASH_COMPILE_FLAGS})
 add_test(NAME test_hot_reload COMMAND test_hot_reload)
 
@@ -585,4 +589,26 @@ if(APPLE)
 endif()
 target_compile_options(test_audio_smoke PRIVATE ${DASH_COMPILE_FLAGS})
 add_test(NAME test_audio_smoke COMMAND test_audio_smoke)
+
+# ── Model import pipeline (D101) ────────────────────────────────────────────
+if(TARGET assimp::assimp)
+    add_executable(test_model_import_pipeline
+        test_model_import_pipeline.cpp
+        ${CMAKE_SOURCE_DIR}/src/assets/importers/ModelImporter.cpp
+    )
+    target_include_directories(test_model_import_pipeline PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+        ${CMAKE_SOURCE_DIR}/src/core
+        ${CMAKE_SOURCE_DIR}/src/assets
+        ${CMAKE_SOURCE_DIR}/src/assets/importers
+        ${CMAKE_SOURCE_DIR}/src/rendering
+    )
+    target_link_libraries(test_model_import_pipeline PRIVATE
+        game_core
+        assimp::assimp
+        nlohmann_json::nlohmann_json
+    )
+    target_compile_options(test_model_import_pipeline PRIVATE ${DASH_COMPILE_FLAGS})
+    add_test(NAME test_model_import_pipeline COMMAND test_model_import_pipeline)
+endif()
 

@@ -27,6 +27,7 @@ public:
     VkRenderPass renderPass() const { return renderPass_; }
     const std::vector<VkImageView>& imageViews() const { return imageViews_; }
     uint32_t imageCount() const { return static_cast<uint32_t>(images_.size()); }
+    VkImageView depthImageView() const { return depthImageView_; }
 
 private:
     VkSurfaceFormatKHR chooseSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& formats) const;
@@ -39,6 +40,14 @@ private:
     VkFormat imageFormat_ = VK_FORMAT_B8G8R8A8_UNORM;
     VkExtent2D extent_{};
     VkRenderPass renderPass_ = VK_NULL_HANDLE;
+
+    VkImage depthImage_ = VK_NULL_HANDLE;
+    VkDeviceMemory depthMemory_ = VK_NULL_HANDLE;
+    VkImageView depthImageView_ = VK_NULL_HANDLE;
+
+    bool createDepthResources(VkPhysicalDevice physicalDevice, VkDevice device);
+    uint32_t findMemoryType(VkPhysicalDevice physicalDevice, uint32_t typeFilter,
+                            VkMemoryPropertyFlags properties) const;
 };
 
 } // namespace dash::vkexp

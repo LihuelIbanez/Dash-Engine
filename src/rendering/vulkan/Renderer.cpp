@@ -1,5 +1,6 @@
 #include "rendering/vulkan/Renderer.h"
 
+#include <array>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -689,24 +690,33 @@ bool Renderer::createDescriptors()
     uboBinding.descriptorCount = 1;
     uboBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 
+    VkDescriptorSetLayoutBinding samplerBinding{};
+    samplerBinding.binding = 1;
+    samplerBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    samplerBinding.descriptorCount = 1;
+    samplerBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+    std::array<VkDescriptorSetLayoutBinding, 2> bindings = {uboBinding, samplerBinding};
+
     VkDescriptorSetLayoutCreateInfo layoutInfo{};
     layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    layoutInfo.bindingCount = 1;
-    layoutInfo.pBindings = &uboBinding;
+    layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
+    layoutInfo.pBindings = bindings.data();
     if (vkCreateDescriptorSetLayout(deviceContext_.device(), &layoutInfo, nullptr, &descriptorSetLayout_) != VK_SUCCESS) {
         std::fprintf(stderr, "[D78] Failed to create descriptor set layout.\n");
         return false;
     }
 
-    VkDescriptorPoolSize poolSize{};
-    poolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    poolSize.descriptorCount = swapchain_.imageCount();
+    std::array<VkDescriptorPoolSize, 2> poolSizes = {{
+        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, swapchain_.imageCount()},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, swapchain_.imageCount()}
+    }};
 
     VkDescriptorPoolCreateInfo poolInfo{};
     poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
     poolInfo.maxSets = swapchain_.imageCount();
-    poolInfo.poolSizeCount = 1;
-    poolInfo.pPoolSizes = &poolSize;
+    poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
+    poolInfo.pPoolSizes = poolSizes.data();
     if (vkCreateDescriptorPool(deviceContext_.device(), &poolInfo, nullptr, &descriptorPool_) != VK_SUCCESS) {
         std::fprintf(stderr, "[D78] Failed to create descriptor pool.\n");
         return false;
@@ -732,6 +742,17 @@ bool Renderer::createPerFrameUniformBuffers()
     uniformBuffers_.resize(swapchain_.imageCount(), VK_NULL_HANDLE);
     uniformMemories_.resize(swapchain_.imageCount(), VK_NULL_HANDLE);
 
+    // Create default white texture for sampler binding
+    if (!TextureLoader::createDefaultWhite(
+            deviceContext_.physicalDevice(),
+            deviceContext_.device(),
+            deviceContext_.graphicsQueue(),
+            frameGraph_.commandPool(),
+            defaultTexture_)) {
+        std::fprintf(stderr, "[D78] Failed to create default white texture.\n");
+        return false;
+    }
+
     for (uint32_t i = 0; i < swapchain_.imageCount(); ++i) {
         if (!createHostVisibleBuffer(
                 deviceContext_.physicalDevice(),
@@ -749,14 +770,30 @@ bool Renderer::createPerFrameUniformBuffers()
         bufferInfo.offset = 0;
         bufferInfo.range = sizeof(CameraUBO);
 
-        VkWriteDescriptorSet write{};
-        write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        write.dstSet = descriptorSets_[i];
-        write.dstBinding = 0;
-        write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        write.descriptorCount = 1;
-        write.pBufferInfo = &bufferInfo;
-        vkUpdateDescriptorSets(deviceContext_.device(), 1, &write, 0, nullptr);
+        VkDescriptorImageInfo imageInfo{};
+        imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        imageInfo.imageView = defaultTexture_.imageView;
+        imageInfo.sampler = defaultTexture_.sampler;
+
+        std::array<VkWriteDescriptorSet, 2> writes{};
+
+        writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writes[0].dstSet = descriptorSets_[i];
+        writes[0].dstBinding = 0;
+        writes[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        writes[0].descriptorCount = 1;
+        writes[0].pBufferInfo = &bufferInfo;
+
+        writes[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writes[1].dstSet = descriptorSets_[i];
+        writes[1].dstBinding = 1;
+        writes[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        writes[1].descriptorCount = 1;
+        writes[1].pImageInfo = &imageInfo;
+
+        vkUpdateDescriptorSets(deviceContext_.device(),
+                               static_cast<uint32_t>(writes.size()),
+                               writes.data(), 0, nullptr);
     }
 
     return true;
@@ -781,6 +818,27 @@ bool Renderer::createPipeline()
         std::fprintf(stderr, "[D78] Pipeline creation failed: %s\n", pipelineError.c_str());
         return false;
     }
+
+    // Create textured pipeline using the same layout but different shaders
+    const std::string texVert = std::string(VULKAN_SHADER_DIR) + "/textured.vert.spv";
+    const std::string texFrag = std::string(VULKAN_SHADER_DIR) + "/textured.frag.spv";
+
+    std::string texPipelineError;
+    if (!PipelineBuilder::createBasicPipeline(
+            deviceContext_.device(),
+            swapchain_.extent(),
+            swapchain_.renderPass(),
+            descriptorSetLayout_,
+            texVert,
+            texFrag,
+            texturedPipelineLayout_,
+            texturedPipeline_,
+            texPipelineError)) {
+        std::fprintf(stderr, "[D78] Textured pipeline creation failed: %s (non-fatal)\n",
+                     texPipelineError.c_str());
+        // Non-fatal — fall back to basic pipeline
+    }
+
     return true;
 }
 
@@ -799,8 +857,6 @@ bool Renderer::init(WindowContext& window)
         return false;
     }
 
-    if (!createPerFrameUniformBuffers()) return false;
-
     if (!frameGraph_.init(
             deviceContext_.device(),
             deviceContext_.queueFamilies().graphicsFamily.value(),
@@ -809,9 +865,12 @@ bool Renderer::init(WindowContext& window)
             swapchain_.swapchain(),
             swapchain_.extent(),
             swapchain_.renderPass(),
-            swapchain_.imageViews())) {
+            swapchain_.imageViews(),
+            swapchain_.depthImageView())) {
         return false;
     }
+
+    if (!createPerFrameUniformBuffers()) return false;
 
     if (!physicsWorld_.init()) {
         std::fprintf(stderr, "[D80] PhysicsWorld initialization failed.\n");
@@ -1110,8 +1169,9 @@ bool Renderer::runSmoke(WindowContext& window, uint32_t targetFrames)
         beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
         if (vkBeginCommandBuffer(cmd, &beginInfo) != VK_SUCCESS) break;
 
-        VkClearValue clearColor{};
-        clearColor.color = { {0.14f, 0.16f, 0.20f, 1.0f} };
+        VkClearValue clearValues[2]{};
+        clearValues[0].color = { {0.14f, 0.16f, 0.20f, 1.0f} };
+        clearValues[1].depthStencil = {1.0f, 0};
 
         VkRenderPassBeginInfo rpBegin{};
         rpBegin.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -1119,11 +1179,12 @@ bool Renderer::runSmoke(WindowContext& window, uint32_t targetFrames)
         rpBegin.framebuffer = frameGraph_.framebuffer(imageIndex);
         rpBegin.renderArea.offset = {0, 0};
         rpBegin.renderArea.extent = swapchain_.extent();
-        rpBegin.clearValueCount = 1;
-        rpBegin.pClearValues = &clearColor;
+        rpBegin.clearValueCount = 2;
+        rpBegin.pClearValues = clearValues;
 
         vkCmdBeginRenderPass(cmd, &rpBegin, VK_SUBPASS_CONTENTS_INLINE);
-        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_);
+        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                          texturedPipeline_ != VK_NULL_HANDLE ? texturedPipeline_ : pipeline_);
         vkCmdBindDescriptorSets(
             cmd,
             VK_PIPELINE_BIND_POINT_GRAPHICS,
@@ -1255,6 +1316,14 @@ void Renderer::shutdown()
     PipelineBuilder::destroy(deviceContext_.device(), pipelineLayout_, pipeline_);
     pipelineLayout_ = VK_NULL_HANDLE;
     pipeline_ = VK_NULL_HANDLE;
+
+    PipelineBuilder::destroy(deviceContext_.device(), texturedPipelineLayout_, texturedPipeline_);
+    texturedPipelineLayout_ = VK_NULL_HANDLE;
+    texturedPipeline_ = VK_NULL_HANDLE;
+
+    TextureLoader::destroy(deviceContext_.device(), defaultTexture_);
+
+    assetCache_.clear(deviceContext_.device());
 
     swapchain_.shutdown(deviceContext_.device());
     deviceContext_.shutdown();

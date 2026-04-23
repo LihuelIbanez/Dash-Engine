@@ -8,6 +8,8 @@
 #include <vulkan/vulkan.h>
 
 #include "rendering/mesh/MeshBuffers.h"
+#include "rendering/textures/TextureLoader.h"
+#include "assets/cache/AssetCache3D.h"
 #include "rendering/platform/WindowContext.h"
 #include "rendering/vulkan/DeviceContext.h"
 #include "rendering/vulkan/FrameGraphLite.h"
@@ -65,7 +67,13 @@ private:
     VkPipelineLayout pipelineLayout_ = VK_NULL_HANDLE;
     VkPipeline pipeline_ = VK_NULL_HANDLE;
 
+    VkPipelineLayout texturedPipelineLayout_ = VK_NULL_HANDLE;
+    VkPipeline texturedPipeline_ = VK_NULL_HANDLE;
+    TextureResource defaultTexture_{};
+
     bool initialized_ = false;
+
+    AssetCache3D assetCache_;
 
     dash::physics::PhysicsWorld physicsWorld_;
     dash::physics::TransformProxy transformProxy_;

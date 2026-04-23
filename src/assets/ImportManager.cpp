@@ -4,6 +4,7 @@
 #include "importers/GameplayConfigImporter.h"
 #include "importers/PrefabImporter.h"
 #include "importers/SpriteImporter.h"
+#include "importers/ModelImporter.h"
 
 #include <filesystem>
 #include <fstream>
@@ -50,6 +51,10 @@ AssetType ImportManager::inferAssetType(const std::string& relativePath)
         return AssetType::Texture;
     }
 
+    if (ext == ".obj" || ext == ".gltf" || ext == ".glb" || ext == ".fbx") {
+        return AssetType::Model;
+    }
+
     if (ext == ".json") {
         // Try to differentiate by parent folder or filename convention
         std::string stem = p.stem().string();
@@ -81,6 +86,7 @@ ImportManager::ImportManager()
     importers_[AssetType::GameplayConfig] = std::make_unique<GameplayConfigImporter>();
     importers_[AssetType::Prefab]         = std::make_unique<PrefabImporter>();
     importers_[AssetType::Sprite]         = std::make_unique<SpriteImporter>();
+    importers_[AssetType::Model]          = std::make_unique<ModelImporter>();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

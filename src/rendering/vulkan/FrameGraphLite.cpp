@@ -12,7 +12,8 @@ bool FrameGraphLite::init(
     VkSwapchainKHR swapchain,
     VkExtent2D extent,
     VkRenderPass renderPass,
-    const std::vector<VkImageView>& imageViews)
+    const std::vector<VkImageView>& imageViews,
+    VkImageView depthImageView)
 {
     device_ = device;
     graphicsQueue_ = graphicsQueue;
@@ -21,13 +22,16 @@ bool FrameGraphLite::init(
 
     framebuffers_.resize(imageViews.size(), VK_NULL_HANDLE);
     for (size_t i = 0; i < imageViews.size(); ++i) {
-        VkImageView attachments[] = { imageViews[i] };
+        std::vector<VkImageView> attachments = { imageViews[i] };
+        if (depthImageView != VK_NULL_HANDLE) {
+            attachments.push_back(depthImageView);
+        }
 
         VkFramebufferCreateInfo framebufferInfo{};
         framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
         framebufferInfo.renderPass = renderPass;
-        framebufferInfo.attachmentCount = 1;
-        framebufferInfo.pAttachments = attachments;
+        framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
+        framebufferInfo.pAttachments = attachments.data();
         framebufferInfo.width = extent.width;
         framebufferInfo.height = extent.height;
         framebufferInfo.layers = 1;

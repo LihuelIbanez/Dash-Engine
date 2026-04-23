@@ -4,7 +4,19 @@
 
 Cargar modelos 3D complejos y texturas externas (.obj/.gltf) y renderizarlos correctamente en Vulkan.
 
-**Estado: PLANIFICADO**
+**Estado: ✅ COMPLETADO**
+
+### Implementacion
+- Assimp via vcpkg para .obj/.gltf/.glb
+- ModelImporter con salida binaria .dashmesh (DMSH header + interleaved vertex data)
+- Vertex extendido: position(3) + normal(3) + texCoord(2) = 32 bytes
+- Depth buffer (VK_FORMAT_D32_SFLOAT) en SwapchainContext
+- TextureLoader: stb_image → staging buffer → VkImage con transiciones de layout
+- Textured pipeline con shaders textured.vert/frag + iluminacion direccional basica
+- AssetCache3D: cache por path con ownership de recursos GPU
+- MeshBuffers movable + initFromData para meshes importados
+- MeshUploader con staging buffer para upload a GPU
+- test_model_import_pipeline: 6 tests, 0 fallos
 
 ---
 
