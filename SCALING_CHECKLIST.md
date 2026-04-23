@@ -164,7 +164,7 @@ Marca como completado cuando se cumpla todo:
 | Sprint 6-7 - SQLite Migration | ✅ Completada | 100% (D55-D68) |
 | Sprint 8 - Vulkan Base Render | ✅ Completada | 100% (D70-D76) |
 | Sprint 9 - Mundo Fisico | ✅ Completada | 100% (D80-D84) |
-| Sprint 10 - Audio e Interfaz | 🧭 Planificado | 0% (D89-D93) |
+| Sprint 10 - Audio e Interfaz | ✅ Completada | 100% (D89-D93) |
 | Sprint 11 - Importacion 3D | 🧭 Planificado | 0% (D97-D101) |
 | Sprint 12 - Portabilidad Windows | 🔧 Parcial | 80% (D106-D109, falta CI) |
 

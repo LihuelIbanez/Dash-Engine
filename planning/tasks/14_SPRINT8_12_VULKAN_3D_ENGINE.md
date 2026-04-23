@@ -89,7 +89,7 @@ Nota: Se uso backend builtin propio en lugar de Jolt/Bullet.
 - Criterios de aceptacion: tolerancias numericas definidas y estables.
 ---
 
-## Sprint 10 - Audio espacial e interfaz (D89-D93)
+## Sprint 10 - Audio espacial e interfaz (D89-D93) — ✅ COMPLETADO
 
 Meta: feedback sonoro y configuracion persistente.
 

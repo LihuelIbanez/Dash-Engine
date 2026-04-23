@@ -14,6 +14,10 @@
 #include "SaveGame.h"
 #include "EventDispatcher.h"
 #include "rendering/SpriteRenderer.h"
+#include "AudioEngine.h"
+#include "AudioEventBindings.h"
+#include "AudioSettingsRepository.h"
+#include "db/SqliteDb.h"
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Game – owns the SDL window/renderer and the game loop
@@ -63,6 +67,10 @@ private:
     SystemScheduler  scheduler_;
     GameplayDatabase gameDb_;
     EventDispatcher  dispatcher_;
+    AudioEngine      audioEngine_;
+    AudioEventBindings audioBindings_;
+    SqliteDb         settingsDb_;
+    std::unique_ptr<AudioSettingsRepository> audioSettingsRepo_;
     void initSystems();
     void spawnEnemiesFromData();
     bool loadSceneFile();           // apply scene JSON if sceneFile_ is set

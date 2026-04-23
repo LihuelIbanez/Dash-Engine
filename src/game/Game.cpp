@@ -7,6 +7,7 @@
 #include "SaveGame.h"
 #include "Profiler.h"
 #include "AppPaths.h"
+#include "db/SchemaManager.h"
 #include <nlohmann/json.hpp>
 #include <fstream>
 #include <filesystem>
@@ -91,6 +92,8 @@ void Game::initSystems()
     scheduler_.addSystem(std::make_unique<AISystem>());
     scheduler_.addSystem(std::make_unique<CombatSystem>());
     scheduler_.addSystem(std::make_unique<SpawnRewardSystem>(&gameDb_));
+
+    audioBindings_.bindDefaults(dispatcher_, audioEngine_);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -489,6 +492,9 @@ void Game::loadGame(const std::string& path)
 
 Game::~Game()
 {
+    if (audioSettingsRepo_)
+        audioSettingsRepo_->save(audioEngine_);
+    audioEngine_.shutdown();
     spriteRenderer_.clearCache();
     if (!embedded_) {
         if (renderer_) SDL_DestroyRenderer(renderer_);
@@ -499,7 +505,7 @@ Game::~Game()
 
 bool Game::init()
 {
-    if (SDL_Init(SDL_INIT_VIDEO) != 0) {
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) != 0) {
         SDL_Log("SDL_Init failed: %s", SDL_GetError());
         return false;
     }
@@ -519,6 +525,28 @@ bool Game::init()
     SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
     spriteRenderer_.init(renderer_, AppPaths::getAssetsDir());
     running_ = true;
+
+    // ── Audio engine ─────────────────────────────────────────────────────────
+    audioEngine_.init();  // graceful no-op if no audio device
+
+    // ── Settings DB (audio volumes) ──────────────────────────────────────────
+    {
+        std::string dbPath = AppPaths::getLibraryDir() + "/dash_engine.db";
+        std::filesystem::create_directories(AppPaths::getLibraryDir());
+        std::string dbErr;
+        if (settingsDb_.open(dbPath, &dbErr)) {
+            // Reuse the same migrations dir pattern as SaveGame
+            std::filesystem::path migrDir =
+                std::filesystem::path(AppPaths::getResourcesDir()) / "src" / "core" / "db" / "migrations";
+            if (!std::filesystem::is_directory(migrDir)) {
+                // Fallback: relative from CWD (works when run from project root)
+                migrDir = std::filesystem::path("src") / "core" / "db" / "migrations";
+            }
+            SchemaManager::applyMigrations(settingsDb_, migrDir.string());
+            audioSettingsRepo_ = std::make_unique<AudioSettingsRepository>(settingsDb_);
+            audioSettingsRepo_->loadInto(audioEngine_);
+        }
+    }
 
     // ── Saves directory ──────────────────────────────────────────────────────
     savesDir_ = AppPaths::getSavesDir();
@@ -584,6 +612,9 @@ bool Game::initEmbedded(SDL_Renderer* renderer)
     running_  = true;
     spriteRenderer_.init(renderer_, AppPaths::getAssetsDir());
     gameState_ = GameState::Playing; // skip title screen when hosted by editor
+
+    // ── Audio engine (embedded mode) ─────────────────────────────────────────
+    audioEngine_.init();
 
     savesDir_ = AppPaths::getSavesDir();
     std::filesystem::create_directories(savesDir_);
@@ -767,6 +798,7 @@ void Game::update(float dt)
     ctx_.dt      = dt;
     ctx_.running = running_;
 
+    audioBindings_.tick(dt);
     scheduler_.updateAll(ctx_);
     dispatcher_.flush();
 

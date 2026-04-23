@@ -132,12 +132,28 @@ if(NOT EXISTS "${STB_READ_PATH}")
     endif()
 endif()
 
+# ── miniaudio (single-header audio library) ──────────────────────────────────
+set(MINIAUDIO_DIR "${CMAKE_SOURCE_DIR}/src/game/audio")
+if(NOT EXISTS "${MINIAUDIO_DIR}/miniaudio.h")
+    message(STATUS "[miniaudio] Downloading miniaudio.h...")
+    file(DOWNLOAD
+        "https://raw.githubusercontent.com/mackron/miniaudio/0.11.21/miniaudio.h"
+        "${MINIAUDIO_DIR}/miniaudio.h"
+        STATUS MINIAUDIO_DL_STATUS)
+    list(GET MINIAUDIO_DL_STATUS 0 MINIAUDIO_DL_CODE)
+    if(NOT MINIAUDIO_DL_CODE EQUAL 0)
+        message(WARNING "[miniaudio] download failed — audio will be unavailable")
+        file(REMOVE "${MINIAUDIO_DIR}/miniaudio.h")
+    endif()
+endif()
+
 # ── Core game library (shared between game & editor) ─────────────────────────
 file(GLOB CORE_SOURCES
     "src/core/*.cpp"
     "src/core/db/*.cpp"
     "src/core/profiling/*.cpp"
     "src/core/components/*.cpp"
+    "src/core/input/*.cpp"
     "src/entities/*.cpp"
     "src/world/*.cpp"
     "src/game/nav/*.cpp"
@@ -150,6 +166,7 @@ target_include_directories(game_core PUBLIC
     src/core/events
     src/core/components
     src/core/profiling
+    src/core/input
     src/entities
     src/world
     src/rendering

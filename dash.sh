@@ -34,8 +34,8 @@ warn()  { echo -e "${YELLOW}[dash]${NC} $*"; }
 err()   { echo -e "${RED}[dash]${NC} $*" >&2; }
 
 # ── Rutas de ejecutables ─────────────────────────────────────────────────────
-EDITOR_EXE="${BUILD_DIR}/DashEngine"
-GAME_EXE="${BUILD_DIR}/IsometricRPG"
+EDITOR_EXE="${BUILD_DIR}/src/editor/DashEngine"
+GAME_EXE="${BUILD_DIR}/src/game/IsometricRPG"
 VULKAN_EXE="${BUILD_DIR}/VulkanBootstrap"
 
 # ── Funciones internas ───────────────────────────────────────────────────────

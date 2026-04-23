@@ -14,6 +14,7 @@
 #include "rendering/vulkan/SwapchainContext.h"
 #include "game/physics/PhysicsWorld.h"
 #include "game/physics/TransformProxy.h"
+#include "input/InputBindings3D.h"
 
 namespace dash::vkexp {
 
@@ -113,6 +114,7 @@ private:
     float lastEditorFollowHeight_ = 2.5f;
 
     bool playerLoaded_ = false;
+    InputBindings3D inputBindings_;
 };
 
 } // namespace dash::vkexp

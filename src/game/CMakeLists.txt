@@ -5,6 +5,7 @@ file(GLOB GAME_SYSTEM_SOURCES  "${CMAKE_CURRENT_SOURCE_DIR}/systems/*.cpp")
 file(GLOB GAME_DATA_SOURCES    "${CMAKE_CURRENT_SOURCE_DIR}/data/*.cpp")
 file(GLOB GAME_SAVE_SOURCES    "${CMAKE_CURRENT_SOURCE_DIR}/save/*.cpp")
 file(GLOB GAME_RENDERING_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/rendering/*.cpp")
+file(GLOB GAME_AUDIO_SOURCES   "${CMAKE_CURRENT_SOURCE_DIR}/audio/*.cpp")
 
 add_library(game_runtime STATIC
     ${CMAKE_CURRENT_SOURCE_DIR}/Game.cpp
@@ -13,6 +14,7 @@ add_library(game_runtime STATIC
     ${GAME_DATA_SOURCES}
     ${GAME_SAVE_SOURCES}
     ${GAME_RENDERING_SOURCES}
+    ${GAME_AUDIO_SOURCES}
 )
 
 target_include_directories(game_runtime PUBLIC
@@ -29,6 +31,7 @@ target_include_directories(game_runtime PUBLIC
     ${CMAKE_SOURCE_DIR}/src/game/save
     ${CMAKE_SOURCE_DIR}/src/game/nav
     ${CMAKE_SOURCE_DIR}/src/game/rendering
+    ${CMAKE_SOURCE_DIR}/src/game/audio
     ${SDL2_INCLUDE_DIRS}
 )
 
@@ -37,6 +40,14 @@ target_link_libraries(game_runtime PUBLIC
     nlohmann_json::nlohmann_json
     ${SDL2_LIBRARIES}
 )
+
+if(APPLE)
+    target_link_libraries(game_runtime PUBLIC
+        "-framework AudioToolbox"
+        "-framework CoreFoundation"
+        "-framework CoreAudio"
+    )
+endif()
 
 add_executable(${PROJECT_NAME}
     ${CMAKE_SOURCE_DIR}/src/main.cpp

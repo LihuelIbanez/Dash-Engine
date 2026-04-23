@@ -156,6 +156,7 @@ add_executable(test_content_validation
     test_content_validation.cpp
     ${CMAKE_SOURCE_DIR}/src/editor/validation/ContentValidator.cpp
     ${CMAKE_SOURCE_DIR}/src/assets/AssetDatabase.cpp
+    ${CMAKE_SOURCE_DIR}/src/assets/AssetRepositorySqlite.cpp
 )
 target_include_directories(test_content_validation PRIVATE
     ${CMAKE_SOURCE_DIR}/src
@@ -171,7 +172,7 @@ target_include_directories(test_content_validation PRIVATE
     ${SDL2_INCLUDE_DIRS}
 )
 target_link_libraries(test_content_validation PRIVATE
-    game_core nlohmann_json::nlohmann_json ${SDL2_LIBRARIES}
+    game_core nlohmann_json::nlohmann_json SQLite3::SQLite3 ${SDL2_LIBRARIES}
 )
 target_compile_options(test_content_validation PRIVATE ${DASH_COMPILE_FLAGS})
 add_test(NAME test_content_validation COMMAND test_content_validation)
@@ -185,6 +186,7 @@ add_executable(test_hot_reload
     ${CMAKE_SOURCE_DIR}/src/assets/FileWatcher.cpp
     ${CMAKE_SOURCE_DIR}/src/assets/ImportManager.cpp
     ${CMAKE_SOURCE_DIR}/src/assets/AssetDatabase.cpp
+    ${CMAKE_SOURCE_DIR}/src/assets/AssetRepositorySqlite.cpp
     ${CMAKE_SOURCE_DIR}/src/assets/importers/SceneImporter.cpp
     ${CMAKE_SOURCE_DIR}/src/assets/importers/TileSetImporter.cpp
     ${CMAKE_SOURCE_DIR}/src/assets/importers/GameplayConfigImporter.cpp
@@ -204,7 +206,7 @@ target_include_directories(test_hot_reload PRIVATE
     ${SDL2_INCLUDE_DIRS}
 )
 target_link_libraries(test_hot_reload PRIVATE
-    game_core nlohmann_json::nlohmann_json ${SDL2_LIBRARIES}
+    game_core nlohmann_json::nlohmann_json SQLite3::SQLite3 ${SDL2_LIBRARIES}
 )
 target_compile_options(test_hot_reload PRIVATE ${DASH_COMPILE_FLAGS})
 add_test(NAME test_hot_reload COMMAND test_hot_reload)
@@ -551,4 +553,36 @@ target_compile_options(migrate_project_data PRIVATE ${DASH_COMPILE_FLAGS})
 
 # ── Physics determinism baseline (D84) ─────────────────────────────────────
 dash_add_test(test_physics_determinism test_physics_determinism.cpp)
+
+# ── Audio smoke tests (D93) ──────────────────────────────────────────────────
+add_executable(test_audio_smoke
+    test_audio_smoke.cpp
+    ${CMAKE_SOURCE_DIR}/src/game/audio/AudioEngine.cpp
+    ${CMAKE_SOURCE_DIR}/src/game/audio/AudioEventBindings.cpp
+    ${CMAKE_SOURCE_DIR}/src/game/audio/AudioSettingsRepository.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/input/InputBindings3D.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/db/SqliteDb.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/db/SqliteStatement.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/db/SchemaManager.cpp
+)
+target_include_directories(test_audio_smoke PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/src/core
+    ${CMAKE_SOURCE_DIR}/src/core/events
+    ${CMAKE_SOURCE_DIR}/src/game/audio
+    ${CMAKE_SOURCE_DIR}/src/core/input
+)
+target_link_libraries(test_audio_smoke PRIVATE
+    SQLite3::SQLite3
+    nlohmann_json::nlohmann_json
+)
+if(APPLE)
+    target_link_libraries(test_audio_smoke PRIVATE
+        "-framework AudioToolbox"
+        "-framework CoreFoundation"
+        "-framework CoreAudio"
+    )
+endif()
+target_compile_options(test_audio_smoke PRIVATE ${DASH_COMPILE_FLAGS})
+add_test(NAME test_audio_smoke COMMAND test_audio_smoke)
 

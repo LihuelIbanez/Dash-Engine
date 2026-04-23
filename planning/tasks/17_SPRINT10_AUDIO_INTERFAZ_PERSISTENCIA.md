@@ -4,7 +4,14 @@
 
 Agregar feedback de audio, triggers por eventos y persistencia de configuracion para mejorar respuesta del juego.
 
-**Estado: PLANIFICADO**
+**Estado: ✅ COMPLETADO**
+
+### Implementacion
+- AudioEngine con miniaudio (single-header, procedural tones)
+- AudioEventBindings: DamageEvent→220Hz, DeathEvent→110Hz, LevelUpEvent→880Hz, LootDropEvent→440Hz
+- AudioSettingsRepository: volumenes persistidos en project_meta (SQLite)
+- InputBindings3D: constantes de input extraidas de Renderer.cpp a struct configurable
+- test_audio_smoke: 23 assertions, 0 fallos
 
 ---
 

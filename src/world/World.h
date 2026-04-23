@@ -28,6 +28,9 @@ struct Tile {
 
     SDL_Color topColor()  const;   // lighter face colour
     SDL_Color sideColor() const;   // darker variant for outline / wall
+
+    bool operator==(const Tile& o) const { return type == o.type && walkable == o.walkable; }
+    bool operator!=(const Tile& o) const { return !(*this == o); }
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

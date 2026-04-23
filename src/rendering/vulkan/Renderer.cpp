@@ -997,16 +997,16 @@ bool Renderer::runSmoke(WindowContext& window, uint32_t targetFrames)
 
         // Isometric camera controls (synchronized with editor viewport)
 
-        const float moveSpeed = 2.4f;
-        
+        const float moveSpeed = inputBindings_.moveSpeed;
+
         // ── Isometric WASD controls (like editor) ──────────────────────────
         // These work in both standalone and embedded preview modes
         // World movement: W/S move along diagonal, A/D move along perpendicular diagonal
-        
+
         // In isometric view (looking at X-Z plane from above):
         // W: move north-west (negative X, negative Z)
         // S: move south-east (positive X, positive Z)
-        // A: move south-west (negative X, positive Z)  
+        // A: move south-west (negative X, positive Z)
         // D: move north-east (positive X, negative Z)
 
         // ── Player movement with WASD (player-centric gameplay) ──────────────
@@ -1014,19 +1014,19 @@ bool Renderer::runSmoke(WindowContext& window, uint32_t targetFrames)
         if (playerLoaded_) {
             float inputX = 0.0f;
             float inputZ = 0.0f;
-            if (glfwGetKey(window.handle(), GLFW_KEY_W) == GLFW_PRESS) {
+            if (glfwGetKey(window.handle(), inputBindings_.keyForward) == GLFW_PRESS) {
                 inputX -= 1.0f;
                 inputZ -= 1.0f;
             }
-            if (glfwGetKey(window.handle(), GLFW_KEY_S) == GLFW_PRESS) {
+            if (glfwGetKey(window.handle(), inputBindings_.keyBackward) == GLFW_PRESS) {
                 inputX += 1.0f;
                 inputZ += 1.0f;
             }
-            if (glfwGetKey(window.handle(), GLFW_KEY_A) == GLFW_PRESS) {
+            if (glfwGetKey(window.handle(), inputBindings_.keyLeft) == GLFW_PRESS) {
                 inputX -= 1.0f;
                 inputZ += 1.0f;
             }
-            if (glfwGetKey(window.handle(), GLFW_KEY_D) == GLFW_PRESS) {
+            if (glfwGetKey(window.handle(), inputBindings_.keyRight) == GLFW_PRESS) {
                 inputX += 1.0f;
                 inputZ -= 1.0f;
             }
@@ -1078,7 +1078,7 @@ bool Renderer::runSmoke(WindowContext& window, uint32_t targetFrames)
             cameraZ_ = playerZ_ - fz * followDistance_;
         }
         // ── Mouse look with right-click (legacy mode) ──────────────────────
-        if (glfwGetMouseButton(window.handle(), GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS) {
+        if (glfwGetMouseButton(window.handle(), inputBindings_.mouseButtonLook) == GLFW_PRESS) {
             double mouseX = 0.0;
             double mouseY = 0.0;
             glfwGetCursorPos(window.handle(), &mouseX, &mouseY);
@@ -1092,11 +1092,10 @@ bool Renderer::runSmoke(WindowContext& window, uint32_t targetFrames)
             lastMouseX_ = mouseX;
             lastMouseY_ = mouseY;
 
-            const float sensitivity = 0.10f;
-            yawDegrees_ += dx * sensitivity;
-            pitchDegrees_ -= dy * sensitivity;
-            if (pitchDegrees_ > 89.0f) pitchDegrees_ = 89.0f;
-            if (pitchDegrees_ < -89.0f) pitchDegrees_ = -89.0f;
+            yawDegrees_ += dx * inputBindings_.mouseSensitivity;
+            pitchDegrees_ -= dy * inputBindings_.mouseSensitivity;
+            if (pitchDegrees_ > inputBindings_.pitchMax) pitchDegrees_ = inputBindings_.pitchMax;
+            if (pitchDegrees_ < inputBindings_.pitchMin) pitchDegrees_ = inputBindings_.pitchMin;
         } else {
             hadLookFrame_ = false;
         }
