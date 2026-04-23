@@ -167,6 +167,7 @@ Marca como completado cuando se cumpla todo:
 | Sprint 10 - Audio e Interfaz | ✅ Completada | 100% (D89-D93) |
 | Sprint 11 - Importacion 3D | ✅ Completada | 100% (D97-D101) |
 | Sprint 12 - Portabilidad Windows | ✅ Completada | 100% (D106-D110) |
+| Sprint 13 - Visual Polish | ✅ Completada | 100% (tema VS Code, status bar, audit) |
 
 ## Notas
 

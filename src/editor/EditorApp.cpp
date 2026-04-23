@@ -229,7 +229,7 @@ bool EditorApp::init(const std::string& projectPath)
     }
 
     window_ = SDL_CreateWindow(
-        "Isometric RPG Editor",
+        "Dash Engine",
         SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
         1600, 900,
         SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
@@ -286,22 +286,108 @@ bool EditorApp::init(const std::string& projectPath)
         io.Fonts->AddFontFromFileTTF(faPath.c_str(), 13.f, &cfg, icon_ranges);
     }
 
-    // Dark style with Unreal-like colour scheme
+    // VS Code Dark+ theme
     ImGui::StyleColorsDark();
     ImGuiStyle& st = ImGui::GetStyle();
-    st.WindowRounding   = 2.f;
-    st.FrameRounding    = 2.f;
-    st.GrabRounding     = 2.f;
-    st.Colors[ImGuiCol_WindowBg]       = {0.12f, 0.12f, 0.12f, 1.f};
-    st.Colors[ImGuiCol_TitleBg]        = {0.08f, 0.08f, 0.08f, 1.f};
-    st.Colors[ImGuiCol_TitleBgActive]  = {0.16f, 0.16f, 0.16f, 1.f};
-    st.Colors[ImGuiCol_Header]         = {0.20f, 0.20f, 0.20f, 1.f};
-    st.Colors[ImGuiCol_HeaderHovered]  = {0.28f, 0.28f, 0.28f, 1.f};
-    st.Colors[ImGuiCol_Button]         = {0.22f, 0.22f, 0.22f, 1.f};
-    st.Colors[ImGuiCol_ButtonHovered]  = {0.30f, 0.50f, 0.30f, 1.f};
-    st.Colors[ImGuiCol_ButtonActive]   = {0.20f, 0.70f, 0.20f, 1.f};
-    st.Colors[ImGuiCol_Tab]            = {0.15f, 0.15f, 0.15f, 1.f};
-    st.Colors[ImGuiCol_TabHovered]     = {0.28f, 0.28f, 0.28f, 1.f};
+
+    // ── Style vars ───────────────────────────────────────────────────────────
+    st.WindowRounding    = 0.f;
+    st.FrameRounding     = 3.f;
+    st.GrabRounding      = 3.f;
+    st.TabRounding       = 0.f;
+    st.ScrollbarRounding = 0.f;
+    st.WindowBorderSize  = 1.f;
+    st.FrameBorderSize   = 0.f;
+    st.TabBorderSize     = 0.f;
+    st.WindowPadding     = {8.f, 8.f};
+    st.FramePadding      = {6.f, 4.f};
+    st.ItemSpacing       = {8.f, 4.f};
+    st.IndentSpacing     = 16.f;
+    st.ScrollbarSize     = 12.f;
+    st.GrabMinSize       = 8.f;
+
+    // ── Colors ───────────────────────────────────────────────────────────────
+    auto& c = st.Colors;
+
+    // Backgrounds
+    c[ImGuiCol_WindowBg]             = {0.118f, 0.118f, 0.118f, 1.f};  // #1E1E1E
+    c[ImGuiCol_ChildBg]              = {0.118f, 0.118f, 0.118f, 1.f};
+    c[ImGuiCol_PopupBg]              = {0.157f, 0.157f, 0.157f, 1.f};  // #282828
+    c[ImGuiCol_MenuBarBg]            = {0.196f, 0.196f, 0.200f, 1.f};  // #323233
+
+    // Borders
+    c[ImGuiCol_Border]               = {0.278f, 0.278f, 0.278f, 1.f};  // #474747
+    c[ImGuiCol_BorderShadow]         = {0.f, 0.f, 0.f, 0.f};
+
+    // Title bars
+    c[ImGuiCol_TitleBg]              = {0.118f, 0.118f, 0.118f, 1.f};  // #1E1E1E
+    c[ImGuiCol_TitleBgActive]        = {0.196f, 0.196f, 0.200f, 1.f};  // #323233
+    c[ImGuiCol_TitleBgCollapsed]     = {0.118f, 0.118f, 0.118f, 0.75f};
+
+    // Tabs
+    c[ImGuiCol_Tab]                  = {0.176f, 0.176f, 0.176f, 1.f};  // #2D2D2D
+    c[ImGuiCol_TabHovered]           = {0.165f, 0.176f, 0.180f, 1.f};  // #2A2D2E
+    c[ImGuiCol_TabSelected]          = {0.118f, 0.118f, 0.118f, 1.f};  // #1E1E1E (active=editor bg)
+    c[ImGuiCol_TabDimmed]            = {0.145f, 0.145f, 0.149f, 1.f};  // #252526
+    c[ImGuiCol_TabDimmedSelected]    = {0.176f, 0.176f, 0.176f, 1.f};
+
+    // Headers (collapsing headers, tree nodes, selectables)
+    c[ImGuiCol_Header]               = {0.149f, 0.310f, 0.471f, 0.5f}; // #264F78 selection
+    c[ImGuiCol_HeaderHovered]        = {0.149f, 0.310f, 0.471f, 0.7f};
+    c[ImGuiCol_HeaderActive]         = {0.149f, 0.310f, 0.471f, 0.9f};
+
+    // Buttons
+    c[ImGuiCol_Button]               = {0.235f, 0.235f, 0.235f, 1.f};  // #3C3C3C
+    c[ImGuiCol_ButtonHovered]        = {0.310f, 0.310f, 0.310f, 1.f};  // #4F4F4F
+    c[ImGuiCol_ButtonActive]         = {0.000f, 0.478f, 0.800f, 1.f};  // #007ACC
+
+    // Frame backgrounds (inputs, sliders, checkboxes)
+    c[ImGuiCol_FrameBg]              = {0.235f, 0.235f, 0.235f, 1.f};  // #3C3C3C
+    c[ImGuiCol_FrameBgHovered]       = {0.278f, 0.278f, 0.278f, 1.f};  // #474747
+    c[ImGuiCol_FrameBgActive]        = {0.200f, 0.200f, 0.200f, 1.f};  // #333333
+
+    // Scrollbar
+    c[ImGuiCol_ScrollbarBg]          = {0.118f, 0.118f, 0.118f, 0.5f};
+    c[ImGuiCol_ScrollbarGrab]        = {0.259f, 0.259f, 0.259f, 1.f};  // #424242
+    c[ImGuiCol_ScrollbarGrabHovered] = {0.310f, 0.310f, 0.310f, 1.f};  // #4F4F4F
+    c[ImGuiCol_ScrollbarGrabActive]  = {0.380f, 0.380f, 0.380f, 1.f};
+
+    // Slider
+    c[ImGuiCol_SliderGrab]           = {0.000f, 0.478f, 0.800f, 1.f};  // #007ACC
+    c[ImGuiCol_SliderGrabActive]     = {0.067f, 0.467f, 0.733f, 1.f};  // #1177BB
+
+    // Check mark
+    c[ImGuiCol_CheckMark]            = {0.000f, 0.478f, 0.800f, 1.f};  // #007ACC
+
+    // Text
+    c[ImGuiCol_Text]                 = {0.800f, 0.800f, 0.800f, 1.f};  // #CCCCCC
+    c[ImGuiCol_TextDisabled]         = {0.522f, 0.522f, 0.522f, 1.f};  // #858585
+
+    // Separators
+    c[ImGuiCol_Separator]            = {0.278f, 0.278f, 0.278f, 1.f};  // #474747
+    c[ImGuiCol_SeparatorHovered]     = {0.000f, 0.478f, 0.800f, 0.7f};
+    c[ImGuiCol_SeparatorActive]      = {0.000f, 0.478f, 0.800f, 1.f};
+
+    // Resize grip
+    c[ImGuiCol_ResizeGrip]           = {0.259f, 0.259f, 0.259f, 0.4f};
+    c[ImGuiCol_ResizeGripHovered]    = {0.000f, 0.478f, 0.800f, 0.6f};
+    c[ImGuiCol_ResizeGripActive]     = {0.000f, 0.478f, 0.800f, 0.9f};
+
+    // Docking
+    c[ImGuiCol_DockingPreview]       = {0.000f, 0.478f, 0.800f, 0.7f};
+    c[ImGuiCol_DockingEmptyBg]       = {0.118f, 0.118f, 0.118f, 1.f};
+
+    // Tables
+    c[ImGuiCol_TableHeaderBg]        = {0.145f, 0.145f, 0.149f, 1.f};  // #252526
+    c[ImGuiCol_TableBorderStrong]    = {0.278f, 0.278f, 0.278f, 1.f};
+    c[ImGuiCol_TableBorderLight]     = {0.200f, 0.200f, 0.200f, 1.f};
+    c[ImGuiCol_TableRowBg]           = {0.f, 0.f, 0.f, 0.f};
+    c[ImGuiCol_TableRowBgAlt]        = {1.f, 1.f, 1.f, 0.03f};
+
+    // Nav & misc
+    c[ImGuiCol_NavHighlight]         = {0.000f, 0.478f, 0.800f, 1.f};
+    c[ImGuiCol_TextSelectedBg]       = {0.149f, 0.310f, 0.471f, 0.5f};
+    c[ImGuiCol_ModalWindowDimBg]     = {0.f, 0.f, 0.f, 0.55f};
 
     ImGui_ImplSDL2_InitForSDLRenderer(window_, renderer_);
     ImGui_ImplSDLRenderer2_Init(renderer_);
@@ -787,10 +873,11 @@ void EditorApp::run()
             }
         }
 
-        // Full-window dockspace
+        // Full-window dockspace (reserve space for status bar)
+        constexpr float kStatusBarHeight = 24.f;
         ImGuiViewport* vp = ImGui::GetMainViewport();
         ImGui::SetNextWindowPos(vp->WorkPos);
-        ImGui::SetNextWindowSize(vp->WorkSize);
+        ImGui::SetNextWindowSize({vp->WorkSize.x, vp->WorkSize.y - kStatusBarHeight});
         ImGui::SetNextWindowViewport(vp->ID);
 
         ImGuiWindowFlags dockFlags =
@@ -881,6 +968,48 @@ void EditorApp::run()
             if (scene_.modified) title += " *";
             if (editorMode_ == EditorMode::Play) title += "  [PLAYING]";
             SDL_SetWindowTitle(window_, title.c_str());
+        }
+
+        // ── Status Bar (VS Code style) ──────────────────────────────────────
+        {
+            ImDrawList* dl = ImGui::GetForegroundDrawList();
+            float barY = vp->WorkPos.y + vp->WorkSize.y - kStatusBarHeight;
+            float barW = vp->WorkSize.x;
+
+            // Background color: blue in Edit, orange in Play
+            ImU32 barColor = (editorMode_ == EditorMode::Edit)
+                ? IM_COL32(0, 122, 204, 255)    // #007ACC
+                : IM_COL32(204, 102, 51, 255);   // #CC6633
+            dl->AddRectFilled({vp->WorkPos.x, barY},
+                              {vp->WorkPos.x + barW, barY + kStatusBarHeight}, barColor);
+
+            float textY = barY + 4.f;
+            float x = vp->WorkPos.x + 10.f;
+
+            // Mode indicator
+            const char* modeText = (editorMode_ == EditorMode::Edit) ? "EDIT" : "PLAYING";
+            dl->AddText({x, textY}, IM_COL32(255, 255, 255, 255), modeText);
+            x += ImGui::CalcTextSize(modeText).x + 20.f;
+
+            // Scene name
+            if (!scene_.sceneName.empty()) {
+                std::string sceneLabel = scene_.sceneName;
+                if (scene_.modified) sceneLabel += " *";
+                dl->AddText({x, textY}, IM_COL32(255, 255, 255, 220), sceneLabel.c_str());
+                x += ImGui::CalcTextSize(sceneLabel.c_str()).x + 20.f;
+            }
+
+            // Entity count
+            std::string entitiesStr = std::to_string(scene_.entities.size()) + " entities";
+            dl->AddText({x, textY}, IM_COL32(255, 255, 255, 180), entitiesStr.c_str());
+
+            // FPS (right-aligned)
+            float fps = ImGui::GetIO().Framerate;
+            char fpsStr[32];
+            std::snprintf(fpsStr, sizeof(fpsStr), "%.0f FPS", fps);
+            float fpsW = ImGui::CalcTextSize(fpsStr).x;
+            dl->AddText({vp->WorkPos.x + barW - fpsW - 10.f, textY},
+                        IM_COL32(255, 255, 255, 200), fpsStr);
         }
 
         // Render
@@ -1096,34 +1225,34 @@ void EditorApp::drawToolbar()
 {
     ImGui::Begin("Toolbar", nullptr, ImGuiWindowFlags_NoScrollbar);
 
-    // ▶ Build & Run (green button)
-    ImGui::PushStyleColor(ImGuiCol_Button,        {0.10f, 0.50f, 0.10f, 1.f});
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,  {0.20f, 0.70f, 0.20f, 1.f});
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive,   {0.10f, 0.90f, 0.10f, 1.f});
+    // ▶ Build & Run (green)
+    ImGui::PushStyleColor(ImGuiCol_Button,        {0.220f, 0.541f, 0.204f, 1.f}); // #388A34
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,  {0.298f, 0.686f, 0.314f, 1.f}); // #4CAF50
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,   {0.180f, 0.490f, 0.196f, 1.f});
     if (ImGui::Button(ICON_FA_HAMMER "  Build & Run  ", {170, 34})) buildAndRun();
     ImGui::PopStyleColor(3);
 
     ImGui::SameLine();
-    ImGui::TextDisabled("|");
+    ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
     ImGui::SameLine();
 
     // ▶ Play / ■ Stop (in-editor play mode)
     if (editorMode_ == EditorMode::Edit) {
-        ImGui::PushStyleColor(ImGuiCol_Button,       {0.10f, 0.35f, 0.60f, 1.f});
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, {0.15f, 0.50f, 0.80f, 1.f});
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive,  {0.10f, 0.60f, 0.90f, 1.f});
+        ImGui::PushStyleColor(ImGuiCol_Button,       {0.000f, 0.478f, 0.800f, 1.f}); // #007ACC
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, {0.067f, 0.467f, 0.733f, 1.f}); // #1177BB
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive,  {0.055f, 0.388f, 0.612f, 1.f}); // #0E639C
         if (ImGui::Button(ICON_FA_PLAY "  Play  ", {110, 34})) enterPlayMode();
         ImGui::PopStyleColor(3);
     } else {
-        ImGui::PushStyleColor(ImGuiCol_Button,       {0.60f, 0.15f, 0.10f, 1.f});
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, {0.80f, 0.25f, 0.15f, 1.f});
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive,  {0.90f, 0.30f, 0.15f, 1.f});
+        ImGui::PushStyleColor(ImGuiCol_Button,       {0.957f, 0.278f, 0.278f, 1.f}); // #F44747
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, {0.827f, 0.184f, 0.184f, 1.f}); // #D32F2F
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive,  {0.710f, 0.150f, 0.150f, 1.f});
         if (ImGui::Button(ICON_FA_STOP "  Stop  ", {110, 34})) exitPlayMode();
         ImGui::PopStyleColor(3);
     }
 
     ImGui::SameLine();
-    ImGui::TextDisabled("|");
+    ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
     ImGui::SameLine();
 
     // Tool buttons (disabled in Play mode)
@@ -1131,7 +1260,7 @@ void EditorApp::drawToolbar()
     auto toolBtn = [&](const char* label, Tool t) {
         bool sel = (currentTool_ == t);
         if (!inEdit) ImGui::BeginDisabled();
-        if (sel) ImGui::PushStyleColor(ImGuiCol_Button, {0.25f, 0.45f, 0.75f, 1.f});
+        if (sel) ImGui::PushStyleColor(ImGuiCol_Button, {0.035f, 0.278f, 0.443f, 1.f}); // #094771
         if (ImGui::Button(label, {110, 34})) currentTool_ = t;
         if (sel) ImGui::PopStyleColor();
         if (!inEdit) ImGui::EndDisabled();
@@ -1143,13 +1272,13 @@ void EditorApp::drawToolbar()
     toolBtn(ICON_FA_SKULL         " Place Enemy",  Tool::PlaceEnemy);
     toolBtn(ICON_FA_ERASER        " Erase",        Tool::Erase);
 
-    ImGui::TextDisabled("|");
+    ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
     ImGui::SameLine();
 
     // ✔ Validate Scene
-    ImGui::PushStyleColor(ImGuiCol_Button,        {0.35f, 0.20f, 0.55f, 1.f});
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,  {0.50f, 0.30f, 0.75f, 1.f});
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive,   {0.60f, 0.40f, 0.85f, 1.f});
+    ImGui::PushStyleColor(ImGuiCol_Button,        {0.773f, 0.525f, 0.753f, 1.f}); // #C586C0
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,  {0.808f, 0.576f, 0.847f, 1.f}); // #CE93D8
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,   {0.690f, 0.440f, 0.680f, 1.f});
     if (ImGui::Button(ICON_FA_SHIELD_HALVED "  Validate  ", {130, 34})) {
         validationIssues_ = contentValidator_.validate(scene_, world_, assetDb_);
         showValidationPanel_ = true;
@@ -1214,17 +1343,17 @@ void EditorApp::drawSceneSelector()
         return;
     }
 
-    ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.18f, 0.40f, 0.78f, 1.f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.24f, 0.50f, 0.92f, 1.f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.14f, 0.34f, 0.66f, 1.f));
+    ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.000f, 0.478f, 0.800f, 1.f)); // #007ACC
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.067f, 0.467f, 0.733f, 1.f)); // #1177BB
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.055f, 0.388f, 0.612f, 1.f));
     if (ImGui::Button(ICON_FA_ARROWS_ROTATE " Refresh", {120, 0})) {
         refreshSceneFiles();
     }
     ImGui::PopStyleColor(3);
 
-    ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.17f, 0.55f, 0.24f, 1.f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.24f, 0.68f, 0.31f, 1.f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.14f, 0.45f, 0.21f, 1.f));
+    ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.220f, 0.541f, 0.204f, 1.f)); // #388A34
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.298f, 0.686f, 0.314f, 1.f)); // #4CAF50
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.180f, 0.490f, 0.196f, 1.f));
     if (ImGui::Button(ICON_FA_FILE " Create", {120, 0})) {
         std::strncpy(createSceneFileName_, "new_scene.json", sizeof(createSceneFileName_));
         createSceneFileName_[sizeof(createSceneFileName_) - 1] = '\0';
@@ -1233,9 +1362,9 @@ void EditorApp::drawSceneSelector()
     ImGui::PopStyleColor(3);
 
     ImGui::SameLine();
-    ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.74f, 0.47f, 0.16f, 1.f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.86f, 0.56f, 0.20f, 1.f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.62f, 0.38f, 0.12f, 1.f));
+    ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.808f, 0.569f, 0.471f, 1.f)); // #CE9178
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.878f, 0.639f, 0.541f, 1.f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.710f, 0.490f, 0.400f, 1.f));
     if (ImGui::Button(ICON_FA_FOLDER_OPEN " Open", {120, 0})) {
         if (!selectedSceneFile_.empty()) {
             openScene(selectedSceneFile_);
@@ -1802,7 +1931,7 @@ void EditorApp::drawViewport()
 
     // Fill background with dark color for letterbox/pillarbox bars
     ImDrawList* bgDl = ImGui::GetWindowDrawList();
-    bgDl->AddRectFilled(cursorPos, {cursorPos.x + avail.x, cursorPos.y + avail.y}, IM_COL32(13, 15, 18, 255));
+    bgDl->AddRectFilled(cursorPos, {cursorPos.x + avail.x, cursorPos.y + avail.y}, IM_COL32(30, 30, 30, 255));
 
     // Center the image and display at fixed aspect ratio
     ImGui::SetCursorPos({ImGui::GetCursorPos().x + offsetX, ImGui::GetCursorPos().y + offsetY});
@@ -3439,7 +3568,9 @@ void EditorApp::exportGameBundle()
     if (!scene_.filePath.empty()) {
         const std::string prevPath = scene_.filePath;
         const bool prevModified = scene_.modified;
-        scene_.saveToFile(scene_.filePath);
+        if (!scene_.saveToFile(scene_.filePath)) {
+            addLog("[ERROR] Failed to save scene before export: " + scene_.filePath);
+        }
         scene_.filePath = prevPath;
         scene_.modified = prevModified;
     }
@@ -3668,7 +3799,7 @@ void EditorApp::drawFileBrowser()
         drawDirectoryTree(fileBrowserRoot_, fileBrowserFilter_,
                           clickedFile, copiedPath, fs::path(resDir));
     } else {
-        ImGui::TextColored({1.f,0.4f,0.4f,1.f}, "Path not found: %s",
+        ImGui::TextColored({0.957f,0.278f,0.278f,1.f}, "Path not found: %s",
                            fileBrowserRoot_.c_str());
     }
 

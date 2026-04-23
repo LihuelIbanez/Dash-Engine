@@ -9,7 +9,7 @@
 ## Estado del Proyecto
 
 ```
-Overall  [██████████████████████████████]  100%  v12.0-alpha (Sprint 12)
+Overall  [██████████████████████████████]  100%  v13.0-alpha (Sprint 13)
 
 Core Engine Foundation  [██████████████████████████████]  100%
 Level Editor (DashEngine)  [██████████████████████████████]  100%
@@ -22,6 +22,7 @@ Mundo Fisico       [████████████████████
 Audio e Interfaz   [██████████████████████████████]  100%  (D89-D93)
 Importacion 3D     [██████████████████████████████]  100%  (D97-D101)
 Windows Port       [██████████████████████████████]  100%  (D106-D110)
+Visual Polish      [██████████████████████████████]  100%  (Sprint 13)
 ```
 
 | Modulo | Estado | Detalle |
@@ -37,8 +38,9 @@ Windows Port       [████████████████████
 | Audio e Interfaz | ✅ Completo | miniaudio backend, canales master/music/sfx, triggers de colision/ataque, input mapping persistente, config en SQLite |
 | Importacion 3D | ✅ Completo | Assimp (.obj/.gltf/.glb), vertex extendido (pos+normal+uv), depth buffer, TextureLoader (stb_image), textured pipeline, AssetCache3D |
 | Windows Port | ✅ Completo | CMake MSVC + CMakePresets.json, build_windows.ps1, Packaging cross-platform (DMG/ZIP+NSIS), CI/CD GitHub Actions dual |
+| Visual Polish | ✅ Completo | Tema VS Code Dark+, status bar con modo/escena/FPS, separadores verticales, audit funcional completo |
 
-**Sprint 12 completado:** portabilidad Windows completa con CI/CD, CMake presets, packaging cross-platform.
+**Sprint 13 completado:** restyling visual estilo VS Code Dark+, status bar, verificacion funcional de todos los controles del editor.
 
 ---
 

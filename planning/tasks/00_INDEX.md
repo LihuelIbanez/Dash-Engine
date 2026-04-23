@@ -23,8 +23,9 @@ Este directorio separa las tareas por semana para ejecutar el escalado del edito
 | Sprint 10 - Audio e Interfaz | ✅ Completada | D89-D93 (audio, input, persistencia) |
 | Sprint 11 - Importacion 3D | ✅ Completada | D97-D101 (Assimp, vertex, depth, texturas, cache) |
 | Sprint 12 - Portabilidad Windows | ✅ Completada | D106-D110 (CMakePresets, Packaging, CI/CD, docs) |
+| Sprint 13 - Visual Polish | ✅ Completada | Tema VS Code Dark+, status bar, audit funcional |
 
-**Estado:** Todos los sprints completados (1-12).
+**Estado:** Todos los sprints completados (1-13).
 
 ## Funcionalidades ya implementadas (fuera del plan)
 
@@ -88,6 +89,9 @@ El proyecto ya cuenta con una base funcional significativa:
 - 17_SPRINT10_AUDIO_INTERFAZ_PERSISTENCIA.md
 - 18_SPRINT11_IMPORTACION_ACTIVOS_3D.md
 - 19_SPRINT12_PORTABILIDAD_WINDOWS_BINARIOS.md
+
+### Sprint 13
+- 20_SPRINT13_VISUAL_POLISH.md
 
 ### General
 - 99_ACCEPTANCE_CHECKLIST.md

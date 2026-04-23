@@ -19,7 +19,7 @@ void ValidationPanel::draw(const std::vector<ValidationIssue>& issues,
     }
 
     if (errCount > 0)
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.f, 0.3f, 0.3f, 1.f));
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.957f, 0.278f, 0.278f, 1.f)); // #F44747
     else
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.6f, 0.6f, 0.6f, 1.f));
     ImGui::Text("%d Error%s", errCount, errCount == 1 ? "" : "s");
@@ -28,7 +28,7 @@ void ValidationPanel::draw(const std::vector<ValidationIssue>& issues,
     ImGui::SameLine();
 
     if (warnCount > 0)
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.f, 0.85f, 0.2f, 1.f));
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.800f, 0.655f, 0.000f, 1.f)); // #CCA700
     else
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.6f, 0.6f, 0.6f, 1.f));
     ImGui::Text("%d Warning%s", warnCount, warnCount == 1 ? "" : "s");
@@ -68,9 +68,9 @@ void ValidationPanel::draw(const std::vector<ValidationIssue>& issues,
             // ── Col 0: Severity badge ─────────────────────────────────────────
             ImGui::TableNextColumn();
             if (isError)
-                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.f, 0.3f, 0.3f, 1.f));
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.957f, 0.278f, 0.278f, 1.f)); // #F44747
             else
-                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.f, 0.85f, 0.2f, 1.f));
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.800f, 0.655f, 0.000f, 1.f)); // #CCA700
             ImGui::Text("%s", isError ? "[ERR] " : "[WARN]");
             ImGui::PopStyleColor();
 
