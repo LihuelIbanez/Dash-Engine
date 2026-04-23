@@ -4,7 +4,10 @@
 
 Conseguir build reproducible en Windows sin romper macOS, con ejecutable empaquetado y flujo CI basico.
 
-**Estado: PLANIFICADO**
+**Estado: 🔧 PARCIAL (80%)**
+
+D106-D109 completados (CMake cross-platform, MSVC flags, AppPaths, build scripts).
+D110 pendiente (CI/CD con GitHub Actions).
 
 ---
 

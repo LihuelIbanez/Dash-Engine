@@ -10,15 +10,15 @@ Prerequisito: Sprint 2 (D21-D30) completado. Tag v2.0-alpha etiquetado.
 
 ### To Do
 
-(ver tareas abajo)
+(vacio — todas las tareas completadas)
 
 ### Doing
 
-(vacio)
+(vacio — sprint completado)
 
 ### Done
 
-(vacio)
+D31, D32, D33, D34, D35 (parcial — no se creo tag v3.0-alpha)
 
 ---
 
@@ -255,11 +255,11 @@ git tag v3.0-alpha
 
 ## Registro Diario de Ejecucion
 
-- [ ] Dia 31 | ID: D31 | Plan: 4h | Real: __h | Bloqueos: __ | Resultado: __
-- [ ] Dia 32 | ID: D32 | Plan: 5h | Real: __h | Bloqueos: __ | Resultado: __
-- [ ] Dia 33 | ID: D33 | Plan: 6h | Real: __h | Bloqueos: __ | Resultado: __
-- [ ] Dia 34 | ID: D34 | Plan: 5h | Real: __h | Bloqueos: __ | Resultado: __
-- [ ] Dia 35 | ID: D35 | Plan: 2h | Real: __h | Bloqueos: __ | Resultado: __
+- [x] Dia 31 | ID: D31 | Plan: 4h | Real: ~3h | Bloqueos: ninguno | Resultado: AppPaths.h multiplataforma (macOS, Windows, iOS, Linux)
+- [x] Dia 32 | ID: D32 | Plan: 5h | Real: ~4h | Bloqueos: ninguno | Resultado: test_save_game.cpp + test_gameplay_database.cpp
+- [x] Dia 33 | ID: D33 | Plan: 6h | Real: ~5h | Bloqueos: ninguno | Resultado: GameState enum, renderTitleScreen(), renderGameOverScreen()
+- [x] Dia 34 | ID: D34 | Plan: 5h | Real: ~4h | Bloqueos: ninguno | Resultado: rollLoot() + LootDropEvent en SpawnRewardSystem
+- [x] Dia 35 | ID: D35 | Plan: 2h | Real: parcial | Bloqueos: ninguno | Resultado: README actualizado, tag v3.0-alpha no creado (proyecto continuo a v7.0-alpha)
 
 ---
 

@@ -4,7 +4,10 @@
 
 Integrar fisicas 3D al renderer para movimiento, gravedad y colisiones reproducibles.
 
-**Estado: PLANIFICADO**
+**Estado: ✅ COMPLETADO**
+
+Implementado en commit 2ad5d01 (2026-04-09).
+PhysicsWorld con backend builtin (sin Jolt/Bullet), fixed timestep, AABB colliders, gravedad, y tests de determinismo pasando.
 
 ---
 

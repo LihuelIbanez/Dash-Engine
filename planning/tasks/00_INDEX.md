@@ -2,7 +2,7 @@
 
 Este directorio separa las tareas por semana para ejecutar el escalado del editor y del juego.
 
-**Ultima actualizacion: 2026-04-09**
+**Ultima actualizacion: 2026-04-23**
 
 ## Estado actual del sprint
 
@@ -13,18 +13,18 @@ Este directorio separa las tareas por semana para ejecutar el escalado del edito
 | 3 - Runtime Systems | ✅ Completada | D13-D17 completados |
 | 4 - Produccion/QA | ✅ Completada | D18-D20 completados |
 | Sprint 2 - Features Avanzadas | ✅ Completada | D21-D30 completados, tag v2.0-alpha |
-| Sprint 3 - Polish & Ship | 🔧 En progreso | D31-D35 pendientes |
+| Sprint 3 - Polish & Ship | ✅ Completada | D31-D35 completados (codigo completo, sin tag v3.0) |
 | Sprint 4 - Sprite Editor | ✅ Completada | D36-D45 completados |
 | Sprint 5 - Project Bundles | ✅ Completada | D46-D54 completados |
 | Sprint 6 - SQLite Foundation | ✅ Completada | D55-D61 (migracion base + coexistencia JSON) |
 | Sprint 7 - SQLite Cutover | ✅ Completada | D62-D68 (editor/runtime en DB + migracion datos) |
-| Sprint 8 - Vulkan Base | 🧭 Planificado | D70-D76 (render bootstrap) |
-| Sprint 9 - Mundo Fisico | 🧭 Planificado | D80-D84 (fisicas y colisiones) |
+| Sprint 8 - Vulkan Base | ✅ Completada | D70-D76 (render bootstrap, pipeline, cubo, shaders) |
+| Sprint 9 - Mundo Fisico | ✅ Completada | D80-D84 (PhysicsWorld, colliders, gravedad, determinismo) |
 | Sprint 10 - Audio e Interfaz | 🧭 Planificado | D89-D93 (audio, input, persistencia) |
 | Sprint 11 - Importacion 3D | 🧭 Planificado | D97-D101 (assets y cache) |
-| Sprint 12 - Portabilidad Windows | 🧭 Planificado | D106-D110 (cross-platform y CI) |
+| Sprint 12 - Portabilidad Windows | 🔧 Parcial (80%) | D106-D109 completados, D110 pendiente (CI/CD) |
 
-**Proximo paso:** Retomar Sprint 3 (D31-D35) y consolidar release final post-bundles.
+**Proximo paso:** Sprint 10 (Audio e Interfaz) o completar Sprint 12 (CI/CD Windows).
 
 ## Funcionalidades ya implementadas (fuera del plan)
 

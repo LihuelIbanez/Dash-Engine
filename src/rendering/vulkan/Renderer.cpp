@@ -522,7 +522,10 @@ void Renderer::applyEditorStateIfNeeded(GLFWwindow* window)
 
         // Only update camera if something changed (don't overwrite WASD each frame)
         if (posChanged || zoomChanged || angleChanged || followChanged) {
-            yawDegrees_ = editorYaw;
+            // Convert isometric yaw to Vulkan camera yaw:
+            // Iso yaw=45° places camera at SE looking NW, which in Vulkan
+            // forward-vector convention corresponds to yaw = -(isoYaw + 90).
+            yawDegrees_ = -(editorYaw + 90.0f);
             pitchDegrees_ = -std::fabs(editorPitch);
             followDistance_ = followDistance;
             followHeight_ = followHeight;
@@ -863,18 +866,40 @@ bool Renderer::init(WindowContext& window)
         sceneInstances_.push_back({spawn, {0.26f, 0.52f, 0.26f}, {0.30f, 0.58f, 0.95f}});
     }
 
+    // Generate a small checkerboard floor when no terrain was loaded
+    if (terrainInstances_.empty()) {
+        for (int z = -3; z <= 3; ++z) {
+            for (int x = -3; x <= 3; ++x) {
+                const bool checker = ((x + z) & 1) == 0;
+                terrainInstances_.push_back({
+                    {static_cast<float>(x), -0.7f, static_cast<float>(z)},
+                    {0.48f, 0.03f, 0.48f},
+                    checker ? dash::physics::Vec3{0.24f, 0.34f, 0.24f}
+                            : dash::physics::Vec3{0.18f, 0.28f, 0.18f}
+                });
+            }
+        }
+    }
+
     cubeBodyId_ = physicsWorld_.createDynamicBox(spawn, {0.30f, 0.30f, 0.30f}, 1.0f);
     transformProxy_.syncFromPhysics(physicsWorld_, cubeBodyId_, cubeTransform_);
 
     // In standalone mode there is no editor camera sync file, so align camera
     // to the loaded scene spawn to avoid starting with an empty/black view.
-    if (!embeddedPreview_ && loadedSceneSpawn) {
+    if (loadedSceneSpawn) {
         cameraX_ = spawn.x + 3.0f;
         cameraY_ = spawn.y + 2.5f;
         cameraZ_ = spawn.z + 3.0f;
         yawDegrees_ = -135.0f;
         pitchDegrees_ = -28.0f;
         pendingAutoFocus_ = true;
+    } else if (scenePath_.empty()) {
+        // No scene provided: position camera to see the default physics cube
+        cameraX_ = 2.0f;
+        cameraY_ = 2.0f;
+        cameraZ_ = 2.0f;
+        yawDegrees_ = -135.0f;
+        pitchDegrees_ = -25.0f;
     }
 
     dash::physics::DebugPhysicsDraw::logBodyAabb(physicsWorld_, floorBodyId_, "floor");

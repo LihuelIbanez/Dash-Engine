@@ -24,7 +24,7 @@ Construir una base de motor 3D en C++ con foco en macOS (MoltenVK) y compatibili
 
 ---
 
-## Sprint 8 - Base Vulkan (D70-D76)
+## Sprint 8 - Base Vulkan (D70-D76) — ✅ COMPLETADO
 
 Meta: inicializar pipeline Vulkan funcional y dibujar un cubo con camara basica.
 
@@ -58,9 +58,10 @@ Meta: inicializar pipeline Vulkan funcional y dibujar un cubo con camara basica.
 - Criterios de aceptacion: suite smoke verde en macOS.
 ---
 
-## Sprint 9 - Dinamica y mundo fisico (D80-D84)
+## Sprint 9 - Dinamica y mundo fisico (D80-D84) — ✅ COMPLETADO
 
 Meta: vincular fisicas con render para interaccion real.
+Nota: Se uso backend builtin propio en lugar de Jolt/Bullet.
 
 ### D80 - Integracion de libreria fisica
 - Descripcion: Integrar Jolt (o Bullet) con modulo PhysicsWorld.
@@ -144,9 +145,10 @@ Meta: cargar modelos complejos y texturas.
 - Criterios de aceptacion: casos edge (.gltf incompleto) manejados.
 ---
 
-## Sprint 12 - Portabilidad Windows + release (D106-D110)
+## Sprint 12 - Portabilidad Windows + release (D106-D110) — 🔧 PARCIAL (80%)
 
 Meta: build cruzado robusto y paquete ejecutable final.
+Nota: D106-D109 completados (CMake MSVC, build scripts, AppPaths). Falta D110 (CI/CD GitHub Actions).
 
 ### D106 - CMake cross-platform cleanup
 - Descripcion: Flags y deteccion por plataforma (Apple/Windows/Linux).

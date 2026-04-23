@@ -4,7 +4,10 @@
 
 Inicializar el pipeline grafico Vulkan en macOS (MoltenVK) y renderizar un cubo estable en pantalla con loop seguro.
 
-**Estado: PLANIFICADO**
+**Estado: ✅ COMPLETADO**
+
+Implementado entre commits b98ce4f (2026-03-27) y 419eaac (2026-04-07).
+Todos los archivos planificados fueron creados y el VulkanBootstrap compila y ejecuta correctamente en macOS con MoltenVK.
 
 ---
 

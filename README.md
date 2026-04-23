@@ -15,7 +15,11 @@ Asset Pipeline  [█████████████████████
 Game Runtime    [██████████████████████████████]  100%
 Production / QA [██████████████████████████████]  100%
 SQLite Persistence [██████████████████████████████]  100%
-Vulkan 3D Roadmap [█████.........................]   18%  (D70-D84 en progreso)
+Vulkan 3D Render   [██████████████████████████████]  100%  (D70-D76 completo)
+Mundo Fisico       [██████████████████████████████]  100%  (D80-D84 completo)
+Windows Port       [████████████████████████......]   80%  (falta CI/CD)
+Audio e Interfaz   [..............................]    0%  (D89-D93 planificado)
+Importacion 3D     [..............................]    0%  (D97-D101 planificado)
 ```
 
 | Módulo | Estado | Detalle |
@@ -26,7 +30,11 @@ Vulkan 3D Roadmap [█████.........................]   18%  (D70-D84 en 
 | Game Runtime | ✅ Completo | 4 sistemas independientes, data-driven desde JSON, A* pathfinding, save/load versionado, EventDispatcher integrado |
 | Production / QA | ✅ Completo | Suite ctest automatizada, ContentValidator, Packaging cmake, VersionInfo embebida |
 | SQLite Persistence | ✅ Completo | Migraciones versionadas, repositorios de assets/scenes/savegame en SQLite, fallback JSON/hybrid/sqlite |
-| Vulkan 3D Roadmap | 🚧 En progreso | D70-D78 completos (bootstrap/render/camara/refactor) + base D80-D84 (PhysicsWorld, timestep fijo, baseline y test determinista) |
+| Vulkan 3D Render | ✅ Completo | MoltenVK/macOS, GLFW window, DeviceContext, SwapchainContext, PipelineBuilder, shaders SPIR-V, MeshBuffers, cubo renderizado, FrameGraphLite |
+| Mundo Fisico | ✅ Completo | PhysicsWorld con backend builtin, fixed timestep (60/120 FPS), AABB colliders, gravedad, TransformProxy, DebugPhysicsDraw, tests de determinismo |
+| Windows Port | 🔧 Parcial (80%) | CMake MSVC, build_windows.ps1, dash.ps1, AppPaths multiplataforma — falta CI/CD GitHub Actions |
+| Audio e Interfaz | 🧭 Planificado | D89-D93: miniaudio, audio events, input mapping 3D |
+| Importacion 3D | 🧭 Planificado | D97-D101: assimp (.obj/.gltf), texturas, cache |
 
 **Sprint 7 completado:** migracion SQLite consolidada (foundation + cutover), migrador de datos, runbook y pruebas de integridad.
 
@@ -212,15 +220,63 @@ Dash-Engine/
 
 ## Backlog Futuro
 
-- [ ] Sprint 8 (D70-D76): bootstrap Vulkan en macOS (MoltenVK), swapchain, pipeline y cubo base.
-- [ ] Sprint 9 (D80-D84): integración de físicas 3D y pruebas deterministas.
+- [x] Sprint 8 (D70-D76): bootstrap Vulkan en macOS (MoltenVK), swapchain, pipeline y cubo base.
+- [x] Sprint 9 (D80-D84): integración de físicas 3D y pruebas deterministas.
 - [ ] Sprint 10 (D89-D93): audio espacial, triggers por eventos, input mapping y persistencia.
 - [ ] Sprint 11 (D97-D101): importación 3D (.obj/.gltf), texturas y cache de assets.
-- [ ] Sprint 12 (D106-D110): portabilidad Windows, CI dual y empaquetado final.
+- [ ] Sprint 12 (D106-D110): portabilidad Windows (80% — falta CI/CD), empaquetado final.
 
 ---
 
 ## Build
+
+### Requisitos
+
+| Dependencia | Instalación (macOS) | Instalación (Windows) |
+|---|---|---|
+| CMake ≥ 3.16 | `brew install cmake` | Visual Studio / `winget install cmake` |
+| SDL2 | `brew install sdl2` | vcpkg (`C:\vcpkg`) |
+| SQLite3 | incluido en macOS SDK | vcpkg |
+| GLFW | `brew install glfw` | vcpkg |
+| Vulkan (opcional) | `brew install molten-vk vulkan-headers vulkan-loader` | Vulkan SDK |
+
+### CLI `dash` (recomendado)
+
+El proyecto incluye un CLI multiplataforma que simplifica compilación y ejecución:
+
+| Archivo | Plataforma |
+|---|---|
+| `dash.sh` | macOS / Linux |
+| `dash.ps1` | Windows |
+
+**Configurar el alias (una sola vez):**
+
+```bash
+# macOS / Linux
+echo 'alias dash="/ruta/a/Dash-Engine/dash.sh"' >> ~/.zshrc
+source ~/.zshrc
+
+# Windows (PowerShell)
+Add-Content $PROFILE 'function dash { powershell -ExecutionPolicy Bypass -File "C:\ruta\a\Dash-Engine\dash.ps1" @args }'
+. $PROFILE
+```
+
+**Comandos disponibles:**
+
+| Comando | Descripción |
+|---|---|
+| `dash build` | Compila todo (editor + runtime + vulkan) |
+| `dash editor` | Compila y abre el editor DashEngine |
+| `dash run` | Abre el editor sin recompilar |
+| `dash game` | Abre el runtime IsometricRPG sin recompilar |
+| `dash vulkan` | Compila y abre VulkanBootstrap |
+| `dash clean` | Elimina el directorio build/ |
+| `dash update` | git pull + recompila |
+| `dash test` | Compila y ejecuta los tests |
+| `dash config` | Solo configura CMake (sin compilar) |
+| `dash help` | Muestra esta ayuda |
+
+### Build manual
 
 ```bash
 # Requiere: CMake ≥ 3.16, SDL2, compilador C++17

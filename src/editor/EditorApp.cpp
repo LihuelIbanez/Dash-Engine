@@ -1782,21 +1782,41 @@ void EditorApp::drawViewport()
     if (avail.x < 1) avail.x = 1;
     if (avail.y < 1) avail.y = 1;
     ImVec2 cursorPos = ImGui::GetCursorScreenPos();
-    vpDisplayW_ = avail.x;
-    vpDisplayH_ = avail.y;
-    vpScreenX_ = cursorPos.x;
-    vpScreenY_ = cursorPos.y;
 
     // Render the world to texture (now with valid viewport coordinates)
     renderWorldToTexture();
 
-    // Display texture scaled to available space
-    ImGui::Image((ImTextureID)viewportTex_, avail);
+    // Fit texture into available space preserving aspect ratio (letterbox/pillarbox)
+    const float texAspect = static_cast<float>(SCREEN_W) / static_cast<float>(SCREEN_H);
+    const float panelAspect = avail.x / avail.y;
+    ImVec2 imgSize;
+    if (panelAspect > texAspect) {
+        // Panel wider than texture → pillarbox (bars on sides)
+        imgSize = {avail.y * texAspect, avail.y};
+    } else {
+        // Panel taller than texture → letterbox (bars top/bottom)
+        imgSize = {avail.x, avail.x / texAspect};
+    }
+    const float offsetX = (avail.x - imgSize.x) * 0.5f;
+    const float offsetY = (avail.y - imgSize.y) * 0.5f;
+
+    // Fill background with dark color for letterbox/pillarbox bars
+    ImDrawList* bgDl = ImGui::GetWindowDrawList();
+    bgDl->AddRectFilled(cursorPos, {cursorPos.x + avail.x, cursorPos.y + avail.y}, IM_COL32(13, 15, 18, 255));
+
+    // Center the image and display at fixed aspect ratio
+    ImGui::SetCursorPos({ImGui::GetCursorPos().x + offsetX, ImGui::GetCursorPos().y + offsetY});
+    ImGui::Image((ImTextureID)viewportTex_, imgSize);
+
+    // Update viewport mapping for mouse coordinate conversion
+    vpDisplayW_ = imgSize.x;
+    vpDisplayH_ = imgSize.y;
+    vpScreenX_ = cursorPos.x + offsetX;
+    vpScreenY_ = cursorPos.y + offsetY;
 
     if (viewport3D_.useVulkan3D) {
         ImDrawList* dl = ImGui::GetWindowDrawList();
-        ImVec2 min = cursorPos;
-        ImVec2 max = {cursorPos.x + avail.x, cursorPos.y + avail.y};
+        ImVec2 min = {vpScreenX_, vpScreenY_};
         dl->AddRectFilled({min.x + 8, min.y + 8}, {min.x + 280, min.y + 48}, IM_COL32(18, 24, 32, 180), 4.0f);
         const char* status = nullptr;
         if (vulkanPreviewRunning_ && viewport3D_.embeddedPreview) {
@@ -1815,8 +1835,8 @@ void EditorApp::drawViewport()
             std::string guid(static_cast<const char*>(payload->Data),
                              static_cast<size_t>(payload->DataSize) - 1);
             ImGuiIO& io = ImGui::GetIO();
-            float mx = io.MousePos.x - cursorPos.x;
-            float my = io.MousePos.y - cursorPos.y;
+            float mx = io.MousePos.x - vpScreenX_;
+            float my = io.MousePos.y - vpScreenY_;
             float wx = 0.f, wy = 0.f;
             if (viewportScreenToWorld(mx, my, wx, wy)) {
                 std::string prefabsDir = assetsRoot_ + "/prefabs";
@@ -1886,8 +1906,8 @@ void EditorApp::drawViewport()
             ImGui::ResetMouseDragDelta(ImGuiMouseButton_Right);
         }
 
-        float mx = io.MousePos.x - cursorPos.x;
-        float my = io.MousePos.y - cursorPos.y;
+        float mx = io.MousePos.x - vpScreenX_;
+        float my = io.MousePos.y - vpScreenY_;
 
         // Left-click → use current tool (only in Edit mode)
         if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) &&
@@ -2836,6 +2856,32 @@ void EditorApp::drawCreateSceneDialog()
 // ═════════════════════════════════════════════════════════════════════════════
 // Actions
 // ═════════════════════════════════════════════════════════════════════════════
+
+// Center camera on the Player entity, or the centroid of all entities,
+// falling back to the world center if no entities exist.
+void EditorApp::focusCameraOnEntities()
+{
+    // Try Player first
+    for (const auto& e : scene_.entities) {
+        if (e.type == EntityData::Type::Player) {
+            camX_ = e.x;
+            camY_ = e.y;
+            return;
+        }
+    }
+    // Centroid of all entities
+    if (!scene_.entities.empty()) {
+        float sx = 0.f, sy = 0.f;
+        for (const auto& e : scene_.entities) { sx += e.x; sy += e.y; }
+        camX_ = sx / static_cast<float>(scene_.entities.size());
+        camY_ = sy / static_cast<float>(scene_.entities.size());
+        return;
+    }
+    // Fallback: world center
+    camX_ = WORLD_W / 2.f;
+    camY_ = WORLD_H / 2.f;
+}
+
 void EditorApp::newScene()
 {
     scene_.createDefault();
@@ -3005,8 +3051,7 @@ void EditorApp::openScene(const std::string& path)
                 applySceneToWorld();
                 selectedEntityId_ = 0;
                 commandStack_.clear();
-                camX_ = WORLD_W / 2.f;
-                camY_ = WORLD_H / 2.f;
+                focusCameraOnEntities();
                 selectedSceneFile_ = fileName;
                 addLog("Loaded (SQLite): " + fileName + " (v" + std::to_string(scene_.sceneVersion) + ")");
                 return;
@@ -3025,8 +3070,7 @@ void EditorApp::openScene(const std::string& path)
         applySceneToWorld();
         selectedEntityId_ = 0;
         commandStack_.clear();
-        camX_ = WORLD_W / 2.f;
-        camY_ = WORLD_H / 2.f;
+        focusCameraOnEntities();
         selectedSceneFile_ = fileName;
         addLog("Loaded: " + path + " (v" + std::to_string(scene_.sceneVersion) + ")");
 

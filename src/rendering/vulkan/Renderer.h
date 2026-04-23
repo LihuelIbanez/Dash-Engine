@@ -79,10 +79,10 @@ private:
     float fixedAccumulator_ = 0.0f;
 
     float cameraX_ = 0.0f;
-    float cameraY_ = 0.0f;
+    float cameraY_ = 1.5f;
     float cameraZ_ = 2.2f;
     float yawDegrees_ = -90.0f;
-    float pitchDegrees_ = 0.0f;
+    float pitchDegrees_ = -20.0f;
     bool pendingAutoFocus_ = false;
     bool hadLookFrame_ = false;
     double lastMouseX_ = 0.0;

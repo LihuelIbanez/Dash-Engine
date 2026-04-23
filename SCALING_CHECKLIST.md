@@ -3,7 +3,7 @@
 Este plan prioriza primero el Editor (como Unity/Unreal/Godot) y luego el Runtime del juego.
 Marca cada item con [x] cuando este completado.
 
-**Ultima actualizacion: 2026-04-09**
+**Ultima actualizacion: 2026-04-23**
 
 ## Objetivos de Escalado
 
@@ -158,7 +158,15 @@ Marca como completado cuando se cumpla todo:
 | 3 - Runtime Systems | ✅ Completada | 100% |
 | 4 - Produccion/QA | ✅ Completada | 100% |
 | Sprint 2 - Features Avanzadas | ✅ Completada | 100% |
+| Sprint 3 - Polish & Ship | ✅ Completada | 100% (D31-D35) |
+| Sprint 4 - Sprite Editor | ✅ Completada | 100% (D36-D45) |
 | Sprint 5 - Project Bundles | ✅ Completada | 100% (D46-D54) |
+| Sprint 6-7 - SQLite Migration | ✅ Completada | 100% (D55-D68) |
+| Sprint 8 - Vulkan Base Render | ✅ Completada | 100% (D70-D76) |
+| Sprint 9 - Mundo Fisico | ✅ Completada | 100% (D80-D84) |
+| Sprint 10 - Audio e Interfaz | 🧭 Planificado | 0% (D89-D93) |
+| Sprint 11 - Importacion 3D | 🧭 Planificado | 0% (D97-D101) |
+| Sprint 12 - Portabilidad Windows | 🔧 Parcial | 80% (D106-D109, falta CI) |
 
 ## Notas
 

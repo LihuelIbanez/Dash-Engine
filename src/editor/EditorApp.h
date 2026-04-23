@@ -232,6 +232,7 @@ private:
     void refreshSceneFiles();
     void saveScene(const std::string& path);
     void openScene(const std::string& path);
+    void focusCameraOnEntities();
     void loadInitialProjectScene();
     void buildAndRun();
     void exportGameBundle();
