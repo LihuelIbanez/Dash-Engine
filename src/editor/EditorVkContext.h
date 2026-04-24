@@ -89,6 +89,7 @@ private:
     VkImageView      dummyTexView_    = VK_NULL_HANDLE;
     VkBuffer              uboBuffer_       = VK_NULL_HANDLE;
     VkDeviceMemory        uboMemory_       = VK_NULL_HANDLE;
+    void*                 uboMapped_       = nullptr; // persistently mapped
 
     // Pipelines
     VkPipelineLayout terrainPipelineLayout_ = VK_NULL_HANDLE;

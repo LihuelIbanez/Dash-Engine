@@ -268,12 +268,12 @@ bool EditorVkContext::createTerrainTextureArray()
     VkQueue gq = deviceCtx_.graphicsQueue();
     VkCommandPool cmdPool = frameGraph_.commandPool();
 
-    constexpr uint32_t TEX_W = 512;
-    constexpr uint32_t TEX_H = 512;
+    constexpr uint32_t TEX_W = 256;
+    constexpr uint32_t TEX_H = 256;
     constexpr uint32_t LAYER_COUNT = 9;  // TerrainTextureId::Count
     constexpr VkDeviceSize layerSize = TEX_W * TEX_H * 4;
+    constexpr VkDeviceSize totalSize = layerSize * LAYER_COUNT;
 
-    // Build texture path base from VULKAN_MODEL_DIR (points to assets/models/gltf)
 #ifdef VULKAN_MODEL_DIR
     std::string modelDir = VULKAN_MODEL_DIR;
     std::string terrainDir = modelDir + "/../terrain/";
@@ -281,10 +281,9 @@ bool EditorVkContext::createTerrainTextureArray()
     std::string terrainDir = "assets/models/terrain/";
 #endif
 
-    // Map: layer index -> file path (empty = procedural)
     struct TexEntry { int layer; std::string path; uint8_t r, g, b; };
     std::vector<TexEntry> entries = {
-        {0, "",  80, 160, 60, },   // Grass — procedural green
+        {0, "",  80, 160, 60},     // Grass
         {1, terrainDir + "rocky_terrain_02_4k.blend/textures/rocky_terrain_02_diff_4k.jpg", 0,0,0},
         {2, terrainDir + "gray_rocks_4k.blend/textures/gray_rocks_diff_4k.jpg", 0,0,0},
         {3, terrainDir + "sandy_gravel_02_4k.blend/textures/sandy_gravel_02_diff_4k.jpg", 0,0,0},
@@ -295,7 +294,7 @@ bool EditorVkContext::createTerrainTextureArray()
         {8, "", 200, 220, 240},    // Ice
     };
 
-    // Create VkImage with arrayLayers = 9
+    // Create VkImage array
     VkImageCreateInfo ici{VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};
     ici.imageType = VK_IMAGE_TYPE_2D;
     ici.format = VK_FORMAT_R8G8B8A8_UNORM;
@@ -322,151 +321,113 @@ bool EditorVkContext::createTerrainTextureArray()
     if (vkAllocateMemory(dev, &mai, nullptr, &terrainTexArrayMemory_) != VK_SUCCESS) return false;
     vkBindImageMemory(dev, terrainTexArrayImage_, terrainTexArrayMemory_, 0);
 
-    // Create staging buffer for one layer at a time
+    // Single staging buffer for ALL layers — one upload, one submit
     VkBuffer stagingBuf = VK_NULL_HANDLE;
     VkDeviceMemory stagingMem = VK_NULL_HANDLE;
-    if (!createBuffer(pd, dev, layerSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+    if (!createBuffer(pd, dev, totalSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
                       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
                       stagingBuf, stagingMem)) {
         std::fprintf(stderr, "[EditorVk] Failed to create staging buffer for terrain textures\n");
         return false;
     }
 
-    // Transition entire array to TRANSFER_DST
-    {
-        VkCommandBufferAllocateInfo cbai{VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO};
-        cbai.commandPool = cmdPool; cbai.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY; cbai.commandBufferCount = 1;
-        VkCommandBuffer cmd;
-        vkAllocateCommandBuffers(dev, &cbai, &cmd);
-        VkCommandBufferBeginInfo bi{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
-        bi.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-        vkBeginCommandBuffer(cmd, &bi);
+    // Map staging buffer and fill all layers
+    void* mapped = nullptr;
+    vkMapMemory(dev, stagingMem, 0, totalSize, 0, &mapped);
+    auto* dst = static_cast<uint8_t*>(mapped);
 
-        VkImageMemoryBarrier barrier{VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
-        barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-        barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        barrier.image = terrainTexArrayImage_;
-        barrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, LAYER_COUNT};
-        barrier.srcAccessMask = 0;
-        barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-        vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
-                             0, 0, nullptr, 0, nullptr, 1, &barrier);
-
-        vkEndCommandBuffer(cmd);
-        VkSubmitInfo si{VK_STRUCTURE_TYPE_SUBMIT_INFO}; si.commandBufferCount = 1; si.pCommandBuffers = &cmd;
-        vkQueueSubmit(gq, 1, &si, VK_NULL_HANDLE);
-        vkQueueWaitIdle(gq);
-        vkFreeCommandBuffers(dev, cmdPool, 1, &cmd);
-    }
-
-    // Upload each layer
     for (auto& e : entries) {
-        std::vector<uint8_t> pixels(TEX_W * TEX_H * 4);
+        uint8_t* layerDst = dst + static_cast<VkDeviceSize>(e.layer) * layerSize;
 
         if (!e.path.empty()) {
             int w = 0, h = 0, ch = 0;
             stbi_set_flip_vertically_on_load(0);
             unsigned char* raw = stbi_load(e.path.c_str(), &w, &h, &ch, STBI_rgb_alpha);
             if (raw) {
-                // Nearest-neighbor downsample to TEX_W x TEX_H
                 for (uint32_t y = 0; y < TEX_H; ++y) {
                     for (uint32_t x = 0; x < TEX_W; ++x) {
                         uint32_t srcX = x * static_cast<uint32_t>(w) / TEX_W;
                         uint32_t srcY = y * static_cast<uint32_t>(h) / TEX_H;
                         uint32_t srcIdx = (srcY * static_cast<uint32_t>(w) + srcX) * 4;
                         uint32_t dstIdx = (y * TEX_W + x) * 4;
-                        pixels[dstIdx + 0] = raw[srcIdx + 0];
-                        pixels[dstIdx + 1] = raw[srcIdx + 1];
-                        pixels[dstIdx + 2] = raw[srcIdx + 2];
-                        pixels[dstIdx + 3] = raw[srcIdx + 3];
+                        layerDst[dstIdx + 0] = raw[srcIdx + 0];
+                        layerDst[dstIdx + 1] = raw[srcIdx + 1];
+                        layerDst[dstIdx + 2] = raw[srcIdx + 2];
+                        layerDst[dstIdx + 3] = raw[srcIdx + 3];
                     }
                 }
                 stbi_image_free(raw);
-                std::fprintf(stdout, "[EditorVk] Loaded terrain texture layer %d: %s (%dx%d)\n",
-                             e.layer, e.path.c_str(), w, h);
+                std::fprintf(stdout, "[EditorVk] Loaded terrain texture layer %d (%dx%d -> %ux%u)\n",
+                             e.layer, w, h, TEX_W, TEX_H);
             } else {
-                // Failed to load — fill with fallback color
                 std::fprintf(stderr, "[EditorVk] Failed to load %s, using fallback\n", e.path.c_str());
                 for (uint32_t i = 0; i < TEX_W * TEX_H; ++i) {
-                    pixels[i*4+0] = e.r; pixels[i*4+1] = e.g;
-                    pixels[i*4+2] = e.b; pixels[i*4+3] = 255;
+                    layerDst[i*4+0] = e.r; layerDst[i*4+1] = e.g;
+                    layerDst[i*4+2] = e.b; layerDst[i*4+3] = 255;
                 }
             }
         } else {
-            // Procedural solid color
             for (uint32_t i = 0; i < TEX_W * TEX_H; ++i) {
-                pixels[i*4+0] = e.r; pixels[i*4+1] = e.g;
-                pixels[i*4+2] = e.b; pixels[i*4+3] = 255;
+                layerDst[i*4+0] = e.r; layerDst[i*4+1] = e.g;
+                layerDst[i*4+2] = e.b; layerDst[i*4+3] = 255;
             }
         }
-
-        // Copy to staging buffer
-        void* mapped = nullptr;
-        vkMapMemory(dev, stagingMem, 0, layerSize, 0, &mapped);
-        std::memcpy(mapped, pixels.data(), layerSize);
-        vkUnmapMemory(dev, stagingMem);
-
-        // Copy staging buffer to image layer
-        VkCommandBufferAllocateInfo cbai{VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO};
-        cbai.commandPool = cmdPool; cbai.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY; cbai.commandBufferCount = 1;
-        VkCommandBuffer cmd;
-        vkAllocateCommandBuffers(dev, &cbai, &cmd);
-        VkCommandBufferBeginInfo bi{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
-        bi.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-        vkBeginCommandBuffer(cmd, &bi);
-
-        VkBufferImageCopy region{};
-        region.bufferOffset = 0;
-        region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        region.imageSubresource.mipLevel = 0;
-        region.imageSubresource.baseArrayLayer = static_cast<uint32_t>(e.layer);
-        region.imageSubresource.layerCount = 1;
-        region.imageExtent = {TEX_W, TEX_H, 1};
-
-        vkCmdCopyBufferToImage(cmd, stagingBuf, terrainTexArrayImage_,
-                               VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
-
-        vkEndCommandBuffer(cmd);
-        VkSubmitInfo si{VK_STRUCTURE_TYPE_SUBMIT_INFO}; si.commandBufferCount = 1; si.pCommandBuffers = &cmd;
-        vkQueueSubmit(gq, 1, &si, VK_NULL_HANDLE);
-        vkQueueWaitIdle(gq);
-        vkFreeCommandBuffers(dev, cmdPool, 1, &cmd);
     }
+    vkUnmapMemory(dev, stagingMem);
+
+    // Single command buffer: transition + copy all layers + transition
+    VkCommandBufferAllocateInfo cbai{VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO};
+    cbai.commandPool = cmdPool; cbai.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY; cbai.commandBufferCount = 1;
+    VkCommandBuffer cmd;
+    vkAllocateCommandBuffers(dev, &cbai, &cmd);
+    VkCommandBufferBeginInfo bi{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
+    bi.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    vkBeginCommandBuffer(cmd, &bi);
+
+    // Transition UNDEFINED -> TRANSFER_DST
+    VkImageMemoryBarrier barrier{VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
+    barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.image = terrainTexArrayImage_;
+    barrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, LAYER_COUNT};
+    barrier.srcAccessMask = 0;
+    barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                         0, 0, nullptr, 0, nullptr, 1, &barrier);
+
+    // Copy all 9 layers in one batch
+    std::array<VkBufferImageCopy, LAYER_COUNT> regions{};
+    for (uint32_t i = 0; i < LAYER_COUNT; ++i) {
+        regions[i].bufferOffset = static_cast<VkDeviceSize>(i) * layerSize;
+        regions[i].imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        regions[i].imageSubresource.mipLevel = 0;
+        regions[i].imageSubresource.baseArrayLayer = i;
+        regions[i].imageSubresource.layerCount = 1;
+        regions[i].imageExtent = {TEX_W, TEX_H, 1};
+    }
+    vkCmdCopyBufferToImage(cmd, stagingBuf, terrainTexArrayImage_,
+                           VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                           LAYER_COUNT, regions.data());
+
+    // Transition TRANSFER_DST -> SHADER_READ_ONLY
+    barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+    vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                         0, 0, nullptr, 0, nullptr, 1, &barrier);
+
+    vkEndCommandBuffer(cmd);
+    VkSubmitInfo si{VK_STRUCTURE_TYPE_SUBMIT_INFO}; si.commandBufferCount = 1; si.pCommandBuffers = &cmd;
+    vkQueueSubmit(gq, 1, &si, VK_NULL_HANDLE);
+    vkQueueWaitIdle(gq);  // single wait for entire upload
+    vkFreeCommandBuffers(dev, cmdPool, 1, &cmd);
 
     // Cleanup staging
     vkDestroyBuffer(dev, stagingBuf, nullptr);
     vkFreeMemory(dev, stagingMem, nullptr);
-
-    // Transition to SHADER_READ_ONLY_OPTIMAL
-    {
-        VkCommandBufferAllocateInfo cbai{VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO};
-        cbai.commandPool = cmdPool; cbai.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY; cbai.commandBufferCount = 1;
-        VkCommandBuffer cmd;
-        vkAllocateCommandBuffers(dev, &cbai, &cmd);
-        VkCommandBufferBeginInfo bi{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
-        bi.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-        vkBeginCommandBuffer(cmd, &bi);
-
-        VkImageMemoryBarrier barrier{VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
-        barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-        barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        barrier.image = terrainTexArrayImage_;
-        barrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, LAYER_COUNT};
-        barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-        barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-        vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-                             0, 0, nullptr, 0, nullptr, 1, &barrier);
-
-        vkEndCommandBuffer(cmd);
-        VkSubmitInfo si{VK_STRUCTURE_TYPE_SUBMIT_INFO}; si.commandBufferCount = 1; si.pCommandBuffers = &cmd;
-        vkQueueSubmit(gq, 1, &si, VK_NULL_HANDLE);
-        vkQueueWaitIdle(gq);
-        vkFreeCommandBuffers(dev, cmdPool, 1, &cmd);
-    }
 
     // Create image view as 2D_ARRAY
     VkImageViewCreateInfo vci{VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
@@ -534,12 +495,13 @@ bool EditorVkContext::createSceneDescriptors()
     if (vkAllocateDescriptorSets(dev, &dsai, &sceneDescSet_) != VK_SUCCESS)
         return false;
 
-    // UBO buffer
+    // UBO buffer (persistently mapped to avoid per-frame map/unmap)
     if (!createBuffer(deviceCtx_.physicalDevice(), dev, 64, // Mat4 = 64 bytes
                       VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
                       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
                       uboBuffer_, uboMemory_))
         return false;
+    vkMapMemory(dev, uboMemory_, 0, 64, 0, &uboMapped_);
 
     VkDescriptorBufferInfo binfo{}; binfo.buffer = uboBuffer_; binfo.range = 64;
 
@@ -752,9 +714,12 @@ void EditorVkContext::endFrame()
 // ─────────────────────────────────────────────────────────────────────────────
 void EditorVkContext::beginViewportRender(uint32_t width, uint32_t height)
 {
-    // Resize if needed
-    if (width != vpWidth_ || height != vpHeight_) {
-        if (width > 0 && height > 0) {
+    // Resize only when dimensions change by more than 4 pixels (avoids
+    // per-frame vkDeviceWaitIdle + reallocation from sub-pixel jitter)
+    if (width > 0 && height > 0) {
+        int dw = static_cast<int>(width) - static_cast<int>(vpWidth_);
+        int dh = static_cast<int>(height) - static_cast<int>(vpHeight_);
+        if (dw*dw + dh*dh > 16 || vpWidth_ == 0) { // >4px change or first time
             destroyOffscreenTarget();
             createOffscreenTarget(width, height);
         }
@@ -799,10 +764,9 @@ ImTextureID EditorVkContext::viewportTexture() const
 // ─────────────────────────────────────────────────────────────────────────────
 void EditorVkContext::updateCamera(const float viewProj[16])
 {
-    void* data = nullptr;
-    vkMapMemory(deviceCtx_.device(), uboMemory_, 0, 64, 0, &data);
-    std::memcpy(data, viewProj, 64);
-    vkUnmapMemory(deviceCtx_.device(), uboMemory_);
+    if (uboMapped_) {
+        std::memcpy(uboMapped_, viewProj, 64);
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -879,7 +843,10 @@ void EditorVkContext::shutdown()
     basicPipelineLayout_ = VK_NULL_HANDLE;   basicPipeline_ = VK_NULL_HANDLE;
 
     if (uboBuffer_) { vkDestroyBuffer(dev, uboBuffer_, nullptr); uboBuffer_ = VK_NULL_HANDLE; }
-    if (uboMemory_) { vkFreeMemory(dev, uboMemory_, nullptr); uboMemory_ = VK_NULL_HANDLE; }
+    if (uboMemory_) {
+        if (uboMapped_) { vkUnmapMemory(dev, uboMemory_); uboMapped_ = nullptr; }
+        vkFreeMemory(dev, uboMemory_, nullptr); uboMemory_ = VK_NULL_HANDLE;
+    }
     if (dummyTexView_) { vkDestroyImageView(dev, dummyTexView_, nullptr); dummyTexView_ = VK_NULL_HANDLE; }
     if (dummyTexImage_) { vkDestroyImage(dev, dummyTexImage_, nullptr); dummyTexImage_ = VK_NULL_HANDLE; }
     if (dummyTexMemory_) { vkFreeMemory(dev, dummyTexMemory_, nullptr); dummyTexMemory_ = VK_NULL_HANDLE; }
