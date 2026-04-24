@@ -17,6 +17,7 @@
 #include "game/physics/PhysicsWorld.h"
 #include "game/physics/TransformProxy.h"
 #include "input/InputBindings3D.h"
+#include "world/TerrainMesh.h"
 
 namespace dash::vkexp {
 
@@ -75,6 +76,10 @@ private:
     VkPipeline terrainPipeline_ = VK_NULL_HANDLE;
     MeshBuffers terrainMeshBuffers_;
 
+    VkPipelineLayout waterPipelineLayout_ = VK_NULL_HANDLE;
+    VkPipeline waterPipeline_ = VK_NULL_HANDLE;
+    MeshBuffers waterMeshBuffers_;
+
     bool initialized_ = false;
 
     AssetCache3D assetCache_;
@@ -87,6 +92,8 @@ private:
     std::vector<float> terrainHeightMap_;
     int terrainMapWidth_ = 0;
     int terrainMapHeight_ = 0;
+    TerrainMesh terrainMesh_;           // for height sampling during gravity
+    bool terrainMeshReady_ = false;
     int floorBodyId_ = -1;
     int cubeBodyId_ = -1;
     float fixedAccumulator_ = 0.0f;
@@ -111,8 +118,15 @@ private:
 
     bool embeddedPreview_ = false;
     float elapsedSeconds_ = 0.0f;
-    float fogStart_ = 80.0f;
-    float fogEnd_ = 160.0f;
+    float fogStart_ = 150.0f;
+    float fogEnd_ = 400.0f;
+    // Directional light (synced from editor, daylight defaults)
+    float lightDirX_ = 0.3f, lightDirY_ = 0.9f, lightDirZ_ = 0.2f;
+    float lightIntensity_ = 1.3f;
+    float lightColorR_ = 1.0f, lightColorG_ = 0.98f, lightColorB_ = 0.92f;
+    float ambientStrength_ = 0.55f;
+    float specularStrength_ = 0.15f;
+    float specularShininess_ = 32.0f;
     std::string scenePath_;
     std::string editorStatePath_;
     std::chrono::steady_clock::time_point lastEditorStateRead_{};

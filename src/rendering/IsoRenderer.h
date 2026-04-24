@@ -1,6 +1,7 @@
 #pragma once
 #include <SDL2/SDL.h>
 #include <cmath>
+#include <cstdint>
 #include <algorithm>
 
 // ─── Tile dimensions ─────────────────────────────────────────────────────────
@@ -33,6 +34,12 @@ enum class TileType {
     Stone,
     Mountain,
     Snow
+};
+
+// ─── Terrain texture identifiers (WC3-style multi-texture blending) ──────────
+enum class TerrainTextureId : uint8_t {
+    Grass = 0, Dirt, Rock, Sand, Snow, Mud, DarkGrass, Gravel, Ice,
+    Count
 };
 
 // ─── 2-D vector helpers ───────────────────────────────────────────────────────

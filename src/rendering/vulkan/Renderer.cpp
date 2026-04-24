@@ -588,8 +588,20 @@ void Renderer::applyEditorStateIfNeeded(GLFWwindow* window)
 
         // Read fog parameters
         bool fogEnabled = vp.value("fogEnabled", true);
-        fogStart_ = fogEnabled ? vp.value("fogStart", 80.0f) : 9999.0f;
-        fogEnd_   = fogEnabled ? vp.value("fogEnd", 160.0f) : 9999.0f;
+        fogStart_ = fogEnabled ? vp.value("fogStart", 150.0f) : 9999.0f;
+        fogEnd_   = fogEnabled ? vp.value("fogEnd", 400.0f) : 9999.0f;
+
+        // Read lighting parameters
+        lightDirX_          = vp.value("lightDirX", 0.3f);
+        lightDirY_          = vp.value("lightDirY", 0.9f);
+        lightDirZ_          = vp.value("lightDirZ", 0.2f);
+        lightColorR_        = vp.value("lightColorR", 1.0f);
+        lightColorG_        = vp.value("lightColorG", 0.98f);
+        lightColorB_        = vp.value("lightColorB", 0.92f);
+        lightIntensity_     = vp.value("lightIntensity", 1.3f);
+        ambientStrength_    = vp.value("ambientStrength", 0.55f);
+        specularStrength_   = vp.value("specularStrength", 0.15f);
+        specularShininess_  = vp.value("specularShininess", 32.0f);
 
         int sx = static_cast<int>(vp.value("screenX", 0.0f));
         int sy = static_cast<int>(vp.value("screenY", 0.0f));
@@ -867,6 +879,25 @@ bool Renderer::createPipeline()
         // Non-fatal — terrain will fall back to per-tile cube instances
     }
 
+    // Create water pipeline for transparent water planes
+    const std::string waterVert = std::string(VULKAN_SHADER_DIR) + "/water.vert.spv";
+    const std::string waterFrag = std::string(VULKAN_SHADER_DIR) + "/water.frag.spv";
+
+    std::string waterPipelineError;
+    if (!PipelineBuilder::createWaterPipeline(
+            deviceContext_.device(),
+            swapchain_.extent(),
+            swapchain_.renderPass(),
+            descriptorSetLayout_,
+            waterVert,
+            waterFrag,
+            waterPipelineLayout_,
+            waterPipeline_,
+            waterPipelineError)) {
+        std::fprintf(stderr, "[D78] Water pipeline creation failed: %s (non-fatal)\n",
+                     waterPipelineError.c_str());
+    }
+
     return true;
 }
 
@@ -934,11 +965,23 @@ bool Renderer::init(WindowContext& window)
 
         // Build heightmap polygon mesh for Vulkan terrain rendering
         if (terrainPipeline_ != VK_NULL_HANDLE) {
+            // Read scene seed from JSON (default to 12345 if missing)
+            unsigned int sceneSeed = 12345;
+            {
+                std::ifstream seedIn(scenePath_);
+                if (seedIn.is_open()) {
+                    json sj;
+                    try { seedIn >> sj; } catch (...) {}
+                    sceneSeed = sj.value("worldSeed", 12345u);
+                }
+            }
             TerrainMesh terrainMesh;
-            terrainMesh.generate(42);
+            terrainMesh.generate(sceneSeed);
             std::vector<TerrainVkVertex> terrainVerts;
             std::vector<uint32_t> terrainIndices;
             terrainMesh.buildVulkanMesh(terrainVerts, terrainIndices);
+            // Append cliff walls to same buffer
+            terrainMesh.buildCliffWalls(terrainVerts, terrainIndices);
 
             if (!terrainVerts.empty() && !terrainIndices.empty()) {
                 if (terrainMeshBuffers_.initFromData(
@@ -953,6 +996,36 @@ bool Renderer::init(WindowContext& window)
                                  terrainVerts.size(), terrainIndices.size());
                     // Clear old tile instances — terrain mesh replaces them
                     terrainInstances_.clear();
+                    // Keep TerrainMesh for height sampling
+                    terrainMesh_ = std::move(terrainMesh);
+                    terrainMeshReady_ = true;
+
+                    // Build water mesh if water pipeline is available
+                    if (waterPipeline_ != VK_NULL_HANDLE) {
+                        // Add default water body
+                        WaterBody defaultWater;
+                        defaultWater.id = 1;
+                        defaultWater.waterLevel = 0.3f * INTRA_CLIFF_HEIGHT;
+                        defaultWater.opacity = 0.6f;
+                        defaultWater.tint = {0.08f, 0.14f, 0.31f};
+                        terrainMesh_.addWaterBody(defaultWater);
+
+                        std::vector<TerrainVkVertex> waterVerts;
+                        std::vector<uint32_t> waterIndices;
+                        terrainMesh_.buildWaterMesh(waterVerts, waterIndices);
+                        if (!waterVerts.empty()) {
+                            waterMeshBuffers_.initFromData(
+                                deviceContext_.physicalDevice(),
+                                deviceContext_.device(),
+                                waterVerts.data(),
+                                static_cast<uint32_t>(waterVerts.size() * sizeof(TerrainVkVertex)),
+                                waterIndices.data(),
+                                static_cast<uint32_t>(waterIndices.size() * sizeof(uint32_t)),
+                                static_cast<uint32_t>(waterIndices.size()));
+                            std::fprintf(stderr, "[VSTEP] Water mesh uploaded: %zu verts, %zu indices\n",
+                                         waterVerts.size(), waterIndices.size());
+                        }
+                    }
                 } else {
                     std::fprintf(stderr, "[VSTEP] Failed to upload terrain mesh buffers\n");
                 }
@@ -963,7 +1036,11 @@ bool Renderer::init(WindowContext& window)
             if (loadPlayerPosition(scenePath_, playerX_, playerZ_)) {
                 playerLoaded_ = true;
                 const float playerHalfHeight = 0.52f;
-                playerY_ = sampleTerrainHeight(terrainHeightMap_, terrainMapWidth_, terrainMapHeight_, playerX_, playerZ_) + playerHalfHeight;
+                if (terrainMeshReady_) {
+                    playerY_ = terrainMesh_.sampleHeight(playerX_, playerZ_) + playerHalfHeight;
+                } else {
+                    playerY_ = sampleTerrainHeight(terrainHeightMap_, terrainMapWidth_, terrainMapHeight_, playerX_, playerZ_) + playerHalfHeight;
+                }
                 playerVelY_ = 0.0f;
                 std::fprintf(stderr, "[VSTEP] Player position loaded: (%.2f, %.2f)\n", playerX_, playerZ_);
             } else {
@@ -1045,7 +1122,7 @@ bool Renderer::updateCameraUbo(uint32_t imageIndex)
         60.0f * 0.0174532925f,
         static_cast<float>(swapchain_.extent().width) / static_cast<float>(swapchain_.extent().height),
         0.1f,
-        100.0f);
+        500.0f);
     proj.m[5] *= -1.0f;
 
     CameraUBO ubo{};
@@ -1165,7 +1242,14 @@ bool Renderer::runSmoke(WindowContext& window, uint32_t targetFrames)
             const float gravity = -9.8f;
             playerVelY_ += gravity * dt;
             playerY_ += playerVelY_ * dt;
-            const float groundY = sampleTerrainHeight(terrainHeightMap_, terrainMapWidth_, terrainMapHeight_, playerX_, playerZ_) + playerHalfHeight;
+            float groundY;
+            if (terrainMeshReady_) {
+                // Use TerrainMesh for accurate height (matches rendered terrain)
+                // Use TerrainMesh for accurate height (matches rendered terrain)
+                groundY = terrainMesh_.sampleHeight(playerX_, playerZ_) + playerHalfHeight;
+            } else {
+                groundY = sampleTerrainHeight(terrainHeightMap_, terrainMapWidth_, terrainMapHeight_, playerX_, playerZ_) + playerHalfHeight;
+            }
             if (playerY_ < groundY) {
                 playerY_ = groundY;
                 if (playerVelY_ < 0.0f) playerVelY_ = 0.0f;
@@ -1226,7 +1310,7 @@ bool Renderer::runSmoke(WindowContext& window, uint32_t targetFrames)
         if (vkBeginCommandBuffer(cmd, &beginInfo) != VK_SUCCESS) break;
 
         VkClearValue clearValues[2]{};
-        clearValues[0].color = { {0.14f, 0.16f, 0.20f, 1.0f} };
+        clearValues[0].color = { {0.72f, 0.82f, 0.95f, 1.0f} };  // daylight sky blue
         clearValues[1].depthStencil = {1.0f, 0};
 
         VkRenderPassBeginInfo rpBegin{};
@@ -1304,18 +1388,44 @@ bool Renderer::runSmoke(WindowContext& window, uint32_t targetFrames)
             vkCmdBindVertexBuffers(cmd, 0, 1, terrainVB, terrainOffsets);
             vkCmdBindIndexBuffer(cmd, terrainMeshBuffers_.indexBuffer(), 0, VK_INDEX_TYPE_UINT32);
 
-            // Push constants: eyePos, time, fog params
-            const float terrainPC[8] = {
-                cameraX_, cameraY_, cameraZ_,
-                elapsedSeconds_,
-                fogStart_, fogEnd_,
-                0.0f, 0.0f
+            // Push constants packed as 4 vec4s to match GLSL layout:
+            // [0] = (eyePos.xyz, time)
+            // [1] = (fogStart, fogEnd, lightDir.x, lightDir.y)
+            // [2] = (lightDir.z, lightIntensity, lightColor.r, lightColor.g)
+            // [3] = (lightColor.b, ambientStrength, specularStrength, specularShininess)
+            const float terrainPC[16] = {
+                cameraX_, cameraY_, cameraZ_, elapsedSeconds_,
+                fogStart_, fogEnd_, lightDirX_, lightDirY_,
+                lightDirZ_, lightIntensity_, lightColorR_, lightColorG_,
+                lightColorB_, ambientStrength_, specularStrength_, specularShininess_
             };
             vkCmdPushConstants(cmd, terrainPipelineLayout_,
                 VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
                 0, sizeof(terrainPC), terrainPC);
 
             vkCmdDrawIndexed(cmd, terrainMeshBuffers_.indexCount(), 1, 0, 0, 0);
+
+            // ── Water mesh (translucent, after terrain) ──────────────
+            if (waterPipeline_ != VK_NULL_HANDLE && waterMeshBuffers_.indexCount() > 0) {
+                vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, waterPipeline_);
+                vkCmdBindDescriptorSets(
+                    cmd,
+                    VK_PIPELINE_BIND_POINT_GRAPHICS,
+                    waterPipelineLayout_,
+                    0, 1,
+                    &descriptorSets_[imageIndex],
+                    0, nullptr);
+
+                VkBuffer waterVB[] = { waterMeshBuffers_.vertexBuffer() };
+                vkCmdBindVertexBuffers(cmd, 0, 1, waterVB, terrainOffsets);
+                vkCmdBindIndexBuffer(cmd, waterMeshBuffers_.indexBuffer(), 0, VK_INDEX_TYPE_UINT32);
+
+                vkCmdPushConstants(cmd, waterPipelineLayout_,
+                    VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+                    0, sizeof(terrainPC), terrainPC);
+
+                vkCmdDrawIndexed(cmd, waterMeshBuffers_.indexCount(), 1, 0, 0, 0);
+            }
 
             // Re-bind the basic pipeline for scene entities that follow
             vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
@@ -1414,6 +1524,7 @@ void Renderer::shutdown()
 
     meshBuffers_.shutdown(deviceContext_.device());
     terrainMeshBuffers_.shutdown(deviceContext_.device());
+    waterMeshBuffers_.shutdown(deviceContext_.device());
     PipelineBuilder::destroy(deviceContext_.device(), pipelineLayout_, pipeline_);
     pipelineLayout_ = VK_NULL_HANDLE;
     pipeline_ = VK_NULL_HANDLE;
@@ -1425,6 +1536,10 @@ void Renderer::shutdown()
     PipelineBuilder::destroy(deviceContext_.device(), terrainPipelineLayout_, terrainPipeline_);
     terrainPipelineLayout_ = VK_NULL_HANDLE;
     terrainPipeline_ = VK_NULL_HANDLE;
+
+    PipelineBuilder::destroy(deviceContext_.device(), waterPipelineLayout_, waterPipeline_);
+    waterPipelineLayout_ = VK_NULL_HANDLE;
+    waterPipeline_ = VK_NULL_HANDLE;
 
     TextureLoader::destroy(deviceContext_.device(), defaultTexture_);
 

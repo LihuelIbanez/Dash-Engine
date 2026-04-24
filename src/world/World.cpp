@@ -392,11 +392,11 @@ void World::drawMesh(SDL_Renderer* renderer, float camX, float camY) const
 
     // Lambda: project a mesh vertex to screen coordinates
     auto project = [&](int vx, int vy) -> SDL_FPoint {
-        float h = terrain_.vert(vx, vy).height;
+        float h = terrain_.worldHeight(vx, vy);
         float rx = (static_cast<float>(vx) - camX) * TILE_SCALE;
         float ry = (static_cast<float>(vy) - camY) * TILE_SCALE;
         float sx = (rx - ry) * hw + SCREEN_W * 0.5f;
-        float sy = (rx + ry) * hh - (h * TILE_SCALE * 32.f) + SCREEN_H * 0.5f;
+        float sy = (rx + ry) * hh - (h * TILE_SCALE * 4.f) + SCREEN_H * 0.5f;
         return {sx, sy};
     };
 

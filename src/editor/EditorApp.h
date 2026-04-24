@@ -17,6 +17,10 @@
 #include "ValidationPanel.h"
 #include "SpriteEditorPanel.h"
 #include "WelcomePanel.h"
+#include "EntityViewportPanel.h"
+#include "CliffBrushCommand.h"
+#include "TexturePaintCommand.h"
+#include "WaterLevelCommand.h"
 #include "project/ProjectManager.h"
 #include <string>
 #include <vector>
@@ -117,8 +121,15 @@ private:
         float heightScale = 32.0f;
         float gridOpacity = 0.22f;
         bool  fogEnabled = true;
-        float fogStart = 40.0f;
-        float fogEnd = 80.0f;
+        float fogStart = 100.0f;
+        float fogEnd = 200.0f;
+        // Directional light (daylight defaults)
+        float lightDirX = 0.3f, lightDirY = 0.9f, lightDirZ = 0.2f;
+        float lightColorR = 1.0f, lightColorG = 0.98f, lightColorB = 0.92f;
+        float lightIntensity = 1.3f;
+        float ambientStrength = 0.55f;
+        float specularStrength = 0.15f;
+        float specularShininess = 32.0f;
     } viewport3D_;
 
     bool vulkanPreviewAvailable_ = false;
@@ -136,7 +147,7 @@ private:
     float vpScreenY_ = 0.f;
 
     // ── Tools ────────────────────────────────────────────────────────────────
-    enum class Tool { Select, PaintTile, FillTile, EyeDropper, HeightBrush, PlaceEnemy, Erase };
+    enum class Tool { Select, PaintTile, FillTile, EyeDropper, HeightBrush, CliffBrush, TexturePaint, WaterTool, PlaceEnemy, Erase };
     Tool     currentTool_      = Tool::Select;
     TileType selectedTileType_ = TileType::Grass;
     int      brushSize_        = 1;
@@ -146,6 +157,19 @@ private:
     HeightBrushMode heightBrushMode_     = HeightBrushMode::Raise;
     float           heightBrushStrength_ = 0.05f;
     int             heightBrushRadius_   = 2;
+
+    // Cliff brush settings (WC3-style)
+    CliffBrushCommand::Mode cliffBrushMode_ = CliffBrushCommand::Mode::Raise;
+    int cliffBrushRadius_ = 1;
+
+    // Texture paint settings (WC3-style)
+    TerrainTextureId selectedTexture_ = TerrainTextureId::Grass;
+    float            texturePaintStrength_ = 0.8f;
+    int              texturePaintRadius_ = 2;
+
+    // Water tool settings (WC3-style)
+    float waterLevel_ = 2.4f;
+    int   selectedWaterBodyId_ = 1;
 
     // ── File dialogs ─────────────────────────────────────────────────────────
     std::string              scenesDir_;
@@ -182,7 +206,10 @@ private:
     bool showFileEditor_ = true;
     bool showAssetBrowser_ = true;
     bool showAssetInspector_ = true;
+    bool showLightingPanel_ = true;
+    bool showEntityViewport_ = false;
     WelcomePanel welcomePanel_;
+    EntityViewportPanel entityViewportPanel_;
 
     // ── Cursors ──────────────────────────────────────────────────────────────
     SDL_Cursor* cursorArrow_     = nullptr;
@@ -236,6 +263,7 @@ private:
     void drawSaveDialog();
     void drawCreateSceneDialog();
     void drawMigrationLogModal();
+    void drawLightingPanel();
 
     // ── Actions ──────────────────────────────────────────────────────────────
     void newScene();
@@ -265,6 +293,9 @@ private:
     void paintTileAt(float wx, float wy);
     void floodFillAt(float wx, float wy);
     void heightBrushAt(float wx, float wy);
+    void cliffBrushAt(float wx, float wy);
+    void texturePaintAt(float wx, float wy);
+    void waterToolAt(float wx, float wy);
 
     void addLog(const std::string& msg);
     void beginPlayAuditSession();

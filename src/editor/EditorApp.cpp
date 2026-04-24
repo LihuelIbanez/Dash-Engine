@@ -440,6 +440,8 @@ bool EditorApp::init(const std::string& projectPath)
     fileWatcher_ = FileWatcher(assetsRoot_, 1.0f);
     fileWatcher_.reset(); // establish baseline (no spurious Added events)
 
+    entityViewportPanel_.init(renderer_, assetsRoot_);
+
     spriteEditor_.init(renderer_);
     spriteEditor_.selectedEntityId = &selectedEntityId_;
     spriteEditor_.scene            = &scene_;
@@ -507,6 +509,7 @@ EditorApp::~EditorApp()
         flushPlayAuditSessionToFile("editor_shutdown");
     }
 
+    entityViewportPanel_.shutdown();
     stopVulkanPreview();
 
     // Persist asset database on shutdown
@@ -942,6 +945,12 @@ void EditorApp::run()
                 });
         if (spriteEditor_.isOpen)
             spriteEditor_.draw();
+        if (showLightingPanel_) drawLightingPanel();
+        if (showEntityViewport_) {
+            entityViewportPanel_.isOpen = true;
+            entityViewportPanel_.draw(scene_, renderer_);
+            if (!entityViewportPanel_.isOpen) showEntityViewport_ = false;
+        }
         // ── About modal ────────────────────────────────────────────────────
         if (showAboutModal_) {
             ImGui::OpenPopup("About DashEngine");
@@ -1071,6 +1080,8 @@ void EditorApp::drawMenuBar()
         ImGui::MenuItem("File Editor", nullptr, &showFileEditor_);
         ImGui::MenuItem("Asset Browser", nullptr, &showAssetBrowser_);
         ImGui::MenuItem("Asset Inspector", nullptr, &showAssetInspector_);
+        ImGui::MenuItem("Lighting", nullptr, &showLightingPanel_);
+        ImGui::MenuItem("Entity Viewport", nullptr, &showEntityViewport_);
         ImGui::MenuItem("Scene Selector", nullptr, &showSceneSelector_);
         ImGui::MenuItem("Validation Panel", nullptr, &showValidationPanel_);
         ImGui::Separator();
@@ -1871,11 +1882,14 @@ void EditorApp::drawTilePalette()
             ImGui::SameLine();
         };
 
-        mapToolBtn(ICON_FA_PAINTBRUSH,  Tool::PaintTile,   "Paint Tile");
+        mapToolBtn(ICON_FA_PAINTBRUSH,  Tool::PaintTile,    "Paint Tile");
         mapToolBtn(ICON_FA_FILL_DRIP,   Tool::FillTile,    "Flood Fill");
         mapToolBtn(ICON_FA_EYE_DROPPER, Tool::EyeDropper,  "Eyedropper (Pick Tile)");
-        mapToolBtn(ICON_FA_MOUNTAIN,    Tool::HeightBrush, "Height Brush (Sculpt)");
-        mapToolBtn(ICON_FA_ERASER,      Tool::Erase,       "Erase (Reset to Grass)");
+        mapToolBtn(ICON_FA_MOUNTAIN,    Tool::HeightBrush,  "Height Brush (Sculpt)");
+        mapToolBtn(ICON_FA_STAIRS,      Tool::CliffBrush,   "Cliff Brush (WC3)");
+        mapToolBtn(ICON_FA_PALETTE,     Tool::TexturePaint, "Texture Paint");
+        mapToolBtn(ICON_FA_WATER,       Tool::WaterTool,    "Water Tool");
+        mapToolBtn(ICON_FA_ERASER,      Tool::Erase,        "Erase (Reset to Grass)");
         ImGui::NewLine();
     }
 
@@ -1906,6 +1920,106 @@ void EditorApp::drawTilePalette()
         ImGui::SameLine();
         ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
         ImGui::SliderFloat("##hbstr", &heightBrushStrength_, 0.01f, 0.20f, "%.3f");
+    }
+
+    // ── Cliff brush settings ────────────────────────────────────────────────
+    if (currentTool_ == Tool::CliffBrush) {
+        const char* cliffModes[] = {"Raise", "Lower"};
+        int cmi = (cliffBrushMode_ == CliffBrushCommand::Mode::Raise) ? 0 : 1;
+        ImGui::Text("Mode");
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+        if (ImGui::Combo("##cbmode", &cmi, cliffModes, 2))
+            cliffBrushMode_ = (cmi == 0) ? CliffBrushCommand::Mode::Raise
+                                         : CliffBrushCommand::Mode::Lower;
+
+        ImGui::Text("Radius");
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+        ImGui::SliderInt("##cbradius", &cliffBrushRadius_, 1, 5);
+    }
+
+    // ── Texture paint settings ──────────────────────────────────────────────
+    if (currentTool_ == Tool::TexturePaint) {
+        struct TexInfo { const char* name; TerrainTextureId id; ImVec4 col; };
+        TexInfo textures[] = {
+            {"Grass",     TerrainTextureId::Grass,     {0.24f, 0.47f, 0.16f, 1.f}},
+            {"Dirt",      TerrainTextureId::Dirt,       {0.43f, 0.29f, 0.16f, 1.f}},
+            {"Rock",      TerrainTextureId::Rock,       {0.47f, 0.45f, 0.41f, 1.f}},
+            {"Sand",      TerrainTextureId::Sand,       {0.71f, 0.63f, 0.35f, 1.f}},
+            {"Snow",      TerrainTextureId::Snow,       {0.86f, 0.88f, 0.92f, 1.f}},
+            {"Mud",       TerrainTextureId::Mud,        {0.35f, 0.22f, 0.10f, 1.f}},
+            {"Dark Grass",TerrainTextureId::DarkGrass,  {0.12f, 0.29f, 0.10f, 1.f}},
+            {"Gravel",    TerrainTextureId::Gravel,     {0.55f, 0.53f, 0.49f, 1.f}},
+            {"Ice",       TerrainTextureId::Ice,        {0.72f, 0.85f, 0.93f, 1.f}},
+        };
+        ImGui::Text("Texture:");
+        const float texBtnSz = 24.f;
+        const float sp = ImGui::GetStyle().ItemSpacing.x;
+        float aw = ImGui::GetContentRegionAvail().x;
+        int tcols = std::max(1, (int)((aw + sp) / (texBtnSz + sp)));
+        int ti = 0;
+        for (auto& tx : textures) {
+            bool sel = (selectedTexture_ == tx.id);
+            ImGui::PushID(100 + ti);
+            ImGui::PushStyleColor(ImGuiCol_Button, tx.col);
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                {tx.col.x + 0.12f, tx.col.y + 0.12f, tx.col.z + 0.12f, 1.f});
+            if (sel) {
+                ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 2.f);
+                ImGui::PushStyleColor(ImGuiCol_Border, {1.f, 1.f, 0.f, 1.f});
+            }
+            if (ImGui::Button("##tex", {texBtnSz, texBtnSz}))
+                selectedTexture_ = tx.id;
+            if (sel) {
+                ImGui::PopStyleColor();
+                ImGui::PopStyleVar();
+            }
+            ImGui::PopStyleColor(2);
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", tx.name);
+            ++ti;
+            if (ti % tcols != 0) ImGui::SameLine();
+            ImGui::PopID();
+        }
+        if (ti % tcols != 0) ImGui::NewLine();
+
+        ImGui::Text("Strength");
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+        ImGui::SliderFloat("##tpstr", &texturePaintStrength_, 0.1f, 1.0f, "%.2f");
+
+        ImGui::Text("Radius");
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+        ImGui::SliderInt("##tpradius", &texturePaintRadius_, 1, 8);
+    }
+
+    // ── Water tool settings ─────────────────────────────────────────────────
+    if (currentTool_ == Tool::WaterTool) {
+        ImGui::Text("Water Level");
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+        ImGui::SliderFloat("##wlevel", &waterLevel_, 0.0f, 8.0f, "%.1f");
+
+        ImGui::Text("Body ID");
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+        ImGui::SliderInt("##wbody", &selectedWaterBodyId_, 1, 8);
+
+        if (ImGui::Button("Set Water Level")) {
+            auto& bodies = world_.terrain().waterBodies();
+            for (auto& wb : bodies) {
+                if (wb.id == static_cast<uint8_t>(selectedWaterBodyId_)) {
+                    float oldLevel = wb.waterLevel;
+                    if (oldLevel != waterLevel_) {
+                        auto cmd = std::make_unique<WaterLevelCommand>(
+                            wb.id, oldLevel, waterLevel_);
+                        commandStack_.execute(std::move(cmd), scene_, world_);
+                    }
+                    break;
+                }
+            }
+        }
     }
 
     ImGui::Separator();
@@ -2272,6 +2386,21 @@ void EditorApp::handleToolClick(float wx, float wy)
         break;
     }
 
+    case Tool::CliffBrush: {
+        cliffBrushAt(wx, wy);
+        break;
+    }
+
+    case Tool::TexturePaint: {
+        texturePaintAt(wx, wy);
+        break;
+    }
+
+    case Tool::WaterTool: {
+        waterToolAt(wx, wy);
+        break;
+    }
+
     case Tool::PlaceEnemy: {
         uint64_t newId = scene_.allocateEntityId();
         auto cmd = std::make_unique<PlaceEnemyCommand>(wx, wy, newId, "Enemy");
@@ -2359,6 +2488,56 @@ void EditorApp::heightBrushAt(float wx, float wy)
     commandStack_.execute(std::move(cmd), scene_, world_);
 }
 
+void EditorApp::cliffBrushAt(float wx, float wy)
+{
+    int vx = static_cast<int>(std::round(wx));
+    int vy = static_cast<int>(std::round(wy));
+    if (vx < 0 || vx >= TerrainMesh::VW || vy < 0 || vy >= TerrainMesh::VH) return;
+
+    auto cmd = std::make_unique<CliffBrushCommand>(
+        vx, vy, cliffBrushRadius_, cliffBrushMode_);
+    commandStack_.execute(std::move(cmd), scene_, world_);
+}
+
+void EditorApp::texturePaintAt(float wx, float wy)
+{
+    int vx = static_cast<int>(std::round(wx));
+    int vy = static_cast<int>(std::round(wy));
+    if (vx < 0 || vx >= TerrainMesh::VW || vy < 0 || vy >= TerrainMesh::VH) return;
+
+    auto cmd = std::make_unique<TexturePaintCommand>(
+        vx, vy, texturePaintRadius_, texturePaintStrength_, selectedTexture_);
+    commandStack_.execute(std::move(cmd), scene_, world_);
+}
+
+void EditorApp::waterToolAt(float wx, float wy)
+{
+    // Water tool sets/adjusts water level for the selected water body
+    TerrainMesh& tm = world_.terrain();
+    bool found = false;
+    for (auto& wb : tm.waterBodies()) {
+        if (wb.id == static_cast<uint8_t>(selectedWaterBodyId_)) {
+            float oldLevel = wb.waterLevel;
+            auto cmd = std::make_unique<WaterLevelCommand>(
+                wb.id, oldLevel, waterLevel_);
+            commandStack_.execute(std::move(cmd), scene_, world_);
+            found = true;
+            break;
+        }
+    }
+    if (!found) {
+        // Create a new water body
+        WaterBody wb;
+        wb.id = static_cast<uint8_t>(selectedWaterBodyId_);
+        wb.waterLevel = waterLevel_;
+        wb.opacity = 0.6f;
+        wb.tint = {0.08f, 0.14f, 0.31f};
+        tm.addWaterBody(wb);
+        tm.markDirty();
+        scene_.modified = true;
+    }
+}
+
 void EditorApp::getSpritePivot(const std::string& spriteName, float& outPivotX, float& outPivotY)
 {
     outPivotX = 0.5f;
@@ -2412,9 +2591,10 @@ Vec2f EditorApp::worldToScreenIso3D(float wx, float wy, float wz) const
     const float zoom = std::max(0.1f, viewport3D_.zoom);
     const float hw = (TILE_W * 0.5f) * zoom;
     const float hh = (TILE_H * 0.5f) * zoom;
+    // wz is in world height units; heightScale / 8.0 converts old display scale
     return {
         (rx - ry) * hw + SCREEN_W * 0.5f,
-        (rx + ry) * hh - (wz * TILE_SCALE * viewport3D_.heightScale * zoom) + SCREEN_H * 0.5f
+        (rx + ry) * hh - (wz * TILE_SCALE * (viewport3D_.heightScale / 8.0f) * zoom) + SCREEN_H * 0.5f
     };
 }
 
@@ -2694,6 +2874,16 @@ void EditorApp::writeVulkanViewportStateFile() const
         {"fogEnabled", viewport3D_.fogEnabled},
         {"fogStart", viewport3D_.fogStart},
         {"fogEnd", viewport3D_.fogEnd},
+        {"lightDirX", viewport3D_.lightDirX},
+        {"lightDirY", viewport3D_.lightDirY},
+        {"lightDirZ", viewport3D_.lightDirZ},
+        {"lightColorR", viewport3D_.lightColorR},
+        {"lightColorG", viewport3D_.lightColorG},
+        {"lightColorB", viewport3D_.lightColorB},
+        {"lightIntensity", viewport3D_.lightIntensity},
+        {"ambientStrength", viewport3D_.ambientStrength},
+        {"specularStrength", viewport3D_.specularStrength},
+        {"specularShininess", viewport3D_.specularShininess},
         {"screenX", globalVpX},
         {"screenY", globalVpY},
         {"screenW", vpDisplayW_},
@@ -2787,7 +2977,7 @@ void EditorApp::renderWorldToTexture()
             pollVulkanPreviewProcess();
 
             // Clear viewport while Vulkan renders in embedded window
-            SDL_SetRenderDrawColor(renderer_, 13, 15, 18, 255);
+            SDL_SetRenderDrawColor(renderer_, 40, 55, 75, 255);
             SDL_RenderClear(renderer_);
             SDL_SetRenderTarget(renderer_, nullptr);
             return;
@@ -2797,7 +2987,7 @@ void EditorApp::renderWorldToTexture()
     }
 
     // ── Edit mode: 3D isometric rendering ───────────────────────────────────
-    SDL_SetRenderDrawColor(renderer_, 13, 15, 18, 255);
+    SDL_SetRenderDrawColor(renderer_, 40, 55, 75, 255);  // dark sky background
     SDL_RenderClear(renderer_);
 
     const float zoom = std::max(0.1f, viewport3D_.zoom);
@@ -2805,16 +2995,18 @@ void EditorApp::renderWorldToTexture()
     const float hh = (TILE_H * 0.5f) * zoom;
 
     // ── Terrain mesh rendering (polygon triangles) ────────────────────────────
+    // Disable alpha blending for opaque terrain geometry
+    SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_NONE);
     {
         const TerrainMesh& tm = world_.terrain();
 
         // Lambda: project a terrain vertex to screen with zoom + height
         auto projectVert = [&](int vx, int vy) -> SDL_FPoint {
-            float h = tm.vert(vx, vy).height;
+            float h = tm.worldHeight(vx, vy);
             float rx = (static_cast<float>(vx) - camX_) * TILE_SCALE;
             float ry = (static_cast<float>(vy) - camY_) * TILE_SCALE;
             float sx = (rx - ry) * hw + SCREEN_W * 0.5f;
-            float sy = (rx + ry) * hh - (h * TILE_SCALE * viewport3D_.heightScale * zoom) + SCREEN_H * 0.5f;
+            float sy = (rx + ry) * hh - (h * TILE_SCALE * (viewport3D_.heightScale / 8.0f) * zoom) + SCREEN_H * 0.5f;
             return {sx, sy};
         };
 
@@ -2844,19 +3036,22 @@ void EditorApp::renderWorldToTexture()
             g = g * (1.0f - rockBlend) + 102.0f * rockBlend;
             b = b * (1.0f - rockBlend) +  89.0f * rockBlend;
 
-            // Directional light (sun upper-right)
-            float lx = 0.4f, ly = 0.7f, lz = 0.3f;
+            // Directional light (from Lighting panel)
+            float lx = viewport3D_.lightDirX, ly = viewport3D_.lightDirY, lz = viewport3D_.lightDirZ;
             float llen = std::sqrt(lx*lx + ly*ly + lz*lz);
-            lx /= llen; ly /= llen; lz /= llen;
+            if (llen > 1e-4f) { lx /= llen; ly /= llen; lz /= llen; }
             float NdotL = std::max(0.0f, v.nx * lx + v.ny * ly + v.nz * lz);
-            float light = 0.40f + 0.60f * NdotL;
+            float amb = viewport3D_.ambientStrength;
+            float diffuse = NdotL * viewport3D_.lightIntensity;
+            float light = amb + diffuse;
 
-            // Apply AO and lighting
-            float ao = v.ao;
+            // Apply light color tint, AO (softened) and lighting
+            float ao = 0.5f + 0.5f * v.ao;  // soften AO so valleys aren't pitch black
+            float lr = viewport3D_.lightColorR, lg = viewport3D_.lightColorG, lb = viewport3D_.lightColorB;
             auto cl = [](float v) -> Uint8 {
                 return static_cast<Uint8>(std::max(0.0f, std::min(255.0f, v)));
             };
-            return { cl(r * light * ao), cl(g * light * ao), cl(b * light * ao), 255 };
+            return { cl(r * light * ao * lr), cl(g * light * ao * lg), cl(b * light * ao * lb), 255 };
         };
 
         // Painter's order: iterate by depth (row + col)
@@ -2867,8 +3062,9 @@ void EditorApp::renderWorldToTexture()
                 int row = depth - col;
                 if (row < 0 || row >= WORLD_H) continue;
 
-                // Frustum cull (coarse)
-                float avgH = tm.faceAverageHeight(col, row);
+                // Frustum cull (coarse) — use cliff-aware world height
+                float avgH = (tm.worldHeight(col, row) + tm.worldHeight(col+1, row) +
+                              tm.worldHeight(col, row+1) + tm.worldHeight(col+1, row+1)) * 0.25f;
                 Vec2f center = worldToScreenIso3D(col + 0.5f, row + 0.5f, avgH);
                 if (center.x < -TILE_W * zoom || center.x > SCREEN_W + TILE_W * zoom) continue;
                 if (center.y < -TILE_H * zoom * 3 || center.y > SCREEN_H + TILE_H * zoom * 3) continue;
@@ -2902,6 +3098,8 @@ void EditorApp::renderWorldToTexture()
             }
         }
     }
+    // Restore blend mode for entity rendering (sprites need alpha blending)
+    SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
 
     // Draw entity markers as 3D proxies (mesh-first workflow)
     for (int i = 0; i < (int)scene_.entities.size(); ++i) {
@@ -2963,7 +3161,8 @@ void EditorApp::renderWorldToTexture()
         const TerrainMesh& tm = world_.terrain();
         for (int ty = 0; ty < WORLD_H; ++ty) {
             for (int tx = 0; tx < WORLD_W; ++tx) {
-                const float h = tm.faceAverageHeight(tx, ty);
+                const float h = (tm.worldHeight(tx, ty) + tm.worldHeight(tx+1, ty) +
+                                 tm.worldHeight(tx, ty+1) + tm.worldHeight(tx+1, ty+1)) * 0.25f;
                 const Vec2f s = worldToScreenIso3D(tx + 0.5f, ty + 0.5f, h);
                 if (s.x < -TILE_W || s.x > SCREEN_W + TILE_W) continue;
                 if (s.y < -TILE_H || s.y > SCREEN_H + TILE_H) continue;
@@ -3114,6 +3313,78 @@ void EditorApp::drawPerformancePanel()
             ImGui::Text("%.3f", s.peakMs);
         }
         ImGui::EndTable();
+    }
+
+    ImGui::End();
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Lighting Panel
+// ═════════════════════════════════════════════════════════════════════════════
+void EditorApp::drawLightingPanel()
+{
+    ImGui::Begin("Lighting");
+
+    ImGui::SeparatorText("Directional Light");
+
+    // Direction
+    float dir[3] = { viewport3D_.lightDirX, viewport3D_.lightDirY, viewport3D_.lightDirZ };
+    ImGui::Text("Direction");
+    if (ImGui::SliderFloat3("##lightdir", dir, -1.0f, 1.0f, "%.2f")) {
+        viewport3D_.lightDirX = dir[0];
+        viewport3D_.lightDirY = dir[1];
+        viewport3D_.lightDirZ = dir[2];
+    }
+    ImGui::SameLine();
+    if (ImGui::SmallButton("Normalize")) {
+        float len = std::sqrt(dir[0]*dir[0] + dir[1]*dir[1] + dir[2]*dir[2]);
+        if (len > 1e-4f) {
+            viewport3D_.lightDirX = dir[0] / len;
+            viewport3D_.lightDirY = dir[1] / len;
+            viewport3D_.lightDirZ = dir[2] / len;
+        }
+    }
+
+    // Color
+    float col[3] = { viewport3D_.lightColorR, viewport3D_.lightColorG, viewport3D_.lightColorB };
+    ImGui::Text("Color");
+    if (ImGui::ColorEdit3("##lightcol", col)) {
+        viewport3D_.lightColorR = col[0];
+        viewport3D_.lightColorG = col[1];
+        viewport3D_.lightColorB = col[2];
+    }
+
+    // Intensity
+    ImGui::Text("Intensity");
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+    ImGui::SliderFloat("##intensity", &viewport3D_.lightIntensity, 0.0f, 3.0f, "%.2f");
+
+    ImGui::SeparatorText("Ambient & Specular");
+
+    ImGui::Text("Ambient");
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+    ImGui::SliderFloat("##ambient", &viewport3D_.ambientStrength, 0.0f, 1.0f, "%.2f");
+
+    ImGui::Text("Specular");
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+    ImGui::SliderFloat("##specstr", &viewport3D_.specularStrength, 0.0f, 1.0f, "%.2f");
+
+    ImGui::Text("Shininess");
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+    ImGui::SliderFloat("##specshin", &viewport3D_.specularShininess, 1.0f, 128.0f, "%.0f");
+
+    ImGui::Separator();
+    if (ImGui::Button("Reset Defaults")) {
+        viewport3D_.lightDirX = 0.3f;  viewport3D_.lightDirY = 0.9f;  viewport3D_.lightDirZ = 0.2f;
+        viewport3D_.lightColorR = 1.0f; viewport3D_.lightColorG = 0.98f; viewport3D_.lightColorB = 0.92f;
+        viewport3D_.lightIntensity = 1.3f;
+        viewport3D_.ambientStrength = 0.55f;
+        viewport3D_.specularStrength = 0.15f;
+        viewport3D_.specularShininess = 32.0f;
     }
 
     ImGui::End();
@@ -3382,6 +3653,38 @@ void EditorApp::saveScene(const std::string& path)
         addLog("WARNING: Scene has no Player entity. Saving anyway.");
     }
 
+    // Capture current terrain state into scene overrides
+    {
+        TerrainMesh& tm = world_.terrain();
+
+        // Cliff overrides: vertices with non-zero cliff level
+        scene_.cliffOverrides.clear();
+        for (int vy = 0; vy < TerrainMesh::VH; ++vy)
+            for (int vx = 0; vx < TerrainMesh::VW; ++vx) {
+                uint8_t cl = tm.vert(vx, vy).cliffLevel;
+                if (cl != 0)
+                    scene_.cliffOverrides.push_back({vx, vy, cl});
+            }
+
+        // Texture overrides: vertices with non-default texture blend
+        scene_.textureOverrides.clear();
+        for (int vy = 0; vy < TerrainMesh::VH; ++vy)
+            for (int vx = 0; vx < TerrainMesh::VW; ++vx) {
+                const auto& v = tm.vert(vx, vy);
+                if (v.texWeights[1] != 0 || v.texWeights[2] != 0 || v.texWeights[3] != 0
+                    || v.texIndices[0] != 0) {
+                    TextureOverride to;
+                    to.vx = vx; to.vy = vy;
+                    std::memcpy(to.texIndices, v.texIndices, 4);
+                    std::memcpy(to.texWeights, v.texWeights, 4);
+                    scene_.textureOverrides.push_back(to);
+                }
+            }
+
+        // Water bodies
+        scene_.waterBodies = tm.waterBodies();
+    }
+
     const std::string fileName = fs::path(path).filename().string();
     const bool sqliteScenes = projectManager_.hasActiveProject() && sqliteModeEnabled();
 
@@ -3492,6 +3795,31 @@ void EditorApp::applySceneToWorld()
             vh.vy >= 0 && vh.vy < TerrainMesh::VH) {
             world_.terrain().vert(vh.vx, vh.vy).height = vh.height;
         }
+    }
+
+    // Apply cliff overrides (v5+)
+    for (auto& co : scene_.cliffOverrides) {
+        if (co.vx >= 0 && co.vx < TerrainMesh::VW &&
+            co.vy >= 0 && co.vy < TerrainMesh::VH) {
+            world_.terrain().setCliffLevel(co.vx, co.vy, co.cliffLevel);
+        }
+    }
+
+    // Apply texture overrides (v5+)
+    for (auto& to : scene_.textureOverrides) {
+        if (to.vx >= 0 && to.vx < TerrainMesh::VW &&
+            to.vy >= 0 && to.vy < TerrainMesh::VH) {
+            auto& v = world_.terrain().vert(to.vx, to.vy);
+            std::memcpy(v.texIndices, to.texIndices, 4);
+            std::memcpy(v.texWeights, to.texWeights, 4);
+        }
+    }
+
+    // Apply water bodies (v5+)
+    auto& wbs = world_.terrain().waterBodies();
+    wbs.clear();
+    for (auto& wb : scene_.waterBodies) {
+        world_.terrain().addWaterBody(wb);
     }
 
     world_.terrain().markDirty();

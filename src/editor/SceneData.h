@@ -2,8 +2,10 @@
 #include <cstdint>
 #include <string>
 #include <vector>
+#include <array>
 #include "IsoRenderer.h"
 #include "World.h"
+#include "TerrainMesh.h"
 #include "components/Components.h"
 #include <nlohmann/json.hpp>
 
@@ -46,10 +48,27 @@ struct VertexHeightOverride {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
+// CliffOverride – a vertex whose cliff level differs from default (0)
+// ─────────────────────────────────────────────────────────────────────────────
+struct CliffOverride {
+    int     vx, vy;
+    uint8_t cliffLevel;
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TextureOverride – a vertex whose texture blend differs from default
+// ─────────────────────────────────────────────────────────────────────────────
+struct TextureOverride {
+    int     vx, vy;
+    uint8_t texIndices[4];
+    uint8_t texWeights[4];
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 // SceneData – everything needed to describe one scenario / level
 // ─────────────────────────────────────────────────────────────────────────────
 struct SceneData {
-    static constexpr int kCurrentVersion = 4;
+    static constexpr int kCurrentVersion = 5;
 
     struct Render3DSettings {
         bool  useVulkan3D = true;
@@ -70,6 +89,9 @@ struct SceneData {
 
     std::vector<TileOverride> tileOverrides;
     std::vector<VertexHeightOverride> vertexHeightOverrides;
+    std::vector<CliffOverride> cliffOverrides;
+    std::vector<TextureOverride> textureOverrides;
+    std::vector<WaterBody> waterBodies;
     std::vector<EntityData>   entities;
 
     uint64_t    nextEntityId = 1;        // monotonic ID generator

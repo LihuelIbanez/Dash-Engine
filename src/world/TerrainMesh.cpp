@@ -258,27 +258,25 @@ void TerrainMesh::computeSmoothNormals()
         vertices_[i].nz = 0.0f;
     }
 
-    const float hs = 8.0f * TILE_SCALE;  // match buildVulkanMesh heightScale * TILE_SCALE
-
-    // Accumulate face normals to corner vertices
+    // Accumulate face normals to corner vertices using cliff-aware heights
     for (int fy = 0; fy < FH; ++fy) {
         for (int fx = 0; fx < FW; ++fx) {
             float x0 = static_cast<float>(fx)     * TILE_SCALE;
             float x1 = static_cast<float>(fx + 1) * TILE_SCALE;
             float z0 = static_cast<float>(fy)     * TILE_SCALE;
             float z1 = static_cast<float>(fy + 1) * TILE_SCALE;
-            float h00 = vert(fx,   fy  ).height * hs;
-            float h10 = vert(fx+1, fy  ).height * hs;
-            float h01 = vert(fx,   fy+1).height * hs;
+            float h00 = worldHeight(fx,   fy  );
+            float h10 = worldHeight(fx+1, fy  );
+            float h01 = worldHeight(fx,   fy+1);
 
             // Edge vectors
             float e1x = x1 - x0, e1y = h10 - h00, e1z = 0.0f;
             float e2x = 0.0f,    e2y = h01 - h00, e2z = z1 - z0;
 
-            // Cross product
-            float fnx = e1y * e2z - e1z * e2y;
-            float fny = e1z * e2x - e1x * e2z;
-            float fnz = e1x * e2y - e1y * e2x;
+            // Cross product (negated for Y-up convention)
+            float fnx = -(e1y * e2z - e1z * e2y);
+            float fny = -(e1z * e2x - e1x * e2z);
+            float fnz = -(e1x * e2y - e1y * e2x);
 
             // Accumulate to 4 corners
             auto accum = [&](int vx, int vy) {
@@ -337,9 +335,15 @@ float TerrainMesh::faceAverageHeight(int fx, int fy) const
             vert(fx, fy+1).height + vert(fx+1, fy+1).height) * 0.25f;
 }
 
-float TerrainMesh::sampleHeight(float wx, float wy) const
+// ── Cliff-aware world height ────────────────────────────────────────────────
+float TerrainMesh::worldHeight(int vx, int vy) const
 {
-    // Bilinear interpolation of vertex heights
+    const auto& v = vert(vx, vy);
+    return v.cliffLevel * CLIFF_STEP + v.height * INTRA_CLIFF_HEIGHT;
+}
+
+float TerrainMesh::worldHeight(float wx, float wy) const
+{
     int ix = static_cast<int>(std::floor(wx));
     int iy = static_cast<int>(std::floor(wy));
     ix = std::max(0, std::min(ix, FW - 1));
@@ -350,14 +354,106 @@ float TerrainMesh::sampleHeight(float wx, float wy) const
     fx = std::max(0.f, std::min(1.f, fx));
     fy = std::max(0.f, std::min(1.f, fy));
 
-    float h00 = vert(ix,     iy    ).height;
-    float h10 = vert(ix + 1, iy    ).height;
-    float h01 = vert(ix,     iy + 1).height;
-    float h11 = vert(ix + 1, iy + 1).height;
+    float h00 = worldHeight(ix,     iy    );
+    float h10 = worldHeight(ix + 1, iy    );
+    float h01 = worldHeight(ix,     iy + 1);
+    float h11 = worldHeight(ix + 1, iy + 1);
 
     float h0 = h00 + (h10 - h00) * fx;
     float h1 = h01 + (h11 - h01) * fx;
     return h0 + (h1 - h0) * fy;
+}
+
+void TerrainMesh::setCliffLevel(int vx, int vy, uint8_t level)
+{
+    if (vx < 0 || vx >= VW || vy < 0 || vy >= VH) return;
+    vert(vx, vy).cliffLevel = std::min(level, static_cast<uint8_t>(MAX_CLIFF_LEVEL));
+    dirty_ = true;
+}
+
+uint8_t TerrainMesh::cliffLevel(int vx, int vy) const
+{
+    if (vx < 0 || vx >= VW || vy < 0 || vy >= VH) return 0;
+    return vert(vx, vy).cliffLevel;
+}
+
+uint8_t TerrainMesh::faceCliffLevel(int fx, int fy) const
+{
+    if (fx < 0 || fx >= FW || fy < 0 || fy >= FH) return 0;
+    uint8_t a = vert(fx,     fy    ).cliffLevel;
+    uint8_t b = vert(fx + 1, fy    ).cliffLevel;
+    uint8_t c = vert(fx,     fy + 1).cliffLevel;
+    uint8_t d = vert(fx + 1, fy + 1).cliffLevel;
+    return std::min({a, b, c, d});
+}
+
+// ── Texture painting ────────────────────────────────────────────────────────
+void TerrainMesh::paintTexture(int vx, int vy, TerrainTextureId tex, float weight)
+{
+    if (vx < 0 || vx >= VW || vy < 0 || vy >= VH) return;
+    auto& v = vert(vx, vy);
+    uint8_t texId = static_cast<uint8_t>(tex);
+    int addW = static_cast<int>(weight * 255.0f);
+    if (addW <= 0) return;
+
+    // Find if texture already exists in a slot
+    int existingSlot = -1;
+    int minSlot = 0;
+    uint8_t minWeight = v.texWeights[0];
+    for (int i = 0; i < 4; ++i) {
+        if (v.texIndices[i] == texId) { existingSlot = i; break; }
+        if (v.texWeights[i] < minWeight) { minWeight = v.texWeights[i]; minSlot = i; }
+    }
+
+    if (existingSlot >= 0) {
+        // Increase existing slot
+        int cur = v.texWeights[existingSlot];
+        v.texWeights[existingSlot] = static_cast<uint8_t>(std::min(255, cur + addW));
+    } else {
+        // Replace lowest-weight slot
+        v.texIndices[minSlot] = texId;
+        v.texWeights[minSlot] = static_cast<uint8_t>(std::min(255, addW));
+    }
+
+    // Renormalize weights to sum to 255
+    int total = 0;
+    for (int i = 0; i < 4; ++i) total += v.texWeights[i];
+    if (total > 0 && total != 255) {
+        float scale = 255.0f / total;
+        int sum = 0;
+        for (int i = 0; i < 3; ++i) {
+            v.texWeights[i] = static_cast<uint8_t>(v.texWeights[i] * scale);
+            sum += v.texWeights[i];
+        }
+        v.texWeights[3] = static_cast<uint8_t>(255 - sum);
+    }
+    dirty_ = true;
+}
+
+// ── Water bodies ────────────────────────────────────────────────────────────
+void TerrainMesh::addWaterBody(const WaterBody& body)
+{
+    // Replace if same ID exists
+    for (auto& wb : waterBodies_) {
+        if (wb.id == body.id) { wb = body; dirty_ = true; return; }
+    }
+    waterBodies_.push_back(body);
+    dirty_ = true;
+}
+
+void TerrainMesh::removeWaterBody(uint8_t id)
+{
+    waterBodies_.erase(
+        std::remove_if(waterBodies_.begin(), waterBodies_.end(),
+                        [id](const WaterBody& wb) { return wb.id == id; }),
+        waterBodies_.end());
+    dirty_ = true;
+}
+
+float TerrainMesh::sampleHeight(float wx, float wy) const
+{
+    // Cliff-aware bilinear interpolation via worldHeight()
+    return worldHeight(wx, wy);
 }
 
 bool TerrainMesh::isWalkable(float wx, float wy) const
@@ -374,6 +470,13 @@ float TerrainMesh::terrainCost(int tx, int ty) const
     const TerrainFace& f = face(tx, ty);
     if (!f.walkable) return 1e6f;
 
+    // Block faces where corners span multiple cliff levels
+    uint8_t a = vert(tx,     ty    ).cliffLevel;
+    uint8_t b = vert(tx + 1, ty    ).cliffLevel;
+    uint8_t c = vert(tx,     ty + 1).cliffLevel;
+    uint8_t d = vert(tx + 1, ty + 1).cliffLevel;
+    if (a != b || a != c || a != d) return 1e6f;
+
     switch (f.type) {
     case TileType::Grass:    return 1.0f;
     case TileType::Dirt:     return 1.0f;
@@ -389,6 +492,16 @@ float TerrainMesh::terrainCost(int tx, int ty) const
 // ═════════════════════════════════════════════════════════════════════════════
 // Vulkan mesh building
 // ═════════════════════════════════════════════════════════════════════════════
+
+// Helper: pack 4 uint8 values into a uint32
+static uint32_t packU8x4(uint8_t a, uint8_t b, uint8_t c, uint8_t d)
+{
+    return static_cast<uint32_t>(a)
+         | (static_cast<uint32_t>(b) << 8)
+         | (static_cast<uint32_t>(c) << 16)
+         | (static_cast<uint32_t>(d) << 24);
+}
+
 void TerrainMesh::buildVulkanMesh(
     std::vector<dash::vkexp::TerrainVkVertex>& outVerts,
     std::vector<uint32_t>& outIndices) const
@@ -398,8 +511,6 @@ void TerrainMesh::buildVulkanMesh(
     outVerts.reserve(totalFaces * 4);
     outIndices.clear();
     outIndices.reserve(totalFaces * 6);
-
-    constexpr float heightScale = 8.0f;
 
     // Helper: compute per-vertex blended color from up to 4 adjacent faces
     auto vertexColor = [&](int vx, int vy) -> std::array<float, 3> {
@@ -419,7 +530,7 @@ void TerrainMesh::buildVulkanMesh(
         return { r / (count * 255.0f), g / (count * 255.0f), b / (count * 255.0f) };
     };
 
-    // Helper: apply slope rock tint and AO to a vertex color
+    // Helper: apply slope rock tint to a vertex color (AO left to the shader)
     auto applyVertexEffects = [&](std::array<float, 3> col, int vx, int vy) -> std::array<float, 3> {
         const auto& v = vert(vx, vy);
 
@@ -430,20 +541,23 @@ void TerrainMesh::buildVulkanMesh(
         col[1] = col[1] * (1.0f - rockBlend) + 0.40f * rockBlend;
         col[2] = col[2] * (1.0f - rockBlend) + 0.35f * rockBlend;
 
-        // Ambient occlusion
-        col[0] *= v.ao;
-        col[1] *= v.ao;
-        col[2] *= v.ao;
-
         return col;
+    };
+
+    // Helper: pack texture data for a vertex
+    auto packTexData = [&](int vx, int vy, uint32_t& outIndicesPacked, uint32_t& outWeightsPacked) {
+        const auto& v = vert(vx, vy);
+        outIndicesPacked = packU8x4(v.texIndices[0], v.texIndices[1], v.texIndices[2], v.texIndices[3]);
+        outWeightsPacked = packU8x4(v.texWeights[0], v.texWeights[1], v.texWeights[2], v.texWeights[3]);
     };
 
     for (int fy = 0; fy < FH; ++fy) {
         for (int fx = 0; fx < FW; ++fx) {
-            float h00 = vert(fx,     fy    ).height * heightScale;
-            float h10 = vert(fx + 1, fy    ).height * heightScale;
-            float h01 = vert(fx,     fy + 1).height * heightScale;
-            float h11 = vert(fx + 1, fy + 1).height * heightScale;
+            // Use cliff-aware world height
+            float h00 = worldHeight(fx,     fy    );
+            float h10 = worldHeight(fx + 1, fy    );
+            float h01 = worldHeight(fx,     fy + 1);
+            float h11 = worldHeight(fx + 1, fy + 1);
 
             std::array<float, 3> p00 = { static_cast<float>(fx)     * TILE_SCALE, h00, static_cast<float>(fy)     * TILE_SCALE };
             std::array<float, 3> p10 = { static_cast<float>(fx + 1) * TILE_SCALE, h10, static_cast<float>(fy)     * TILE_SCALE };
@@ -462,11 +576,18 @@ void TerrainMesh::buildVulkanMesh(
             auto c01 = applyVertexEffects(vertexColor(fx,   fy+1), fx,   fy+1);
             auto c11 = applyVertexEffects(vertexColor(fx+1, fy+1), fx+1, fy+1);
 
+            // Pack texture blend data
+            uint32_t ti00, tw00, ti10, tw10, ti01, tw01, ti11, tw11;
+            packTexData(fx,   fy,   ti00, tw00);
+            packTexData(fx+1, fy,   ti10, tw10);
+            packTexData(fx,   fy+1, ti01, tw01);
+            packTexData(fx+1, fy+1, ti11, tw11);
+
             uint32_t baseIdx = static_cast<uint32_t>(outVerts.size());
-            outVerts.push_back({ p00, n00, c00 });
-            outVerts.push_back({ p10, n10, c10 });
-            outVerts.push_back({ p01, n01, c01 });
-            outVerts.push_back({ p11, n11, c11 });
+            outVerts.push_back({ p00, n00, c00, ti00, tw00, 0, 0 });
+            outVerts.push_back({ p10, n10, c10, ti10, tw10, 0, 0 });
+            outVerts.push_back({ p01, n01, c01, ti01, tw01, 0, 0 });
+            outVerts.push_back({ p11, n11, c11, ti11, tw11, 0, 0 });
 
             // Triangle 1: TL, TR, BL
             outIndices.push_back(baseIdx + 0);
@@ -476,6 +597,138 @@ void TerrainMesh::buildVulkanMesh(
             outIndices.push_back(baseIdx + 1);
             outIndices.push_back(baseIdx + 3);
             outIndices.push_back(baseIdx + 2);
+        }
+    }
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Cliff wall generation — vertical quads between differing cliff levels
+// ═════════════════════════════════════════════════════════════════════════════
+void TerrainMesh::buildCliffWalls(
+    std::vector<dash::vkexp::TerrainVkVertex>& outVerts,
+    std::vector<uint32_t>& outIndices) const
+{
+    // Rock color for cliff walls
+    const std::array<float, 3> rockCol = {0.45f, 0.40f, 0.35f};
+    const uint32_t rockTexIdx = packU8x4(
+        static_cast<uint8_t>(TerrainTextureId::Rock), 0, 0, 0);
+    const uint32_t rockTexWt = packU8x4(255, 0, 0, 0);
+
+    auto addCliffQuad = [&](float x0, float z0, float topY0, float botY0,
+                            float x1, float z1, float topY1, float botY1,
+                            float nx, float nz) {
+        // Wall normal (horizontal, pointing outward)
+        std::array<float, 3> n = {nx, 0.0f, nz};
+        uint32_t baseIdx = static_cast<uint32_t>(outVerts.size());
+
+        // Four corners: topLeft, topRight, botLeft, botRight
+        outVerts.push_back({{x0, topY0, z0}, n, rockCol, rockTexIdx, rockTexWt, 1, 0});
+        outVerts.push_back({{x1, topY1, z1}, n, rockCol, rockTexIdx, rockTexWt, 1, 0});
+        outVerts.push_back({{x0, botY0, z0}, n, rockCol, rockTexIdx, rockTexWt, 1, 0});
+        outVerts.push_back({{x1, botY1, z1}, n, rockCol, rockTexIdx, rockTexWt, 1, 0});
+
+        outIndices.push_back(baseIdx + 0);
+        outIndices.push_back(baseIdx + 1);
+        outIndices.push_back(baseIdx + 2);
+        outIndices.push_back(baseIdx + 1);
+        outIndices.push_back(baseIdx + 3);
+        outIndices.push_back(baseIdx + 2);
+    };
+
+    // Check horizontal edges (between vx,vy and vx+1,vy)
+    for (int vy = 0; vy < VH; ++vy) {
+        for (int vx = 0; vx < VW - 1; ++vx) {
+            int clA = vert(vx, vy).cliffLevel;
+            int clB = vert(vx + 1, vy).cliffLevel;
+            if (clA == clB) continue;
+
+            float xA = vx * TILE_SCALE;
+            float xB = (vx + 1) * TILE_SCALE;
+            float z  = vy * TILE_SCALE;
+
+            float hA = worldHeight(vx, vy);
+            float hB = worldHeight(vx + 1, vy);
+
+            if (clA > clB) {
+                // Wall faces +Z direction from B side looking at A
+                float botY = clB * CLIFF_STEP + vert(vx + 1, vy).height * INTRA_CLIFF_HEIGHT;
+                addCliffQuad(xA, z, hA, botY, xB, z, hB, botY, 0.0f, -1.0f);
+            } else {
+                float botY = clA * CLIFF_STEP + vert(vx, vy).height * INTRA_CLIFF_HEIGHT;
+                addCliffQuad(xA, z, hA, botY, xB, z, hB, botY, 0.0f, 1.0f);
+            }
+        }
+    }
+
+    // Check vertical edges (between vx,vy and vx,vy+1)
+    for (int vy = 0; vy < VH - 1; ++vy) {
+        for (int vx = 0; vx < VW; ++vx) {
+            int clA = vert(vx, vy).cliffLevel;
+            int clB = vert(vx, vy + 1).cliffLevel;
+            if (clA == clB) continue;
+
+            float x  = vx * TILE_SCALE;
+            float zA = vy * TILE_SCALE;
+            float zB = (vy + 1) * TILE_SCALE;
+
+            float hA = worldHeight(vx, vy);
+            float hB = worldHeight(vx, vy + 1);
+
+            if (clA > clB) {
+                float botY = clB * CLIFF_STEP + vert(vx, vy + 1).height * INTRA_CLIFF_HEIGHT;
+                addCliffQuad(x, zA, hA, botY, x, zB, hB, botY, -1.0f, 0.0f);
+            } else {
+                float botY = clA * CLIFF_STEP + vert(vx, vy).height * INTRA_CLIFF_HEIGHT;
+                addCliffQuad(x, zA, hA, botY, x, zB, hB, botY, 1.0f, 0.0f);
+            }
+        }
+    }
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Water mesh — flat planes at water body levels
+// ═════════════════════════════════════════════════════════════════════════════
+void TerrainMesh::buildWaterMesh(
+    std::vector<dash::vkexp::TerrainVkVertex>& outVerts,
+    std::vector<uint32_t>& outIndices) const
+{
+    for (const auto& wb : waterBodies_) {
+        float wl = wb.waterLevel;
+        std::array<float, 3> waterCol = {wb.tint[0], wb.tint[1], wb.tint[2]};
+        std::array<float, 3> waterNorm = {0.0f, 1.0f, 0.0f};
+        uint32_t waterTexIdx = packU8x4(0, 0, 0, 0);
+        uint32_t waterTexWt  = packU8x4(255, 0, 0, 0);
+        // flags bit 1 = water (value 2)
+        uint16_t waterFlags = 2;
+
+        for (int fy = 0; fy < FH; ++fy) {
+            for (int fx = 0; fx < FW; ++fx) {
+                // Check if any corner is below water level
+                float h00 = worldHeight(fx,     fy    );
+                float h10 = worldHeight(fx + 1, fy    );
+                float h01 = worldHeight(fx,     fy + 1);
+                float h11 = worldHeight(fx + 1, fy + 1);
+
+                if (h00 >= wl && h10 >= wl && h01 >= wl && h11 >= wl) continue;
+
+                float x0 = fx * TILE_SCALE;
+                float x1 = (fx + 1) * TILE_SCALE;
+                float z0 = fy * TILE_SCALE;
+                float z1 = (fy + 1) * TILE_SCALE;
+
+                uint32_t baseIdx = static_cast<uint32_t>(outVerts.size());
+                outVerts.push_back({{x0, wl, z0}, waterNorm, waterCol, waterTexIdx, waterTexWt, waterFlags, 0});
+                outVerts.push_back({{x1, wl, z0}, waterNorm, waterCol, waterTexIdx, waterTexWt, waterFlags, 0});
+                outVerts.push_back({{x0, wl, z1}, waterNorm, waterCol, waterTexIdx, waterTexWt, waterFlags, 0});
+                outVerts.push_back({{x1, wl, z1}, waterNorm, waterCol, waterTexIdx, waterTexWt, waterFlags, 0});
+
+                outIndices.push_back(baseIdx + 0);
+                outIndices.push_back(baseIdx + 1);
+                outIndices.push_back(baseIdx + 2);
+                outIndices.push_back(baseIdx + 1);
+                outIndices.push_back(baseIdx + 3);
+                outIndices.push_back(baseIdx + 2);
+            }
         }
     }
 }

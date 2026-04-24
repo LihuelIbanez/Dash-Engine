@@ -3,6 +3,7 @@
 #include "PrefabAsset.h"
 #include <nlohmann/json.hpp>
 #include <fstream>
+#include <cstring>
 
 using json = nlohmann::json;
 
@@ -21,6 +22,9 @@ void SceneData::createDefault()
     nextEntityId = 1;
     tileOverrides.clear();
     vertexHeightOverrides.clear();
+    cliffOverrides.clear();
+    textureOverrides.clear();
+    waterBodies.clear();
     entities.clear();
 
     EntityData player;
@@ -80,6 +84,37 @@ nlohmann::json SceneData::toJson() const
         });
     }
     j["vertexHeightOverrides"] = heightArr;
+
+    // Cliff overrides (v5+)
+    json cliffArr = json::array();
+    for (auto& co : cliffOverrides) {
+        cliffArr.push_back({
+            {"vx", co.vx}, {"vy", co.vy}, {"cliffLevel", co.cliffLevel}
+        });
+    }
+    j["cliffOverrides"] = cliffArr;
+
+    // Texture overrides (v5+)
+    json texArr = json::array();
+    for (auto& to : textureOverrides) {
+        texArr.push_back({
+            {"vx", to.vx}, {"vy", to.vy},
+            {"texIndices", {to.texIndices[0], to.texIndices[1], to.texIndices[2], to.texIndices[3]}},
+            {"texWeights", {to.texWeights[0], to.texWeights[1], to.texWeights[2], to.texWeights[3]}}
+        });
+    }
+    j["textureOverrides"] = texArr;
+
+    // Water bodies (v5+)
+    json waterArr = json::array();
+    for (auto& wb : waterBodies) {
+        waterArr.push_back({
+            {"id", wb.id}, {"waterLevel", wb.waterLevel},
+            {"opacity", wb.opacity},
+            {"tint", {wb.tint[0], wb.tint[1], wb.tint[2]}}
+        });
+    }
+    j["waterBodies"] = waterArr;
 
     json entsArr = json::array();
     for (auto& e : entities) {
@@ -219,6 +254,69 @@ bool SceneData::loadFromJson(const nlohmann::json& j, const std::string& assetsR
             if (vx < 0 || vx >= VW || vy < 0 || vy >= VH) continue;
             float h = vh.value("height", 0.0f);
             vertexHeightOverrides.push_back({vx, vy, h});
+        }
+    }
+
+    // ── Cliff overrides (v5+) ───────────────────────────────────────────────
+    cliffOverrides.clear();
+    if (j.contains("cliffOverrides") && j["cliffOverrides"].is_array()) {
+        constexpr int VW = WORLD_W + 1;
+        constexpr int VH = WORLD_H + 1;
+        for (auto& co : j["cliffOverrides"]) {
+            if (!co.is_object()) continue;
+            int vx = co.value("vx", -1);
+            int vy = co.value("vy", -1);
+            if (vx < 0 || vx >= VW || vy < 0 || vy >= VH) continue;
+            uint8_t cl = static_cast<uint8_t>(co.value("cliffLevel", 0));
+            if (cl > MAX_CLIFF_LEVEL) cl = MAX_CLIFF_LEVEL;
+            cliffOverrides.push_back({vx, vy, cl});
+        }
+    }
+
+    // ── Texture overrides (v5+) ─────────────────────────────────────────────
+    textureOverrides.clear();
+    if (j.contains("textureOverrides") && j["textureOverrides"].is_array()) {
+        constexpr int VW = WORLD_W + 1;
+        constexpr int VH = WORLD_H + 1;
+        for (auto& to : j["textureOverrides"]) {
+            if (!to.is_object()) continue;
+            int vx = to.value("vx", -1);
+            int vy = to.value("vy", -1);
+            if (vx < 0 || vx >= VW || vy < 0 || vy >= VH) continue;
+            TextureOverride txo;
+            txo.vx = vx; txo.vy = vy;
+            if (to.contains("texIndices") && to["texIndices"].is_array() && to["texIndices"].size() == 4) {
+                for (int i = 0; i < 4; ++i)
+                    txo.texIndices[i] = static_cast<uint8_t>(to["texIndices"][i].get<int>());
+            } else {
+                std::memset(txo.texIndices, 0, 4);
+            }
+            if (to.contains("texWeights") && to["texWeights"].is_array() && to["texWeights"].size() == 4) {
+                for (int i = 0; i < 4; ++i)
+                    txo.texWeights[i] = static_cast<uint8_t>(to["texWeights"][i].get<int>());
+            } else {
+                txo.texWeights[0] = 255; txo.texWeights[1] = 0;
+                txo.texWeights[2] = 0; txo.texWeights[3] = 0;
+            }
+            textureOverrides.push_back(txo);
+        }
+    }
+
+    // ── Water bodies (v5+) ──────────────────────────────────────────────────
+    waterBodies.clear();
+    if (j.contains("waterBodies") && j["waterBodies"].is_array()) {
+        for (auto& wb : j["waterBodies"]) {
+            if (!wb.is_object()) continue;
+            WaterBody body;
+            body.id = static_cast<uint8_t>(wb.value("id", 0));
+            body.waterLevel = wb.value("waterLevel", 0.3f);
+            body.opacity = wb.value("opacity", 0.6f);
+            if (wb.contains("tint") && wb["tint"].is_array() && wb["tint"].size() == 3) {
+                body.tint[0] = wb["tint"][0].get<float>();
+                body.tint[1] = wb["tint"][1].get<float>();
+                body.tint[2] = wb["tint"][2].get<float>();
+            }
+            waterBodies.push_back(body);
         }
     }
 
