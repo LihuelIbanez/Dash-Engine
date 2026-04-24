@@ -22,6 +22,7 @@
 #include "TexturePaintCommand.h"
 #include "WaterLevelCommand.h"
 #include "project/ProjectManager.h"
+#include "EditorVkContext.h"
 #include <string>
 #include <vector>
 #include <map>
@@ -40,10 +41,9 @@ public:
     ~EditorApp();
 
 private:
-    SDL_Window*   window_      = nullptr;
-    SDL_Renderer* renderer_    = nullptr;
-    SDL_Texture*  viewportTex_ = nullptr;
-    bool          running_     = false;
+    SDL_Window*      window_      = nullptr;
+    EditorVkContext  vkCtx_;
+    bool             running_     = false;
 
     // ── Editor mode ──────────────────────────────────────────────────────────
     enum class EditorMode { Edit, Play };
@@ -114,15 +114,15 @@ private:
         bool  useVulkan3D = true;
         bool  embeddedPreview = false;
         float isoYawDeg = 45.0f;
-        float isoPitchDeg = 35.264f;
-        float cameraDistance = 8.0f;
-        float cameraHeight = 2.5f;
+        float isoPitchDeg = 50.0f;
+        float cameraDistance = 18.0f;
+        float cameraHeight = 1.5f;
         float zoom = 1.0f;
         float heightScale = 32.0f;
         float gridOpacity = 0.22f;
         bool  fogEnabled = true;
-        float fogStart = 100.0f;
-        float fogEnd = 200.0f;
+        float fogStart = 60.0f;
+        float fogEnd = 120.0f;
         // Directional light (daylight defaults)
         float lightDirX = 0.3f, lightDirY = 0.9f, lightDirZ = 0.2f;
         float lightColorR = 1.0f, lightColorG = 0.98f, lightColorB = 0.92f;
@@ -131,14 +131,6 @@ private:
         float specularStrength = 0.15f;
         float specularShininess = 32.0f;
     } viewport3D_;
-
-    bool vulkanPreviewAvailable_ = false;
-    bool vulkanPreviewRunning_ = false;
-    bool vulkanPreviewStartPending_ = false;
-    bool vulkanPreviewStartFailed_ = false;   // set on first launch failure; suppresses per-frame retry
-    intptr_t vulkanPreviewPid_ = -1;
-    std::string vulkanViewportStatePath_;
-    std::string vulkanScenePath_;
 
     // Displayed size of the viewport image (for mouse coordinate mapping)
     float vpDisplayW_ = 1.f;
@@ -284,11 +276,10 @@ private:
     float tileHeight(TileType type) const;
     bool syncSceneRender3DSettingsFromUI();
     void syncUIRender3DSettingsFromScene();
-    bool startVulkanPreview();
-    void stopVulkanPreview();
-    void pollVulkanPreviewProcess();
-    void writeVulkanViewportStateFile() const;
     bool viewportScreenToWorld(float vx, float vy, float& wx, float& wy);
+    void buildViewProjMatrix(float vpW, float vpH, float viewProj[16],
+                             float* outEyeX = nullptr, float* outEyeY = nullptr,
+                             float* outEyeZ = nullptr);
     void handleToolClick(float wx, float wy);
     void paintTileAt(float wx, float wy);
     void floodFillAt(float wx, float wy);

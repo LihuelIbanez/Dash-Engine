@@ -3,7 +3,6 @@
 #include <cstdint>
 #include <string>
 #include <vector>
-#include <chrono>
 
 #include <vulkan/vulkan.h>
 
@@ -12,8 +11,12 @@
 #include "assets/cache/AssetCache3D.h"
 #include "rendering/platform/WindowContext.h"
 #include "rendering/vulkan/DeviceContext.h"
+#include "rendering/vulkan/EditorBridge.h"
 #include "rendering/vulkan/FrameGraphLite.h"
 #include "rendering/vulkan/SwapchainContext.h"
+#include "rendering/vulkan/CameraController.h"
+#include "rendering/vulkan/PlayerController.h"
+#include "rendering/vulkan/RenderTypes.h"
 #include "game/physics/PhysicsWorld.h"
 #include "game/physics/TransformProxy.h"
 #include "input/InputBindings3D.h"
@@ -23,13 +26,6 @@ namespace dash::vkexp {
 
 class Renderer {
 public:
-    struct RenderInstance {
-        dash::physics::Vec3 position{};
-        dash::physics::Vec3 scale{1.0f, 1.0f, 1.0f};
-        dash::physics::Vec3 color{0.7f, 0.7f, 0.7f};
-        bool isPlayer = false;
-    };
-
     Renderer() = default;
     ~Renderer();
 
@@ -49,7 +45,7 @@ private:
     bool createPipeline();
     bool createPerFrameUniformBuffers();
     bool updateCameraUbo(uint32_t imageIndex);
-    void applyEditorStateIfNeeded(GLFWwindow* window);
+    void recordDrawCommands(VkCommandBuffer cmd, uint32_t imageIndex);
 
     VkInstance instance_ = VK_NULL_HANDLE;
     VkSurfaceKHR surface_ = VK_NULL_HANDLE;
@@ -92,57 +88,18 @@ private:
     std::vector<float> terrainHeightMap_;
     int terrainMapWidth_ = 0;
     int terrainMapHeight_ = 0;
-    TerrainMesh terrainMesh_;           // for height sampling during gravity
+    TerrainMesh terrainMesh_;
     bool terrainMeshReady_ = false;
     int floorBodyId_ = -1;
     int cubeBodyId_ = -1;
     float fixedAccumulator_ = 0.0f;
 
-    float cameraX_ = 0.0f;
-    float cameraY_ = 1.5f;
-    float cameraZ_ = 2.2f;
-    float yawDegrees_ = -90.0f;
-    float pitchDegrees_ = -20.0f;
-    bool pendingAutoFocus_ = false;
-    bool hadLookFrame_ = false;
-    double lastMouseX_ = 0.0;
-    double lastMouseY_ = 0.0;
+    CameraController camera_;
+    PlayerController player_;
+    EditorBridge editorBridge_;
 
-    // Player position (from scene)
-    float playerX_ = 32.0f;
-    float playerY_ = 1.0f;
-    float playerZ_ = 32.0f;
-    float playerVelY_ = 0.0f;
-    float followDistance_ = 8.0f;
-    float followHeight_ = 2.5f;
-
-    bool embeddedPreview_ = false;
     float elapsedSeconds_ = 0.0f;
-    float fogStart_ = 150.0f;
-    float fogEnd_ = 400.0f;
-    // Directional light (synced from editor, daylight defaults)
-    float lightDirX_ = 0.3f, lightDirY_ = 0.9f, lightDirZ_ = 0.2f;
-    float lightIntensity_ = 1.3f;
-    float lightColorR_ = 1.0f, lightColorG_ = 0.98f, lightColorB_ = 0.92f;
-    float ambientStrength_ = 0.55f;
-    float specularStrength_ = 0.15f;
-    float specularShininess_ = 32.0f;
     std::string scenePath_;
-    std::string editorStatePath_;
-    std::chrono::steady_clock::time_point lastEditorStateRead_{};
-    bool hasExternalSelection_ = false;
-    bool loggedEmbeddedDocking_ = false;
-
-    // Track editor state changes to avoid overwriting WASD input every frame
-    float lastEditorTargetX_ = 0.0f;
-    float lastEditorTargetZ_ = 0.0f;
-    float lastEditorZoom_ = 1.0f;
-    float lastEditorYaw_ = -90.0f;
-    float lastEditorPitch_ = 0.0f;
-    float lastEditorFollowDistance_ = 8.0f;
-    float lastEditorFollowHeight_ = 2.5f;
-
-    bool playerLoaded_ = false;
     InputBindings3D inputBindings_;
 };
 

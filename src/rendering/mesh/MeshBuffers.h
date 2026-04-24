@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
 
 #include <vulkan/vulkan.h>
 
@@ -17,6 +18,8 @@ public:
     MeshBuffers& operator=(MeshBuffers&& other) noexcept;
 
     bool initCube(VkPhysicalDevice physicalDevice, VkDevice device);
+    bool initFromGLTF(VkPhysicalDevice physicalDevice, VkDevice device,
+                      const std::string& gltfPath);
     bool initFromData(VkPhysicalDevice physicalDevice, VkDevice device,
                       const void* vertexData, uint32_t vertexDataSize,
                       const void* indexData, uint32_t indexDataSize,

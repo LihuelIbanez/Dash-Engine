@@ -1,9 +1,9 @@
 {
   "sessions": [
     {
-      "endedAt": "2026-04-23T21:41:31",
+      "endedAt": "2026-04-24T12:03:24",
       "logs": [
-        "[AUDIT] Play session started at 2026-04-23T21:41:06",
+        "[AUDIT] Play session started at 2026-04-24T12:03:19",
         "[VSTEP] enterPlayMode begin",
         "[VSTEP] Current scene name: Default Scene",
         "[VSTEP] Current scene entities: 28",
@@ -35,23 +35,17 @@
         "[VSTEP]   Entity[25]: Enemy (type=Enemy)",
         "[VSTEP]   Entity[26]: Enemy (type=Enemy)",
         "[VSTEP]   Entity[27]: Enemy (type=Enemy)",
-        "[VSTEP] play scene export ok: /Users/lihuelibanez/Development/ueno/Dash-Engine/build/_play_scene.json",
-        "[VSTEP] Tilemap exported (65536 tiles)",
-        "[VOK] Entered Play mode (Vulkan 3D starting...).",
-        "[VSTEP] startVulkanPreview begin",
-        "[VSTEP] checking preview candidate: /Users/lihuelibanez/Development/ueno/Dash-Engine/build/VulkanBootstrap",
-        "[VSTEP] using VulkanBootstrap executable: /Users/lihuelibanez/Development/ueno/Dash-Engine/build/VulkanBootstrap",
-        "[Vulkan] Launch args: --editor-preview --embedded-window --scene /Users/lihuelibanez/Development/ueno/Dash-Engine/build/_play_scene.json --state /Users/lihuelibanez/Development/ueno/Dash-Engine/build/generated/vulkan_viewport_state.json",
-        "[VOK] Preview started (pid=5712) [embedded].",
+        "[Play] Scene exported: ok",
+        "Entered Play mode.",
         "[AUDIT] Session end reason: play_stopped"
       ],
       "reason": "play_stopped",
-      "startedAt": "2026-04-23T21:41:06"
+      "startedAt": "2026-04-24T12:03:19"
     },
     {
-      "endedAt": "2026-04-23T21:42:50",
+      "endedAt": "2026-04-24T12:05:30",
       "logs": [
-        "[AUDIT] Play session started at 2026-04-23T21:42:42",
+        "[AUDIT] Play session started at 2026-04-24T12:05:29",
         "[VSTEP] enterPlayMode begin",
         "[VSTEP] Current scene name: Default Scene",
         "[VSTEP] Current scene entities: 28",
@@ -83,18 +77,12 @@
         "[VSTEP]   Entity[25]: Enemy (type=Enemy)",
         "[VSTEP]   Entity[26]: Enemy (type=Enemy)",
         "[VSTEP]   Entity[27]: Enemy (type=Enemy)",
-        "[VSTEP] play scene export ok: /Users/lihuelibanez/Development/ueno/Dash-Engine/build/_play_scene.json",
-        "[VSTEP] Tilemap exported (65536 tiles)",
-        "[VOK] Entered Play mode (Vulkan 3D starting...).",
-        "[VSTEP] startVulkanPreview begin",
-        "[VSTEP] checking preview candidate: /Users/lihuelibanez/Development/ueno/Dash-Engine/build/VulkanBootstrap",
-        "[VSTEP] using VulkanBootstrap executable: /Users/lihuelibanez/Development/ueno/Dash-Engine/build/VulkanBootstrap",
-        "[Vulkan] Launch args: --editor-preview --embedded-window --scene /Users/lihuelibanez/Development/ueno/Dash-Engine/build/_play_scene.json --state /Users/lihuelibanez/Development/ueno/Dash-Engine/build/generated/vulkan_viewport_state.json",
-        "[VOK] Preview started (pid=7441) [embedded].",
+        "[Play] Scene exported: ok",
+        "Entered Play mode.",
         "[AUDIT] Session end reason: play_stopped"
       ],
       "reason": "play_stopped",
-      "startedAt": "2026-04-23T21:42:42"
+      "startedAt": "2026-04-24T12:05:29"
     }
   ]
 }

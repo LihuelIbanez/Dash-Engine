@@ -2,6 +2,12 @@
 
 #include <array>
 #include <cstring>
+#include <cstdio>
+#include <vector>
+
+#include <assimp/Importer.hpp>
+#include <assimp/scene.h>
+#include <assimp/postprocess.h>
 
 #include "rendering/mesh/Vertex.h"
 
@@ -212,6 +218,75 @@ bool MeshBuffers::initFromData(VkPhysicalDevice physicalDevice, VkDevice device,
 
     indexCount_ = numIndices;
     return true;
+}
+
+bool MeshBuffers::initFromGLTF(VkPhysicalDevice physicalDevice, VkDevice device,
+                                const std::string& gltfPath)
+{
+    Assimp::Importer importer;
+    const aiScene* scene = importer.ReadFile(gltfPath,
+        aiProcess_Triangulate |
+        aiProcess_GenNormals |
+        aiProcess_FlipUVs |
+        aiProcess_JoinIdenticalVertices);
+
+    if (!scene || (scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE) || !scene->mRootNode) {
+        std::fprintf(stderr, "[MeshBuffers] Assimp error: %s\n", importer.GetErrorString());
+        return false;
+    }
+
+    if (scene->mNumMeshes == 0) {
+        std::fprintf(stderr, "[MeshBuffers] No meshes found in %s\n", gltfPath.c_str());
+        return false;
+    }
+
+    std::vector<Vertex> vertices;
+    std::vector<uint32_t> indices;
+    uint32_t vertexOffset = 0;
+
+    for (unsigned int m = 0; m < scene->mNumMeshes; ++m) {
+        const aiMesh* mesh = scene->mMeshes[m];
+
+        for (unsigned int i = 0; i < mesh->mNumVertices; ++i) {
+            Vertex v{};
+            v.position = { mesh->mVertices[i].x, mesh->mVertices[i].y, mesh->mVertices[i].z };
+
+            if (mesh->mNormals) {
+                v.normal = { mesh->mNormals[i].x, mesh->mNormals[i].y, mesh->mNormals[i].z };
+            } else {
+                v.normal = { 0.0f, 1.0f, 0.0f };
+            }
+
+            if (mesh->mTextureCoords[0]) {
+                v.texCoord = { mesh->mTextureCoords[0][i].x, mesh->mTextureCoords[0][i].y };
+            } else {
+                v.texCoord = { 0.0f, 0.0f };
+            }
+
+            vertices.push_back(v);
+        }
+
+        for (unsigned int f = 0; f < mesh->mNumFaces; ++f) {
+            const aiFace& face = mesh->mFaces[f];
+            for (unsigned int j = 0; j < face.mNumIndices; ++j) {
+                indices.push_back(vertexOffset + face.mIndices[j]);
+            }
+        }
+
+        vertexOffset += mesh->mNumVertices;
+    }
+
+    std::fprintf(stdout, "[MeshBuffers] Loaded GLTF: %u vertices, %u indices from %s\n",
+                 static_cast<uint32_t>(vertices.size()),
+                 static_cast<uint32_t>(indices.size()),
+                 gltfPath.c_str());
+
+    return initFromData(physicalDevice, device,
+                        vertices.data(),
+                        static_cast<uint32_t>(vertices.size() * sizeof(Vertex)),
+                        indices.data(),
+                        static_cast<uint32_t>(indices.size() * sizeof(uint32_t)),
+                        static_cast<uint32_t>(indices.size()));
 }
 
 void MeshBuffers::shutdown(VkDevice device)

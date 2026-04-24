@@ -1,9 +1,26 @@
 #version 450
 
 layout(location = 0) in vec3 vColor;
+layout(location = 1) in vec3 vNormal;
+layout(location = 2) in vec3 vWorldPos;
+
 layout(location = 0) out vec4 outColor;
+
+layout(push_constant) uniform InstancePC {
+    vec4 offset;
+    vec4 scale;
+    vec4 color;
+    vec4 lightDir; // xyz = direction, w = intensity
+} pc;
 
 void main()
 {
-    outColor = vec4(vColor, 1.0);
+    vec3 N = normalize(vNormal);
+    vec3 L = normalize(pc.lightDir.xyz);
+    float NdotL = max(dot(N, L), 0.0);
+
+    // Ambient + directional with soft wrap
+    float light = 0.4 + NdotL * pc.lightDir.w * 0.6;
+
+    outColor = vec4(vColor * light, 1.0);
 }

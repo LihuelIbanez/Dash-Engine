@@ -1,0 +1,895 @@
+#include "EditorVkContext.h"
+#include "rendering/vulkan/PipelineBuilder.h"
+#include "rendering/mesh/TerrainVertex.h"
+#include "imgui_impl_vulkan.h"
+#include "imgui_impl_sdl2.h"
+#include <SDL2/SDL_vulkan.h>
+#include <cstdio>
+#include <cstring>
+#include <string>
+#include <vector>
+#include <array>
+#include <cmath>
+
+#include "game/rendering/stb_image.h"
+
+using namespace dash::vkexp;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────────────────────
+static uint32_t findMemType(VkPhysicalDevice pd, uint32_t filter, VkMemoryPropertyFlags props)
+{
+    VkPhysicalDeviceMemoryProperties mp{};
+    vkGetPhysicalDeviceMemoryProperties(pd, &mp);
+    for (uint32_t i = 0; i < mp.memoryTypeCount; ++i)
+        if ((filter & (1u << i)) && (mp.memoryTypes[i].propertyFlags & props) == props)
+            return i;
+    return UINT32_MAX;
+}
+
+static bool createBuffer(VkPhysicalDevice pd, VkDevice dev, VkDeviceSize size,
+                          VkBufferUsageFlags usage, VkMemoryPropertyFlags memProps,
+                          VkBuffer& buf, VkDeviceMemory& mem)
+{
+    VkBufferCreateInfo ci{VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
+    ci.size = size; ci.usage = usage; ci.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    if (vkCreateBuffer(dev, &ci, nullptr, &buf) != VK_SUCCESS) return false;
+    VkMemoryRequirements req; vkGetBufferMemoryRequirements(dev, buf, &req);
+    VkMemoryAllocateInfo ai{VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO};
+    ai.allocationSize = req.size;
+    ai.memoryTypeIndex = findMemType(pd, req.memoryTypeBits, memProps);
+    if (ai.memoryTypeIndex == UINT32_MAX) return false;
+    if (vkAllocateMemory(dev, &ai, nullptr, &mem) != VK_SUCCESS) return false;
+    vkBindBufferMemory(dev, buf, mem, 0);
+    return true;
+}
+
+static bool createImage(VkPhysicalDevice pd, VkDevice dev, uint32_t w, uint32_t h,
+                         VkFormat fmt, VkImageUsageFlags usage,
+                         VkImage& img, VkDeviceMemory& mem)
+{
+    VkImageCreateInfo ci{VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};
+    ci.imageType = VK_IMAGE_TYPE_2D; ci.format = fmt;
+    ci.extent = {w, h, 1}; ci.mipLevels = 1; ci.arrayLayers = 1;
+    ci.samples = VK_SAMPLE_COUNT_1_BIT; ci.tiling = VK_IMAGE_TILING_OPTIMAL;
+    ci.usage = usage; ci.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    ci.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    if (vkCreateImage(dev, &ci, nullptr, &img) != VK_SUCCESS) return false;
+    VkMemoryRequirements req; vkGetImageMemoryRequirements(dev, img, &req);
+    VkMemoryAllocateInfo ai{VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO};
+    ai.allocationSize = req.size;
+    ai.memoryTypeIndex = findMemType(pd, req.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    if (ai.memoryTypeIndex == UINT32_MAX) return false;
+    if (vkAllocateMemory(dev, &ai, nullptr, &mem) != VK_SUCCESS) return false;
+    vkBindImageMemory(dev, img, mem, 0);
+    return true;
+}
+
+static VkImageView createView(VkDevice dev, VkImage img, VkFormat fmt, VkImageAspectFlags aspect)
+{
+    VkImageViewCreateInfo ci{VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
+    ci.image = img; ci.viewType = VK_IMAGE_VIEW_TYPE_2D; ci.format = fmt;
+    ci.subresourceRange = {aspect, 0, 1, 0, 1};
+    VkImageView v = VK_NULL_HANDLE;
+    vkCreateImageView(dev, &ci, nullptr, &v);
+    return v;
+}
+
+static void checkVkResult(VkResult r) {
+    if (r != VK_SUCCESS)
+        std::fprintf(stderr, "[EditorVk] VkResult = %d\n", static_cast<int>(r));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// init
+// ─────────────────────────────────────────────────────────────────────────────
+bool EditorVkContext::createInstance(SDL_Window* window)
+{
+    unsigned int extCount = 0;
+    SDL_Vulkan_GetInstanceExtensions(window, &extCount, nullptr);
+    std::vector<const char*> exts(extCount);
+    SDL_Vulkan_GetInstanceExtensions(window, &extCount, exts.data());
+
+#ifdef __APPLE__
+    exts.push_back(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
+    exts.push_back("VK_KHR_get_physical_device_properties2");
+#endif
+
+    VkApplicationInfo appInfo{VK_STRUCTURE_TYPE_APPLICATION_INFO};
+    appInfo.pApplicationName = "DashEngine Editor";
+    appInfo.apiVersion = VK_API_VERSION_1_0;
+
+    VkInstanceCreateInfo ci{VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO};
+    ci.pApplicationInfo = &appInfo;
+    ci.enabledExtensionCount = static_cast<uint32_t>(exts.size());
+    ci.ppEnabledExtensionNames = exts.data();
+#ifdef __APPLE__
+    ci.flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
+#endif
+
+    return vkCreateInstance(&ci, nullptr, &instance_) == VK_SUCCESS;
+}
+
+bool EditorVkContext::init(SDL_Window* window)
+{
+    if (!createInstance(window)) {
+        std::fprintf(stderr, "[EditorVk] Failed to create Vulkan instance.\n");
+        return false;
+    }
+
+    if (!SDL_Vulkan_CreateSurface(window, instance_, &surface_)) {
+        std::fprintf(stderr, "[EditorVk] SDL_Vulkan_CreateSurface failed: %s\n", SDL_GetError());
+        return false;
+    }
+
+    if (!deviceCtx_.init(instance_, surface_)) {
+        std::fprintf(stderr, "[EditorVk] Failed to init device context.\n");
+        return false;
+    }
+
+    int w = 0, h = 0;
+    SDL_Vulkan_GetDrawableSize(window, &w, &h);
+    if (!swapchain_.init(deviceCtx_, surface_, static_cast<uint32_t>(w), static_cast<uint32_t>(h))) {
+        std::fprintf(stderr, "[EditorVk] Failed to create swapchain.\n");
+        return false;
+    }
+
+    auto qf = deviceCtx_.queueFamilies();
+    if (!frameGraph_.init(deviceCtx_.device(),
+                          qf.graphicsFamily.value(),
+                          deviceCtx_.graphicsQueue(),
+                          deviceCtx_.presentQueue(),
+                          swapchain_.swapchain(),
+                          swapchain_.extent(),
+                          swapchain_.renderPass(),
+                          swapchain_.imageViews(),
+                          swapchain_.depthImageView())) {
+        std::fprintf(stderr, "[EditorVk] Failed to init frame graph.\n");
+        return false;
+    }
+
+    // ── Sampler (needed by scene descriptors and viewport texture) ───────────
+    {
+        VkSamplerCreateInfo sci{VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
+        sci.magFilter = VK_FILTER_LINEAR; sci.minFilter = VK_FILTER_LINEAR;
+        sci.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+        sci.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+        sci.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+        if (vkCreateSampler(deviceCtx_.device(), &sci, nullptr, &vpSampler_) != VK_SUCCESS)
+            return false;
+    }
+
+    // ── Terrain texture array (load before descriptors) ───────────────────
+    createTerrainTextureArray(); // non-fatal: falls back to dummy if it fails
+
+    // ── Scene descriptors (UBO for camera) ──────────────────────────────────
+    if (!createSceneDescriptors()) return false;
+
+    // ── Offscreen viewport render pass ──────────────────────────────────────
+    {
+        VkAttachmentDescription colorAtt{};
+        colorAtt.format = VK_FORMAT_B8G8R8A8_UNORM;
+        colorAtt.samples = VK_SAMPLE_COUNT_1_BIT;
+        colorAtt.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        colorAtt.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+        colorAtt.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+        colorAtt.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        colorAtt.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        colorAtt.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+        VkAttachmentReference colorRef{0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL};
+
+        VkAttachmentDescription depthAtt{};
+        depthAtt.format = VK_FORMAT_D32_SFLOAT;
+        depthAtt.samples = VK_SAMPLE_COUNT_1_BIT;
+        depthAtt.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        depthAtt.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        depthAtt.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+        depthAtt.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        depthAtt.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        depthAtt.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
+        VkAttachmentReference depthRef{1, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL};
+
+        VkSubpassDescription sub{};
+        sub.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+        sub.colorAttachmentCount = 1;
+        sub.pColorAttachments = &colorRef;
+        sub.pDepthStencilAttachment = &depthRef;
+
+        VkSubpassDependency dep{};
+        dep.srcSubpass = VK_SUBPASS_EXTERNAL;
+        dep.dstSubpass = 0;
+        dep.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+        dep.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+        dep.srcAccessMask = 0;
+        dep.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+
+        std::array<VkAttachmentDescription, 2> atts = {colorAtt, depthAtt};
+        VkRenderPassCreateInfo rpci{VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO};
+        rpci.attachmentCount = 2; rpci.pAttachments = atts.data();
+        rpci.subpassCount = 1; rpci.pSubpasses = &sub;
+        rpci.dependencyCount = 1; rpci.pDependencies = &dep;
+        if (vkCreateRenderPass(deviceCtx_.device(), &rpci, nullptr, &vpRenderPass_) != VK_SUCCESS)
+            return false;
+    }
+
+    // ── Pipelines ───────────────────────────────────────────────────────────
+    if (!createPipelines()) return false;
+
+    // ── Cube mesh (for entity rendering) ────────────────────────────────────
+    cubeMeshBuf_.initCube(deviceCtx_.physicalDevice(), deviceCtx_.device());
+
+    // ── Wolf GLTF mesh (for enemy entities) ────────────────────────────────
+#ifdef VULKAN_MODEL_DIR
+    {
+        std::string wolfPath = std::string(VULKAN_MODEL_DIR) + "/Wolf-Blender-2.82a.gltf";
+        if (!wolfMeshBuf_.initFromGLTF(deviceCtx_.physicalDevice(), deviceCtx_.device(), wolfPath)) {
+            std::fprintf(stderr, "[EditorVkContext] Warning: could not load wolf model, enemies will use cube fallback\n");
+        }
+    }
+#endif
+
+    // ── ImGui Vulkan backend init ───────────────────────────────────────────
+    {
+        ImGui_ImplVulkan_InitInfo info{};
+        info.ApiVersion = VK_API_VERSION_1_0;
+        info.Instance = instance_;
+        info.PhysicalDevice = deviceCtx_.physicalDevice();
+        info.Device = deviceCtx_.device();
+        info.QueueFamily = qf.graphicsFamily.value();
+        info.Queue = deviceCtx_.graphicsQueue();
+        info.DescriptorPoolSize = 64;
+        info.MinImageCount = swapchain_.imageCount();
+        info.ImageCount = swapchain_.imageCount();
+        info.PipelineInfoMain.RenderPass = swapchain_.renderPass();
+        info.CheckVkResultFn = checkVkResult;
+        if (!ImGui_ImplVulkan_Init(&info)) {
+            std::fprintf(stderr, "[EditorVk] ImGui_ImplVulkan_Init failed.\n");
+            return false;
+        }
+    }
+
+    // Create initial offscreen target
+    createOffscreenTarget(1280, 720);
+
+    std::fprintf(stdout, "[EditorVk] Vulkan context initialized.\n");
+    return true;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Terrain texture array (9 layers matching TerrainTextureId)
+// ─────────────────────────────────────────────────────────────────────────────
+bool EditorVkContext::createTerrainTextureArray()
+{
+    VkDevice dev = deviceCtx_.device();
+    VkPhysicalDevice pd = deviceCtx_.physicalDevice();
+    VkQueue gq = deviceCtx_.graphicsQueue();
+    VkCommandPool cmdPool = frameGraph_.commandPool();
+
+    constexpr uint32_t TEX_W = 512;
+    constexpr uint32_t TEX_H = 512;
+    constexpr uint32_t LAYER_COUNT = 9;  // TerrainTextureId::Count
+    constexpr VkDeviceSize layerSize = TEX_W * TEX_H * 4;
+
+    // Build texture path base from VULKAN_MODEL_DIR (points to assets/models/gltf)
+#ifdef VULKAN_MODEL_DIR
+    std::string modelDir = VULKAN_MODEL_DIR;
+    std::string terrainDir = modelDir + "/../terrain/";
+#else
+    std::string terrainDir = "assets/models/terrain/";
+#endif
+
+    // Map: layer index -> file path (empty = procedural)
+    struct TexEntry { int layer; std::string path; uint8_t r, g, b; };
+    std::vector<TexEntry> entries = {
+        {0, "",  80, 160, 60, },   // Grass — procedural green
+        {1, terrainDir + "rocky_terrain_02_4k.blend/textures/rocky_terrain_02_diff_4k.jpg", 0,0,0},
+        {2, terrainDir + "gray_rocks_4k.blend/textures/gray_rocks_diff_4k.jpg", 0,0,0},
+        {3, terrainDir + "sandy_gravel_02_4k.blend/textures/sandy_gravel_02_diff_4k.jpg", 0,0,0},
+        {4, terrainDir + "snow_02_4k.blend/textures/snow_02_diff_4k.jpg", 0,0,0},
+        {5, "", 100, 70, 40},      // Mud
+        {6, "",  40, 100, 30},     // DarkGrass
+        {7, "", 130, 130, 120},    // Gravel
+        {8, "", 200, 220, 240},    // Ice
+    };
+
+    // Create VkImage with arrayLayers = 9
+    VkImageCreateInfo ici{VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};
+    ici.imageType = VK_IMAGE_TYPE_2D;
+    ici.format = VK_FORMAT_R8G8B8A8_UNORM;
+    ici.extent = {TEX_W, TEX_H, 1};
+    ici.mipLevels = 1;
+    ici.arrayLayers = LAYER_COUNT;
+    ici.samples = VK_SAMPLE_COUNT_1_BIT;
+    ici.tiling = VK_IMAGE_TILING_OPTIMAL;
+    ici.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+    ici.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    ici.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+    if (vkCreateImage(dev, &ici, nullptr, &terrainTexArrayImage_) != VK_SUCCESS) {
+        std::fprintf(stderr, "[EditorVk] Failed to create terrain texture array image\n");
+        return false;
+    }
+
+    VkMemoryRequirements memReqs;
+    vkGetImageMemoryRequirements(dev, terrainTexArrayImage_, &memReqs);
+    VkMemoryAllocateInfo mai{VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO};
+    mai.allocationSize = memReqs.size;
+    mai.memoryTypeIndex = findMemType(pd, memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    if (mai.memoryTypeIndex == UINT32_MAX) return false;
+    if (vkAllocateMemory(dev, &mai, nullptr, &terrainTexArrayMemory_) != VK_SUCCESS) return false;
+    vkBindImageMemory(dev, terrainTexArrayImage_, terrainTexArrayMemory_, 0);
+
+    // Create staging buffer for one layer at a time
+    VkBuffer stagingBuf = VK_NULL_HANDLE;
+    VkDeviceMemory stagingMem = VK_NULL_HANDLE;
+    if (!createBuffer(pd, dev, layerSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                      stagingBuf, stagingMem)) {
+        std::fprintf(stderr, "[EditorVk] Failed to create staging buffer for terrain textures\n");
+        return false;
+    }
+
+    // Transition entire array to TRANSFER_DST
+    {
+        VkCommandBufferAllocateInfo cbai{VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO};
+        cbai.commandPool = cmdPool; cbai.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY; cbai.commandBufferCount = 1;
+        VkCommandBuffer cmd;
+        vkAllocateCommandBuffers(dev, &cbai, &cmd);
+        VkCommandBufferBeginInfo bi{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
+        bi.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+        vkBeginCommandBuffer(cmd, &bi);
+
+        VkImageMemoryBarrier barrier{VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
+        barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+        barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.image = terrainTexArrayImage_;
+        barrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, LAYER_COUNT};
+        barrier.srcAccessMask = 0;
+        barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                             0, 0, nullptr, 0, nullptr, 1, &barrier);
+
+        vkEndCommandBuffer(cmd);
+        VkSubmitInfo si{VK_STRUCTURE_TYPE_SUBMIT_INFO}; si.commandBufferCount = 1; si.pCommandBuffers = &cmd;
+        vkQueueSubmit(gq, 1, &si, VK_NULL_HANDLE);
+        vkQueueWaitIdle(gq);
+        vkFreeCommandBuffers(dev, cmdPool, 1, &cmd);
+    }
+
+    // Upload each layer
+    for (auto& e : entries) {
+        std::vector<uint8_t> pixels(TEX_W * TEX_H * 4);
+
+        if (!e.path.empty()) {
+            int w = 0, h = 0, ch = 0;
+            stbi_set_flip_vertically_on_load(0);
+            unsigned char* raw = stbi_load(e.path.c_str(), &w, &h, &ch, STBI_rgb_alpha);
+            if (raw) {
+                // Nearest-neighbor downsample to TEX_W x TEX_H
+                for (uint32_t y = 0; y < TEX_H; ++y) {
+                    for (uint32_t x = 0; x < TEX_W; ++x) {
+                        uint32_t srcX = x * static_cast<uint32_t>(w) / TEX_W;
+                        uint32_t srcY = y * static_cast<uint32_t>(h) / TEX_H;
+                        uint32_t srcIdx = (srcY * static_cast<uint32_t>(w) + srcX) * 4;
+                        uint32_t dstIdx = (y * TEX_W + x) * 4;
+                        pixels[dstIdx + 0] = raw[srcIdx + 0];
+                        pixels[dstIdx + 1] = raw[srcIdx + 1];
+                        pixels[dstIdx + 2] = raw[srcIdx + 2];
+                        pixels[dstIdx + 3] = raw[srcIdx + 3];
+                    }
+                }
+                stbi_image_free(raw);
+                std::fprintf(stdout, "[EditorVk] Loaded terrain texture layer %d: %s (%dx%d)\n",
+                             e.layer, e.path.c_str(), w, h);
+            } else {
+                // Failed to load — fill with fallback color
+                std::fprintf(stderr, "[EditorVk] Failed to load %s, using fallback\n", e.path.c_str());
+                for (uint32_t i = 0; i < TEX_W * TEX_H; ++i) {
+                    pixels[i*4+0] = e.r; pixels[i*4+1] = e.g;
+                    pixels[i*4+2] = e.b; pixels[i*4+3] = 255;
+                }
+            }
+        } else {
+            // Procedural solid color
+            for (uint32_t i = 0; i < TEX_W * TEX_H; ++i) {
+                pixels[i*4+0] = e.r; pixels[i*4+1] = e.g;
+                pixels[i*4+2] = e.b; pixels[i*4+3] = 255;
+            }
+        }
+
+        // Copy to staging buffer
+        void* mapped = nullptr;
+        vkMapMemory(dev, stagingMem, 0, layerSize, 0, &mapped);
+        std::memcpy(mapped, pixels.data(), layerSize);
+        vkUnmapMemory(dev, stagingMem);
+
+        // Copy staging buffer to image layer
+        VkCommandBufferAllocateInfo cbai{VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO};
+        cbai.commandPool = cmdPool; cbai.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY; cbai.commandBufferCount = 1;
+        VkCommandBuffer cmd;
+        vkAllocateCommandBuffers(dev, &cbai, &cmd);
+        VkCommandBufferBeginInfo bi{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
+        bi.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+        vkBeginCommandBuffer(cmd, &bi);
+
+        VkBufferImageCopy region{};
+        region.bufferOffset = 0;
+        region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        region.imageSubresource.mipLevel = 0;
+        region.imageSubresource.baseArrayLayer = static_cast<uint32_t>(e.layer);
+        region.imageSubresource.layerCount = 1;
+        region.imageExtent = {TEX_W, TEX_H, 1};
+
+        vkCmdCopyBufferToImage(cmd, stagingBuf, terrainTexArrayImage_,
+                               VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+
+        vkEndCommandBuffer(cmd);
+        VkSubmitInfo si{VK_STRUCTURE_TYPE_SUBMIT_INFO}; si.commandBufferCount = 1; si.pCommandBuffers = &cmd;
+        vkQueueSubmit(gq, 1, &si, VK_NULL_HANDLE);
+        vkQueueWaitIdle(gq);
+        vkFreeCommandBuffers(dev, cmdPool, 1, &cmd);
+    }
+
+    // Cleanup staging
+    vkDestroyBuffer(dev, stagingBuf, nullptr);
+    vkFreeMemory(dev, stagingMem, nullptr);
+
+    // Transition to SHADER_READ_ONLY_OPTIMAL
+    {
+        VkCommandBufferAllocateInfo cbai{VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO};
+        cbai.commandPool = cmdPool; cbai.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY; cbai.commandBufferCount = 1;
+        VkCommandBuffer cmd;
+        vkAllocateCommandBuffers(dev, &cbai, &cmd);
+        VkCommandBufferBeginInfo bi{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
+        bi.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+        vkBeginCommandBuffer(cmd, &bi);
+
+        VkImageMemoryBarrier barrier{VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
+        barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+        barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.image = terrainTexArrayImage_;
+        barrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, LAYER_COUNT};
+        barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+        vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                             0, 0, nullptr, 0, nullptr, 1, &barrier);
+
+        vkEndCommandBuffer(cmd);
+        VkSubmitInfo si{VK_STRUCTURE_TYPE_SUBMIT_INFO}; si.commandBufferCount = 1; si.pCommandBuffers = &cmd;
+        vkQueueSubmit(gq, 1, &si, VK_NULL_HANDLE);
+        vkQueueWaitIdle(gq);
+        vkFreeCommandBuffers(dev, cmdPool, 1, &cmd);
+    }
+
+    // Create image view as 2D_ARRAY
+    VkImageViewCreateInfo vci{VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
+    vci.image = terrainTexArrayImage_;
+    vci.viewType = VK_IMAGE_VIEW_TYPE_2D_ARRAY;
+    vci.format = VK_FORMAT_R8G8B8A8_UNORM;
+    vci.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, LAYER_COUNT};
+    if (vkCreateImageView(dev, &vci, nullptr, &terrainTexArrayView_) != VK_SUCCESS) {
+        std::fprintf(stderr, "[EditorVk] Failed to create terrain texture array view\n");
+        return false;
+    }
+
+    // Create sampler with REPEAT addressing
+    VkSamplerCreateInfo sci{VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
+    sci.magFilter = VK_FILTER_LINEAR;
+    sci.minFilter = VK_FILTER_LINEAR;
+    sci.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    sci.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    sci.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    sci.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    if (vkCreateSampler(dev, &sci, nullptr, &terrainTexSampler_) != VK_SUCCESS) {
+        std::fprintf(stderr, "[EditorVk] Failed to create terrain texture sampler\n");
+        return false;
+    }
+
+    std::fprintf(stdout, "[EditorVk] Terrain texture array created (%ux%u, %u layers)\n",
+                 TEX_W, TEX_H, LAYER_COUNT);
+    return true;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Scene descriptors (camera UBO at binding 0, dummy sampler at binding 1)
+// ─────────────────────────────────────────────────────────────────────────────
+bool EditorVkContext::createSceneDescriptors()
+{
+    VkDevice dev = deviceCtx_.device();
+
+    // Layout: binding 0 = UBO, binding 1 = combined image sampler (required by terrain shader)
+    VkDescriptorSetLayoutBinding uboB{};
+    uboB.binding = 0; uboB.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    uboB.descriptorCount = 1; uboB.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+
+    VkDescriptorSetLayoutBinding samplerB{};
+    samplerB.binding = 1; samplerB.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    samplerB.descriptorCount = 1; samplerB.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+    std::array<VkDescriptorSetLayoutBinding, 2> bindings = {uboB, samplerB};
+    VkDescriptorSetLayoutCreateInfo lci{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
+    lci.bindingCount = 2; lci.pBindings = bindings.data();
+    if (vkCreateDescriptorSetLayout(dev, &lci, nullptr, &sceneDescLayout_) != VK_SUCCESS)
+        return false;
+
+    std::array<VkDescriptorPoolSize, 2> poolSizes = {{
+        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1}
+    }};
+    VkDescriptorPoolCreateInfo pci{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
+    pci.maxSets = 1; pci.poolSizeCount = 2; pci.pPoolSizes = poolSizes.data();
+    if (vkCreateDescriptorPool(dev, &pci, nullptr, &sceneDescPool_) != VK_SUCCESS)
+        return false;
+
+    VkDescriptorSetAllocateInfo dsai{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
+    dsai.descriptorPool = sceneDescPool_; dsai.descriptorSetCount = 1;
+    dsai.pSetLayouts = &sceneDescLayout_;
+    if (vkAllocateDescriptorSets(dev, &dsai, &sceneDescSet_) != VK_SUCCESS)
+        return false;
+
+    // UBO buffer
+    if (!createBuffer(deviceCtx_.physicalDevice(), dev, 64, // Mat4 = 64 bytes
+                      VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                      uboBuffer_, uboMemory_))
+        return false;
+
+    VkDescriptorBufferInfo binfo{}; binfo.buffer = uboBuffer_; binfo.range = 64;
+
+    // Create a 1x1 white dummy texture for binding 1 (required by descriptor layout)
+    VkPhysicalDevice pd = deviceCtx_.physicalDevice();
+    if (!createImage(pd, dev, 1, 1, VK_FORMAT_R8G8B8A8_UNORM,
+                     VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+                     dummyTexImage_, dummyTexMemory_))
+        return false;
+    dummyTexView_ = createView(dev, dummyTexImage_, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_ASPECT_COLOR_BIT);
+    if (!dummyTexView_) return false;
+
+    // Transition dummy image to SHADER_READ_ONLY_OPTIMAL
+    {
+        VkCommandBuffer tmpCmd = frameGraph_.commandBuffer(0);
+        VkCommandBufferBeginInfo cbi{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
+        cbi.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+        vkBeginCommandBuffer(tmpCmd, &cbi);
+
+        VkImageMemoryBarrier barrier{VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
+        barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.image = dummyTexImage_;
+        barrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+        barrier.srcAccessMask = 0;
+        barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+        vkCmdPipelineBarrier(tmpCmd,
+            VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+            0, 0, nullptr, 0, nullptr, 1, &barrier);
+
+        vkEndCommandBuffer(tmpCmd);
+        VkSubmitInfo si{VK_STRUCTURE_TYPE_SUBMIT_INFO};
+        si.commandBufferCount = 1; si.pCommandBuffers = &tmpCmd;
+        vkQueueSubmit(deviceCtx_.graphicsQueue(), 1, &si, VK_NULL_HANDLE);
+        vkQueueWaitIdle(deviceCtx_.graphicsQueue());
+        vkResetCommandBuffer(tmpCmd, 0);
+    }
+
+    VkDescriptorImageInfo imgInfo{};
+    if (terrainTexArrayView_ != VK_NULL_HANDLE && terrainTexSampler_ != VK_NULL_HANDLE) {
+        imgInfo.sampler = terrainTexSampler_;
+        imgInfo.imageView = terrainTexArrayView_;
+    } else {
+        imgInfo.sampler = vpSampler_;
+        imgInfo.imageView = dummyTexView_;
+    }
+    imgInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+    std::array<VkWriteDescriptorSet, 2> writes{};
+    writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    writes[0].dstSet = sceneDescSet_; writes[0].dstBinding = 0;
+    writes[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    writes[0].descriptorCount = 1; writes[0].pBufferInfo = &binfo;
+
+    writes[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    writes[1].dstSet = sceneDescSet_; writes[1].dstBinding = 1;
+    writes[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    writes[1].descriptorCount = 1; writes[1].pImageInfo = &imgInfo;
+
+    vkUpdateDescriptorSets(dev, static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
+
+    return true;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Pipelines
+// ─────────────────────────────────────────────────────────────────────────────
+bool EditorVkContext::createPipelines()
+{
+    VkDevice dev = deviceCtx_.device();
+    VkExtent2D ext = {1280, 720}; // initial; viewport rendering uses dynamic viewport
+
+    std::string shaderDir = VULKAN_SHADER_DIR;
+    std::string err;
+
+    if (!PipelineBuilder::createTerrainPipeline(dev, ext, vpRenderPass_, sceneDescLayout_,
+            shaderDir + "/terrain.vert.spv", shaderDir + "/terrain.frag.spv",
+            terrainPipelineLayout_, terrainPipeline_, err)) {
+        std::fprintf(stderr, "[EditorVk] Terrain pipeline: %s\n", err.c_str());
+        return false;
+    }
+
+    if (!PipelineBuilder::createWaterPipeline(dev, ext, vpRenderPass_, sceneDescLayout_,
+            shaderDir + "/water.vert.spv", shaderDir + "/water.frag.spv",
+            waterPipelineLayout_, waterPipeline_, err)) {
+        std::fprintf(stderr, "[EditorVk] Water pipeline: %s\n", err.c_str());
+        return false;
+    }
+
+    if (!PipelineBuilder::createBasicPipeline(dev, ext, vpRenderPass_, sceneDescLayout_,
+            shaderDir + "/basic.vert.spv", shaderDir + "/basic.frag.spv",
+            basicPipelineLayout_, basicPipeline_, err)) {
+        std::fprintf(stderr, "[EditorVk] Basic pipeline: %s\n", err.c_str());
+        return false;
+    }
+
+    return true;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Offscreen render target
+// ─────────────────────────────────────────────────────────────────────────────
+bool EditorVkContext::createOffscreenTarget(uint32_t w, uint32_t h)
+{
+    VkDevice dev = deviceCtx_.device();
+    VkPhysicalDevice pd = deviceCtx_.physicalDevice();
+
+    // Color image
+    if (!createImage(pd, dev, w, h, VK_FORMAT_B8G8R8A8_UNORM,
+            VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+            vpColorImage_, vpColorMemory_))
+        return false;
+    vpColorView_ = createView(dev, vpColorImage_, VK_FORMAT_B8G8R8A8_UNORM, VK_IMAGE_ASPECT_COLOR_BIT);
+
+    // Depth image
+    if (!createImage(pd, dev, w, h, VK_FORMAT_D32_SFLOAT,
+            VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+            vpDepthImage_, vpDepthMemory_))
+        return false;
+    vpDepthView_ = createView(dev, vpDepthImage_, VK_FORMAT_D32_SFLOAT, VK_IMAGE_ASPECT_DEPTH_BIT);
+
+    // Framebuffer
+    std::array<VkImageView, 2> atts = {vpColorView_, vpDepthView_};
+    VkFramebufferCreateInfo fci{VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO};
+    fci.renderPass = vpRenderPass_;
+    fci.attachmentCount = 2; fci.pAttachments = atts.data();
+    fci.width = w; fci.height = h; fci.layers = 1;
+    if (vkCreateFramebuffer(dev, &fci, nullptr, &vpFramebuffer_) != VK_SUCCESS)
+        return false;
+
+    vpWidth_ = w; vpHeight_ = h;
+
+    // Register with ImGui
+    vpImGuiDesc_ = ImGui_ImplVulkan_AddTexture(vpSampler_, vpColorView_,
+                                                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+    return true;
+}
+
+void EditorVkContext::destroyOffscreenTarget()
+{
+    VkDevice dev = deviceCtx_.device();
+    if (dev == VK_NULL_HANDLE) return;
+
+    vkDeviceWaitIdle(dev);
+
+    if (vpImGuiDesc_ != VK_NULL_HANDLE) {
+        ImGui_ImplVulkan_RemoveTexture(vpImGuiDesc_);
+        vpImGuiDesc_ = VK_NULL_HANDLE;
+    }
+    if (vpFramebuffer_) { vkDestroyFramebuffer(dev, vpFramebuffer_, nullptr); vpFramebuffer_ = VK_NULL_HANDLE; }
+    if (vpDepthView_)   { vkDestroyImageView(dev, vpDepthView_, nullptr);     vpDepthView_ = VK_NULL_HANDLE; }
+    if (vpDepthImage_)  { vkDestroyImage(dev, vpDepthImage_, nullptr);        vpDepthImage_ = VK_NULL_HANDLE; }
+    if (vpDepthMemory_) { vkFreeMemory(dev, vpDepthMemory_, nullptr);         vpDepthMemory_ = VK_NULL_HANDLE; }
+    if (vpColorView_)   { vkDestroyImageView(dev, vpColorView_, nullptr);     vpColorView_ = VK_NULL_HANDLE; }
+    if (vpColorImage_)  { vkDestroyImage(dev, vpColorImage_, nullptr);        vpColorImage_ = VK_NULL_HANDLE; }
+    if (vpColorMemory_) { vkFreeMemory(dev, vpColorMemory_, nullptr);         vpColorMemory_ = VK_NULL_HANDLE; }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Per-frame lifecycle
+// ─────────────────────────────────────────────────────────────────────────────
+bool EditorVkContext::beginFrame()
+{
+    if (!frameGraph_.beginFrame(currentImageIndex_))
+        return false;
+    frameInFlight_ = true;
+
+    VkCommandBuffer cmd = frameGraph_.commandBuffer(currentImageIndex_);
+    VkCommandBufferBeginInfo bi{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
+    bi.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    vkBeginCommandBuffer(cmd, &bi);
+
+    return true;
+}
+
+VkCommandBuffer EditorVkContext::currentCmd()
+{
+    return frameGraph_.commandBuffer(currentImageIndex_);
+}
+
+void EditorVkContext::endFrame()
+{
+    VkCommandBuffer cmd = currentCmd();
+
+    // Begin swapchain render pass for ImGui
+    VkRenderPassBeginInfo rpbi{VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
+    rpbi.renderPass = swapchain_.renderPass();
+    rpbi.framebuffer = frameGraph_.framebuffer(currentImageIndex_);
+    rpbi.renderArea.extent = swapchain_.extent();
+    VkClearValue clears[2]{};
+    clears[0].color = {{0.118f, 0.118f, 0.118f, 1.0f}};
+    clears[1].depthStencil = {1.0f, 0};
+    rpbi.clearValueCount = 2; rpbi.pClearValues = clears;
+    vkCmdBeginRenderPass(cmd, &rpbi, VK_SUBPASS_CONTENTS_INLINE);
+
+    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
+
+    vkCmdEndRenderPass(cmd);
+    vkEndCommandBuffer(cmd);
+
+    frameGraph_.endFrame(currentImageIndex_);
+    frameInFlight_ = false;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Offscreen viewport rendering
+// ─────────────────────────────────────────────────────────────────────────────
+void EditorVkContext::beginViewportRender(uint32_t width, uint32_t height)
+{
+    // Resize if needed
+    if (width != vpWidth_ || height != vpHeight_) {
+        if (width > 0 && height > 0) {
+            destroyOffscreenTarget();
+            createOffscreenTarget(width, height);
+        }
+    }
+
+    VkCommandBuffer cmd = currentCmd();
+
+    VkRenderPassBeginInfo rpbi{VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
+    rpbi.renderPass = vpRenderPass_;
+    rpbi.framebuffer = vpFramebuffer_;
+    rpbi.renderArea.extent = {vpWidth_, vpHeight_};
+    VkClearValue clears[2]{};
+    clears[0].color = {{0.157f, 0.216f, 0.294f, 1.0f}}; // dark sky blue
+    clears[1].depthStencil = {1.0f, 0};
+    rpbi.clearValueCount = 2; rpbi.pClearValues = clears;
+    vkCmdBeginRenderPass(cmd, &rpbi, VK_SUBPASS_CONTENTS_INLINE);
+
+    // Set viewport + scissor
+    VkViewport vp{};
+    vp.width = static_cast<float>(vpWidth_);
+    vp.height = static_cast<float>(vpHeight_);
+    vp.minDepth = 0.0f; vp.maxDepth = 1.0f;
+    vkCmdSetViewport(cmd, 0, 1, &vp);
+    VkRect2D sc{{0, 0}, {vpWidth_, vpHeight_}};
+    vkCmdSetScissor(cmd, 0, 1, &sc);
+}
+
+void EditorVkContext::endViewportRender()
+{
+    VkCommandBuffer cmd = currentCmd();
+    vkCmdEndRenderPass(cmd);
+    // The render pass finalLayout transitions color to SHADER_READ_ONLY_OPTIMAL automatically
+}
+
+ImTextureID EditorVkContext::viewportTexture() const
+{
+    return reinterpret_cast<ImTextureID>(vpImGuiDesc_);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Camera UBO
+// ─────────────────────────────────────────────────────────────────────────────
+void EditorVkContext::updateCamera(const float viewProj[16])
+{
+    void* data = nullptr;
+    vkMapMemory(deviceCtx_.device(), uboMemory_, 0, 64, 0, &data);
+    std::memcpy(data, viewProj, 64);
+    vkUnmapMemory(deviceCtx_.device(), uboMemory_);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Terrain mesh update
+// ─────────────────────────────────────────────────────────────────────────────
+void EditorVkContext::updateTerrainMesh(TerrainMesh& terrain)
+{
+    if (!terrain.dirty()) return;
+
+    VkDevice dev = deviceCtx_.device();
+    VkPhysicalDevice pd = deviceCtx_.physicalDevice();
+
+    vkDeviceWaitIdle(dev);
+
+    // Rebuild terrain surface
+    std::vector<TerrainVkVertex> verts;
+    std::vector<uint32_t> indices;
+    terrain.buildVulkanMesh(verts, indices);
+    terrain.buildCliffWalls(verts, indices);
+
+    terrainMeshBuf_.shutdown(dev);
+    if (!verts.empty()) {
+        terrainMeshBuf_.initFromData(pd, dev,
+            verts.data(), static_cast<uint32_t>(verts.size() * sizeof(TerrainVkVertex)),
+            indices.data(), static_cast<uint32_t>(indices.size() * sizeof(uint32_t)),
+            static_cast<uint32_t>(indices.size()));
+    }
+
+    // Rebuild water mesh
+    std::vector<TerrainVkVertex> wverts;
+    std::vector<uint32_t> windices;
+    terrain.buildWaterMesh(wverts, windices);
+
+    waterMeshBuf_.shutdown(dev);
+    if (!wverts.empty()) {
+        waterMeshBuf_.initFromData(pd, dev,
+            wverts.data(), static_cast<uint32_t>(wverts.size() * sizeof(TerrainVkVertex)),
+            windices.data(), static_cast<uint32_t>(windices.size() * sizeof(uint32_t)),
+            static_cast<uint32_t>(windices.size()));
+    }
+
+    terrain.clearDirty();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Shutdown
+// ─────────────────────────────────────────────────────────────────────────────
+void EditorVkContext::shutdown()
+{
+    VkDevice dev = deviceCtx_.device();
+    if (dev) vkDeviceWaitIdle(dev);
+
+    destroyOffscreenTarget();
+
+    cubeMeshBuf_.shutdown(dev);
+    wolfMeshBuf_.shutdown(dev);
+    terrainMeshBuf_.shutdown(dev);
+    waterMeshBuf_.shutdown(dev);
+
+    if (vpSampler_) { vkDestroySampler(dev, vpSampler_, nullptr); vpSampler_ = VK_NULL_HANDLE; }
+    if (vpRenderPass_) { vkDestroyRenderPass(dev, vpRenderPass_, nullptr); vpRenderPass_ = VK_NULL_HANDLE; }
+
+    // Terrain texture array
+    if (terrainTexSampler_) { vkDestroySampler(dev, terrainTexSampler_, nullptr); terrainTexSampler_ = VK_NULL_HANDLE; }
+    if (terrainTexArrayView_) { vkDestroyImageView(dev, terrainTexArrayView_, nullptr); terrainTexArrayView_ = VK_NULL_HANDLE; }
+    if (terrainTexArrayImage_) { vkDestroyImage(dev, terrainTexArrayImage_, nullptr); terrainTexArrayImage_ = VK_NULL_HANDLE; }
+    if (terrainTexArrayMemory_) { vkFreeMemory(dev, terrainTexArrayMemory_, nullptr); terrainTexArrayMemory_ = VK_NULL_HANDLE; }
+
+    PipelineBuilder::destroy(dev, terrainPipelineLayout_, terrainPipeline_);
+    PipelineBuilder::destroy(dev, waterPipelineLayout_, waterPipeline_);
+    PipelineBuilder::destroy(dev, basicPipelineLayout_, basicPipeline_);
+    terrainPipelineLayout_ = VK_NULL_HANDLE; terrainPipeline_ = VK_NULL_HANDLE;
+    waterPipelineLayout_ = VK_NULL_HANDLE;   waterPipeline_ = VK_NULL_HANDLE;
+    basicPipelineLayout_ = VK_NULL_HANDLE;   basicPipeline_ = VK_NULL_HANDLE;
+
+    if (uboBuffer_) { vkDestroyBuffer(dev, uboBuffer_, nullptr); uboBuffer_ = VK_NULL_HANDLE; }
+    if (uboMemory_) { vkFreeMemory(dev, uboMemory_, nullptr); uboMemory_ = VK_NULL_HANDLE; }
+    if (dummyTexView_) { vkDestroyImageView(dev, dummyTexView_, nullptr); dummyTexView_ = VK_NULL_HANDLE; }
+    if (dummyTexImage_) { vkDestroyImage(dev, dummyTexImage_, nullptr); dummyTexImage_ = VK_NULL_HANDLE; }
+    if (dummyTexMemory_) { vkFreeMemory(dev, dummyTexMemory_, nullptr); dummyTexMemory_ = VK_NULL_HANDLE; }
+    if (sceneDescPool_) { vkDestroyDescriptorPool(dev, sceneDescPool_, nullptr); sceneDescPool_ = VK_NULL_HANDLE; }
+    if (sceneDescLayout_) { vkDestroyDescriptorSetLayout(dev, sceneDescLayout_, nullptr); sceneDescLayout_ = VK_NULL_HANDLE; }
+
+    frameGraph_.shutdown();
+    swapchain_.shutdown(dev);
+    deviceCtx_.shutdown();
+
+    if (surface_) { vkDestroySurfaceKHR(instance_, surface_, nullptr); surface_ = VK_NULL_HANDLE; }
+    if (instance_) { vkDestroyInstance(instance_, nullptr); instance_ = VK_NULL_HANDLE; }
+}

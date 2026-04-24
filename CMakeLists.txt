@@ -55,13 +55,14 @@ add_library(imgui_lib STATIC
     ${imgui_SOURCE_DIR}/imgui_demo.cpp
     ${imgui_SOURCE_DIR}/backends/imgui_impl_sdl2.cpp
     ${imgui_SOURCE_DIR}/backends/imgui_impl_sdlrenderer2.cpp
+    ${imgui_SOURCE_DIR}/backends/imgui_impl_vulkan.cpp
 )
 target_include_directories(imgui_lib PUBLIC
     ${imgui_SOURCE_DIR}
     ${imgui_SOURCE_DIR}/backends
     ${SDL2_INCLUDE_DIRS}
 )
-target_link_libraries(imgui_lib PUBLIC ${SDL2_LIBRARIES})
+target_link_libraries(imgui_lib PUBLIC ${SDL2_LIBRARIES} Vulkan::Vulkan)
 
 # ── nlohmann/json (header-only, downloaded on first build) ────────────────────
 FetchContent_Declare(
@@ -215,10 +216,14 @@ if(ENABLE_VULKAN_EXPERIMENTAL AND NOT IOS)
             ${CMAKE_SOURCE_DIR}/src/assets/cache/AssetCache3D.cpp
             ${CMAKE_SOURCE_DIR}/src/rendering/vulkan/VulkanDiagnostics.cpp
             ${CMAKE_SOURCE_DIR}/src/rendering/vulkan/DeviceContext.cpp
+            ${CMAKE_SOURCE_DIR}/src/rendering/vulkan/CameraController.cpp
+            ${CMAKE_SOURCE_DIR}/src/rendering/vulkan/EditorBridge.cpp
+            ${CMAKE_SOURCE_DIR}/src/rendering/vulkan/PlayerController.cpp
             ${CMAKE_SOURCE_DIR}/src/rendering/vulkan/SwapchainContext.cpp
             ${CMAKE_SOURCE_DIR}/src/rendering/vulkan/FrameGraphLite.cpp
             ${CMAKE_SOURCE_DIR}/src/rendering/vulkan/Renderer.cpp
             ${CMAKE_SOURCE_DIR}/src/rendering/vulkan/PipelineBuilder.cpp
+            ${CMAKE_SOURCE_DIR}/src/rendering/vulkan/SceneLoader.cpp
         )
 
         add_library(vulkan_experimental STATIC ${VULKAN_EXPERIMENTAL_SOURCES})
@@ -234,6 +239,7 @@ if(ENABLE_VULKAN_EXPERIMENTAL AND NOT IOS)
 
         target_compile_definitions(vulkan_experimental PUBLIC
             VULKAN_SHADER_DIR="${VULKAN_SHADER_BIN_DIR}"
+            VULKAN_MODEL_DIR="${CMAKE_SOURCE_DIR}/assets/models/gltf"
         )
 
         find_program(GLSLC_EXECUTABLE glslc)

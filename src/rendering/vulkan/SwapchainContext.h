@@ -19,6 +19,7 @@ public:
     SwapchainContext& operator=(const SwapchainContext&) = delete;
 
     bool init(const DeviceContext& deviceContext, VkSurfaceKHR surface, GLFWwindow* window);
+    bool init(const DeviceContext& deviceContext, VkSurfaceKHR surface, uint32_t width, uint32_t height);
     void shutdown(VkDevice device);
 
     VkSwapchainKHR swapchain() const { return swapchain_; }

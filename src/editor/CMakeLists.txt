@@ -69,6 +69,8 @@ target_link_libraries(DashEngine PRIVATE
     game_core
     imgui_lib
     nlohmann_json::nlohmann_json
+    vulkan_experimental
+    Vulkan::Vulkan
 )
 
 target_compile_definitions(DashEngine PRIVATE
