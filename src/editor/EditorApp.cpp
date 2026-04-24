@@ -795,7 +795,10 @@ void EditorApp::buildDefaultLayout(ImGuiID dockspaceId)
 // ═════════════════════════════════════════════════════════════════════════════
 void EditorApp::run()
 {
+    constexpr float TARGET_FRAME_MS = 1000.0f / 60.0f; // 60 fps cap
+
     while (running_) {
+        uint32_t frameStart = SDL_GetTicks();
         Profiler::instance().beginFrame();
         SDL_Event ev;
         while (SDL_PollEvent(&ev)) {
@@ -992,6 +995,12 @@ void EditorApp::run()
             vkCtx_.endFrame();
         }
         Profiler::instance().endFrame();
+
+        // Frame limiter — cap at 60fps to avoid spinning CPU/GPU
+        uint32_t frameTime = SDL_GetTicks() - frameStart;
+        if (frameTime < static_cast<uint32_t>(TARGET_FRAME_MS)) {
+            SDL_Delay(static_cast<uint32_t>(TARGET_FRAME_MS) - frameTime);
+        }
     }
 }
 

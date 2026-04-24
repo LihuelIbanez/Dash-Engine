@@ -22,9 +22,9 @@ VkSurfaceFormatKHR SwapchainContext::chooseSurfaceFormat(const std::vector<VkSur
 
 VkPresentModeKHR SwapchainContext::choosePresentMode(const std::vector<VkPresentModeKHR>& presentModes) const
 {
-    for (VkPresentModeKHR mode : presentModes) {
-        if (mode == VK_PRESENT_MODE_MAILBOX_KHR) return mode;
-    }
+    // Prefer FIFO (vsync) to avoid spinning the GPU/CPU at max speed.
+    // FIFO is guaranteed to be available by the Vulkan spec.
+    (void)presentModes;
     return VK_PRESENT_MODE_FIFO_KHR;
 }
 
