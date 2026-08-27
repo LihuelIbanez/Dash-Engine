@@ -27,7 +27,7 @@ Este directorio separa las tareas por semana para ejecutar el escalado del edito
 | Sprint 14 - Terreno 3D y Gravedad | ✅ Completada | TILE_SCALE, smooth normals, AO, Blinn-Phong shaders, fog, terrain-following |
 | Auditoria Tecnica Ago-2026 | ✅ Completada | 3 bugs corregidos + 6 mejoras (ctest 26/26) |
 | Sprint 15 - Componentes 3D | 🟡 En progreso | Fases 1-3 + culling completadas; instancing (15.9) postergado con justificacion |
-| Backlog post-Sprint 15 | 📋 Registrado | 8 tareas: pendientes del sprint, verificaciones y deuda (ver 24_BACKLOG_POST_SPRINT15.md) |
+| Backlog post-Sprint 15 | 📋 En curso | 8 tareas: B2/C1/C2 resueltas; quedan A1-A3, B1, C3 (ver 24_BACKLOG_POST_SPRINT15.md) |
 
 **Estado:** Sprints 1-14 completados. Sprint 15 en curso (ver 23_SPRINT15_COMPONENTES_3D.md).
 

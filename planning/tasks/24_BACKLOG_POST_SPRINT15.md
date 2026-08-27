@@ -103,6 +103,7 @@ Sigue teniendo valor cuando muchas entidades estan **simultaneamente en camara**
 
 ### B2 — Investigar picos de frame de ~1.2 s en el editor
 
+- **Estado:** ✅ Resuelta (2026-08-27)
 - **Prioridad:** Alta
 - **Objetivo:** diagnosticar cuatro frames consecutivos de mas de un segundo tras abrir un proyecto.
 
@@ -127,6 +128,33 @@ Sigue teniendo valor cuando muchas entidades estan **simultaneamente en camara**
 **Criterio de aceptacion:**
 - Causa raiz identificada y documentada.
 - Sin picos > 100 ms en estado estacionario tras abrir un proyecto.
+
+### Resolucion
+
+La causa no estaba en `openProject()` ni en la migracion: era **`FileWatcher::scan()`**, llamado incondicionalmente en cada iteracion de `EditorApp::run()`.
+
+**Cadena causal.**
+1. `scan()` construia su snapshot llamando a `ImportManager::computeFileHash()` sobre **cada archivo** de `assets/`.
+2. `computeFileHash()` lee el archivo entero a un `ostringstream`, lo copia a un `std::string` y recien ahi hashea. Sobre `assets/` (**363 MB en 56 archivos**, con `.exr`/`.png` de terreno de hasta 39 MB) eso son ~726 MB de asignaciones por scan.
+3. El scan tardaba **mas que el `pollIntervalSeconds_` de 1.0 s**, y como `lastScan_` se fijaba al *inicio*, en el frame siguiente `elapsed >= 1.0` ya se cumplia. El throttle quedaba anulado y el scan pasaba a correr **en todos los frames** — de ahi los picos sostenidos y el 100% de CPU.
+
+**Medicion** (micro-benchmark sobre `assets/`, 3 corridas con cache caliente):
+
+| Implementacion | scan() |
+|---|---|
+| Anterior (hash de contenido) | 1259.69 / 1157.09 / 1161.89 ms |
+| Actual (size + mtime) | 10.02 / 6.70 / 6.75 ms |
+
+Los 1157-1260 ms reproducen los picos del log (1177 / 1180 / 1188 / 1212 ms), lo que confirma el diagnostico.
+
+**Cambios.**
+- `FileWatcher.cpp`: la señal de cambio pasa a ser `size:mtime` (helper `fileStamp()`, un `stat` por archivo) en vez del hash del contenido. `hashSnapshot_` → `stampSnapshot_`.
+- `FileWatcher.cpp`: `lastScan_` se fija al **final** del scan, para que un scan lento no vuelva a dispararse en el frame siguiente. Es la valvula de seguridad que faltaba.
+- `ImportManager::reimportChanged()`: pasa `force=false`. Como la señal ahora es mas gruesa, deja que el hash de contenido de `importAsset()` decida, evitando reimportar un `.exr` de 39 MB solo porque cambio el mtime. La deteccion sigue siendo exacta a nivel de bytes.
+
+**Verificacion:** build sin errores, `ctest` 29/29. `test_hot_reload` cubre Added/Modified/Deleted/no-change/reset y pasa sin modificaciones.
+
+**Residual:** dos archivos distintos con identico tamaño *y* identico mtime al nanosegundo no se distinguirian. En APFS el mtime tiene resolucion de nanosegundos, asi que el escenario es despreciable.
 
 ---
 
@@ -217,11 +245,11 @@ Resuelta junto con C1 en el mismo cambio.
 
 | ID | Tarea | Prioridad |
 |---|---|---|
-| B2 | Picos de frame de ~1.2 s en el editor | **Alta** |
 | A2 | Escena de benchmark y medicion de frame time | Media |
 | A3 | `MaterialImporter` + Asset Browser | Media |
 | B1 | Verificar Inspector con componentes nuevos | Media |
 | A1 | Instancing por malla | Baja (requiere A2) |
 | C3 | `popen()` del pipeline de build | Baja |
+| ~~B2~~ | ~~Picos de frame de ~1.2 s en el editor~~ | ✅ Resuelta |
 | ~~C1~~ | ~~Artefactos mutables en `.library/`~~ | ✅ Resuelta |
 | ~~C2~~ | ~~Clarificar `library/` vs `.library/`~~ | ✅ Resuelta |

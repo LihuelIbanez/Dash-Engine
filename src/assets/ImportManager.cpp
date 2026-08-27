@@ -165,8 +165,10 @@ bool ImportManager::reimportChanged(const std::vector<FileWatcher::FileChange>& 
     for (const auto& change : changes) {
         if (change.type == FileWatcher::FileChange::Added ||
             change.type == FileWatcher::FileChange::Modified) {
+            // Not forced: FileWatcher signals on size/mtime, so let the content
+            // hash decide and skip files whose bytes did not actually change.
             if (importAsset(assetsRoot, libraryRoot, change.relativePath,
-                            db, outErrors, /*force=*/true))
+                            db, outErrors, /*force=*/false))
                 anyChanged = true;
         } else if (change.type == FileWatcher::FileChange::Deleted) {
             db.removeBySourcePath(change.relativePath);

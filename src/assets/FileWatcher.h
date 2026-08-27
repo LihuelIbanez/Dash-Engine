@@ -33,6 +33,6 @@ private:
     std::string  watchRoot_;
     float        pollIntervalSeconds_ = 1.0f;
     std::chrono::steady_clock::time_point lastScan_{};  // epoch → scan always fires first
-    std::unordered_map<std::string, std::string> hashSnapshot_;
+    std::unordered_map<std::string, std::string> stampSnapshot_;  // rel → "size:mtime"
     std::vector<FileChange> pendingChanges_;
 };
