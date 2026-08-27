@@ -10,6 +10,7 @@
 #include "rendering/mesh/MeshBuffers.h"
 #include "rendering/textures/TextureLoader.h"
 #include "assets/cache/AssetCache3D.h"
+#include "assets/AssetDatabase.h"
 #include "assets/MaterialAsset.h"
 #include "rendering/platform/WindowContext.h"
 #include "rendering/vulkan/DeviceContext.h"
@@ -65,6 +66,10 @@ private:
 
     bool resolveSceneMaterials();
     void destroySceneMaterials();
+
+    // Asset database used to turn a material GUID into its source path. Loaded
+    // on first use so scenes that reference materials by path never read it.
+    const AssetDatabase* materialDb();
 
     // Prints min/avg/p95/max for the samples collected during runSmoke().
     void reportFrameStats(uint32_t renderedFrames) const;
@@ -122,6 +127,10 @@ private:
     // Index into materials_ per scene instance; -1 = default descriptor set.
     std::vector<int> sceneInstanceMaterials_;
     VkDescriptorPool materialDescriptorPool_ = VK_NULL_HANDLE;
+
+    AssetDatabase assetDb_;
+    bool assetDbLoadAttempted_ = false;
+    bool assetDbLoaded_ = false;
 
     std::vector<RenderInstance> terrainInstances_;
     std::vector<float> terrainHeightMap_;

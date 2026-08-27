@@ -5,6 +5,7 @@
 #include "importers/PrefabImporter.h"
 #include "importers/SpriteImporter.h"
 #include "importers/ModelImporter.h"
+#include "importers/MaterialImporter.h"
 
 #include <filesystem>
 #include <fstream>
@@ -60,6 +61,9 @@ AssetType ImportManager::inferAssetType(const std::string& relativePath)
         std::string stem = p.stem().string();
         std::string parent = p.parent_path().filename().string();
 
+        // "<name>.mat.json" leaves ".mat" as the stem's extension.
+        if (parent == "materials" || fs::path(stem).extension() == ".mat")
+            return AssetType::Material;
         if (parent == "scenes" || stem.find("scene") != std::string::npos)
             return AssetType::Scene;
         if (parent == "tilesets" || stem.find("tileset") != std::string::npos)
@@ -87,6 +91,7 @@ ImportManager::ImportManager()
     importers_[AssetType::Prefab]         = std::make_unique<PrefabImporter>();
     importers_[AssetType::Sprite]         = std::make_unique<SpriteImporter>();
     importers_[AssetType::Model]          = std::make_unique<ModelImporter>();
+    importers_[AssetType::Material]       = std::make_unique<MaterialImporter>();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

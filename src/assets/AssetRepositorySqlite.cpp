@@ -22,22 +22,12 @@ std::string migrationsDirPath()
 
 std::string typeToString(AssetType type)
 {
-    switch (type) {
-        case AssetType::Texture:        return "Texture";
-        case AssetType::TileSet:        return "TileSet";
-        case AssetType::Scene:          return "Scene";
-        case AssetType::GameplayConfig: return "GameplayConfig";
-        default:                        return "Unknown";
-    }
+    return assetTypeToStr(type);
 }
 
 AssetType stringToType(const std::string& type)
 {
-    if (type == "Texture") return AssetType::Texture;
-    if (type == "TileSet") return AssetType::TileSet;
-    if (type == "Scene") return AssetType::Scene;
-    if (type == "GameplayConfig") return AssetType::GameplayConfig;
-    return AssetType::Unknown;
+    return assetTypeFromStr(type);
 }
 
 } // namespace

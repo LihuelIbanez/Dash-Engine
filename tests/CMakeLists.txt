@@ -189,6 +189,8 @@ add_executable(test_hot_reload
     ${CMAKE_SOURCE_DIR}/src/assets/importers/PrefabImporter.cpp
     ${CMAKE_SOURCE_DIR}/src/assets/importers/SpriteImporter.cpp
     ${CMAKE_SOURCE_DIR}/src/assets/importers/ModelImporter.cpp
+    ${CMAKE_SOURCE_DIR}/src/assets/importers/MaterialImporter.cpp
+    ${CMAKE_SOURCE_DIR}/src/assets/MaterialAsset.cpp
 )
 target_include_directories(test_hot_reload PRIVATE
     ${CMAKE_SOURCE_DIR}/src
@@ -210,6 +212,42 @@ if(TARGET assimp::assimp)
 endif()
 target_compile_options(test_hot_reload PRIVATE ${DASH_COMPILE_FLAGS})
 add_test(NAME test_hot_reload COMMAND test_hot_reload)
+
+# ── MaterialImporter + AssetType round-trip (backlog A3) ─────────────────────
+add_executable(test_material_importer
+    test_material_importer.cpp
+    ${CMAKE_SOURCE_DIR}/src/assets/ImportManager.cpp
+    ${CMAKE_SOURCE_DIR}/src/assets/AssetDatabase.cpp
+    ${CMAKE_SOURCE_DIR}/src/assets/AssetRepositorySqlite.cpp
+    ${CMAKE_SOURCE_DIR}/src/assets/MaterialAsset.cpp
+    ${CMAKE_SOURCE_DIR}/src/assets/importers/SceneImporter.cpp
+    ${CMAKE_SOURCE_DIR}/src/assets/importers/TileSetImporter.cpp
+    ${CMAKE_SOURCE_DIR}/src/assets/importers/GameplayConfigImporter.cpp
+    ${CMAKE_SOURCE_DIR}/src/assets/importers/PrefabImporter.cpp
+    ${CMAKE_SOURCE_DIR}/src/assets/importers/SpriteImporter.cpp
+    ${CMAKE_SOURCE_DIR}/src/assets/importers/ModelImporter.cpp
+    ${CMAKE_SOURCE_DIR}/src/assets/importers/MaterialImporter.cpp
+)
+target_include_directories(test_material_importer PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/src/core
+    ${CMAKE_SOURCE_DIR}/src/core/components
+    ${CMAKE_SOURCE_DIR}/src/entities
+    ${CMAKE_SOURCE_DIR}/src/world
+    ${CMAKE_SOURCE_DIR}/src/rendering
+    ${CMAKE_SOURCE_DIR}/src/editor
+    ${CMAKE_SOURCE_DIR}/src/assets
+    ${CMAKE_SOURCE_DIR}/src/assets/importers
+    ${SDL2_INCLUDE_DIRS}
+)
+target_link_libraries(test_material_importer PRIVATE
+    game_core nlohmann_json::nlohmann_json SQLite3::SQLite3 ${SDL2_LIBRARIES}
+)
+if(TARGET assimp::assimp)
+    target_link_libraries(test_material_importer PRIVATE assimp::assimp)
+endif()
+target_compile_options(test_material_importer PRIVATE ${DASH_COMPILE_FLAGS})
+add_test(NAME test_material_importer COMMAND test_material_importer)
 
 # ── SaveGame round-trip (D32) ─────────────────────────────────────────────────
 add_executable(test_save_game
@@ -586,6 +624,8 @@ if(TARGET assimp::assimp)
     add_executable(test_model_import_pipeline
         test_model_import_pipeline.cpp
         ${CMAKE_SOURCE_DIR}/src/assets/importers/ModelImporter.cpp
+        ${CMAKE_SOURCE_DIR}/src/assets/importers/MaterialImporter.cpp
+        ${CMAKE_SOURCE_DIR}/src/assets/MaterialAsset.cpp
     )
     target_include_directories(test_model_import_pipeline PRIVATE
         ${CMAKE_SOURCE_DIR}/src

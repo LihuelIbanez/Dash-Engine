@@ -106,6 +106,7 @@ El costo de grabado escala ~linealmente con las instancias visibles (~0.15 µs p
 
 ### A3 — `MaterialImporter` e integracion con Asset Browser
 
+- **Estado:** ✅ Resuelta (2026-08-27)
 - **Prioridad:** Media
 - **Objetivo:** cerrar el criterio de aceptacion de 15.5 que quedo explicitamente incumplido.
 
@@ -122,7 +123,42 @@ El costo de grabado escala ~linealmente con las instancias visibles (~0.15 µs p
 - Reimport incremental funciona (cambiar el material y ver el cambio sin reiniciar).
 - Escenas que referencian materiales por path siguen cargando.
 
-**Archivos:** `src/assets/importers/`, `src/assets/AssetTypes.h`, `src/assets/ImportManager.cpp`, `src/rendering/vulkan/Renderer.cpp`.
+### Resolucion
+
+**Bug de fondo encontrado primero.** El mapeo `AssetType` ↔ string estaba **triplicado** y las tres copias estaban desactualizadas:
+
+| Copia | Tipos que cubria |
+|---|---|
+| `AssetTypes.h::assetTypeToStr` | los 7 (completa) |
+| `AssetDatabase.cpp` helpers de JSON | solo 4 |
+| `AssetDatabase.cpp` miembros estaticos | solo 4 |
+| `AssetRepositorySqlite.cpp` | solo 4 |
+
+Consecuencia observable: `assets/asset_db.json` tenia `prefabs/goblin_warrior.json` guardado como **`Unknown`**. Agregar `Material` sin arreglar esto habria dado el mismo resultado y el criterio de aceptacion no se habria cumplido de verdad. Las tres copias ahora delegan en `AssetTypes.h`, que suma `assetTypeFromStr()` como contraparte.
+
+**Cambios.**
+- `AssetTypes.h`: nuevo `AssetType::Material` y `assetTypeFromStr()`; queda como unica fuente de verdad.
+- `AssetDatabase.cpp` / `AssetRepositorySqlite.cpp`: delegan en los helpers compartidos.
+- `importers/MaterialImporter.{h,cpp}`: valida el JSON, avisa si `albedoTexture` no existe, estampa el GUID del record en la copia importada y escribe a `library/`.
+- `ImportManager`: registra el importer e `inferAssetType()` mapea `*.mat.json` y cualquier `.json` bajo `materials/` a `Material`.
+- `Renderer`: `materialDb()` carga `<assets>/asset_db.json` de forma perezosa (solo si aparece una referencia con forma de GUID, via `looksLikeGuid()`). El GUID se prueba **antes** que los paths para que un archivo homonimo no lo tape; las rutas siguen como fallback.
+- `CMakeLists.txt`: `AssetDatabase.cpp` + `AssetRepositorySqlite.cpp` entran a `vulkan_experimental`, y nuevo define `VULKAN_ASSETS_DIR`.
+- `assets/materials/stone.mat.json`: material de ejemplo versionado.
+
+**Verificacion.**
+
+1. `tests/test_material_importer.cpp` (nuevo, en ctest): deteccion de tipo, alta con GUID/tipo/hash, copia a `library/`, reimport incremental (sin cambios → 0 imports; con cambios → 1 import y **el GUID se conserva**), y round-trip de los 6 `AssetType` por el `asset_db.json`.
+2. Resolucion en el renderer, end-to-end contra `VulkanBootstrap` con una escena donde una entidad referencia el material **por GUID** y otra **por path**:
+
+```
+[Material] Resolved 2 material(s).
+```
+
+Sin ningun `Definition not found`: ambas vias resuelven y la compatibilidad por path se mantiene.
+
+**Nota operativa.** `AssetDatabase::load()` respeta `DASH_DB_MODE`. En el default (`Hybrid`) lee del SQLite y solo cae al JSON si aquel falla, asi que la verificacion anterior necesita `DASH_DB_MODE=json` para leer el `asset_db.json`. No es un defecto: es el comportamiento del cutover del Sprint 7.
+
+`ctest` 30/30.
 
 ---
 
@@ -292,10 +328,10 @@ Resuelta junto con C1 en el mismo cambio.
 
 | ID | Tarea | Prioridad |
 |---|---|---|
-| A3 | `MaterialImporter` + Asset Browser | Media |
 | B1 | Verificar Inspector con componentes nuevos | Media |
 | C3 | `popen()` del pipeline de build | Baja |
 | ~~A2~~ | ~~Escena de benchmark y medicion de frame time~~ | ✅ Resuelta |
+| ~~A3~~ | ~~`MaterialImporter` + Asset Browser~~ | ✅ Resuelta |
 | ~~B2~~ | ~~Picos de frame de ~1.2 s en el editor~~ | ✅ Resuelta |
 | ~~C1~~ | ~~Artefactos mutables en `.library/`~~ | ✅ Resuelta |
 | ~~C2~~ | ~~Clarificar `library/` vs `.library/`~~ | ✅ Resuelta |

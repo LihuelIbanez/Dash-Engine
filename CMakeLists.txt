@@ -217,6 +217,8 @@ if(ENABLE_VULKAN_EXPERIMENTAL AND NOT IOS)
             ${CMAKE_SOURCE_DIR}/src/rendering/textures/stb_image_vk_impl.cpp
             ${CMAKE_SOURCE_DIR}/src/assets/cache/AssetCache3D.cpp
             ${CMAKE_SOURCE_DIR}/src/assets/MaterialAsset.cpp
+            ${CMAKE_SOURCE_DIR}/src/assets/AssetDatabase.cpp
+            ${CMAKE_SOURCE_DIR}/src/assets/AssetRepositorySqlite.cpp
             ${CMAKE_SOURCE_DIR}/src/rendering/vulkan/VulkanDiagnostics.cpp
             ${CMAKE_SOURCE_DIR}/src/rendering/vulkan/DeviceContext.cpp
             ${CMAKE_SOURCE_DIR}/src/rendering/vulkan/CameraController.cpp
@@ -243,6 +245,7 @@ if(ENABLE_VULKAN_EXPERIMENTAL AND NOT IOS)
         target_compile_definitions(vulkan_experimental PUBLIC
             VULKAN_SHADER_DIR="${VULKAN_SHADER_BIN_DIR}"
             VULKAN_MODEL_DIR="${CMAKE_SOURCE_DIR}/assets/models/gltf"
+            VULKAN_ASSETS_DIR="${CMAKE_SOURCE_DIR}/assets"
         )
 
         find_program(GLSLC_EXECUTABLE glslc)

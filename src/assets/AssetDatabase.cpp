@@ -13,26 +13,6 @@ using json = nlohmann::json;
 
 namespace {
 
-AssetType stringToAssetTypeLocal(const std::string& type)
-{
-    if (type == "Texture") return AssetType::Texture;
-    if (type == "TileSet") return AssetType::TileSet;
-    if (type == "Scene") return AssetType::Scene;
-    if (type == "GameplayConfig") return AssetType::GameplayConfig;
-    return AssetType::Unknown;
-}
-
-std::string assetTypeToStringLocal(AssetType type)
-{
-    switch (type) {
-        case AssetType::Texture: return "Texture";
-        case AssetType::TileSet: return "TileSet";
-        case AssetType::Scene: return "Scene";
-        case AssetType::GameplayConfig: return "GameplayConfig";
-        default: return "Unknown";
-    }
-}
-
 fs::path sqlitePathForAssetDbPath(const std::string& assetDbJsonPath)
 {
     fs::path jsonPath(assetDbJsonPath);
@@ -63,7 +43,7 @@ bool loadJsonAssetDb(const std::string& path,
         rec.guid           = item.value("guid", "");
         rec.sourcePath     = item.value("sourcePath", "");
         rec.importPath     = item.value("importPath", "");
-        rec.assetType      = stringToAssetTypeLocal(item.value("assetType", "Unknown"));
+        rec.assetType      = assetTypeFromStr(item.value("assetType", "Unknown"));
         rec.hash           = item.value("hash", "");
         rec.lastImportTime = item.value("lastImportTime", int64_t(0));
         if (item.contains("dependencies") && item["dependencies"].is_array()) {
@@ -87,7 +67,7 @@ bool saveJsonAssetDb(const std::string& path,
         item["guid"]           = rec.guid;
         item["sourcePath"]     = rec.sourcePath;
         item["importPath"]     = rec.importPath;
-        item["assetType"]      = assetTypeToStringLocal(rec.assetType);
+        item["assetType"]      = assetTypeToStr(rec.assetType);
         item["hash"]           = rec.hash;
         item["lastImportTime"] = rec.lastImportTime;
         item["dependencies"]   = rec.dependencies;
@@ -136,22 +116,12 @@ std::string AssetDatabase::generateGuid()
 // ─────────────────────────────────────────────────────────────────────────────
 std::string AssetDatabase::assetTypeToString(AssetType type)
 {
-    switch (type) {
-        case AssetType::Texture:        return "Texture";
-        case AssetType::TileSet:        return "TileSet";
-        case AssetType::Scene:          return "Scene";
-        case AssetType::GameplayConfig: return "GameplayConfig";
-        default:                        return "Unknown";
-    }
+    return assetTypeToStr(type);
 }
 
 AssetType AssetDatabase::stringToAssetType(const std::string& str)
 {
-    if (str == "Texture")        return AssetType::Texture;
-    if (str == "TileSet")        return AssetType::TileSet;
-    if (str == "Scene")          return AssetType::Scene;
-    if (str == "GameplayConfig") return AssetType::GameplayConfig;
-    return AssetType::Unknown;
+    return assetTypeFromStr(str);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

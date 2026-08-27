@@ -28,6 +28,10 @@
 #define VULKAN_SHADER_DIR ""
 #endif
 
+#ifndef VULKAN_ASSETS_DIR
+#define VULKAN_ASSETS_DIR ""
+#endif
+
 namespace dash::vkexp {
 
 using json = nlohmann::json;
@@ -40,6 +44,21 @@ static constexpr const char* kGetPhysicalDeviceProps2Ext = "VK_KHR_get_physical_
 // mat4 model (16 floats) + color/alpha (4) + lightDir/intensity (4).
 constexpr size_t kInstancePushConstantFloats = 24;
 
+// Distinguishes a material GUID from a path reference: 8-4-4-4-12 hex, the
+// shape AssetDatabase::generateGuid() produces.
+bool looksLikeGuid(const std::string& s)
+{
+    if (s.size() != 36) return false;
+    for (size_t i = 0; i < s.size(); ++i) {
+        const bool dashPos = (i == 8 || i == 13 || i == 18 || i == 23);
+        if (dashPos) {
+            if (s[i] != '-') return false;
+        } else if (!std::isxdigit(static_cast<unsigned char>(s[i]))) {
+            return false;
+        }
+    }
+    return true;
+}
 void buildInstancePushConstants(const Mat4& model,
                                 float r, float g, float b, float a,
                                 const LightingParams& light,
@@ -664,6 +683,26 @@ void Renderer::destroySceneMaterials()
     }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// materialDb — asset database behind GUID material references. Loaded lazily
+// and at most once; a missing database is not an error, it just means only
+// path-based material references can be resolved.
+// ─────────────────────────────────────────────────────────────────────────────
+const AssetDatabase* Renderer::materialDb()
+{
+    if (!assetDbLoadAttempted_) {
+        assetDbLoadAttempted_ = true;
+        const std::filesystem::path dbPath =
+            std::filesystem::path(VULKAN_ASSETS_DIR) / "asset_db.json";
+        assetDbLoaded_ = assetDb_.load(dbPath.string());
+        if (!assetDbLoaded_) {
+            std::fprintf(stderr, "[Material] Asset database unavailable at '%s'; "
+                                 "GUID references will not resolve.\n", dbPath.string().c_str());
+        }
+    }
+    return assetDbLoaded_ ? &assetDb_ : nullptr;
+}
+
 bool Renderer::resolveSceneMaterials()
 {
     destroySceneMaterials();
@@ -701,12 +740,24 @@ bool Renderer::resolveSceneMaterials()
 
         std::vector<fs::path> candidates;
         const fs::path raw(id);
+
+        // A GUID reference resolves through the asset database. Tried first so a
+        // file that happens to share the name cannot shadow it; path references
+        // keep working through the fallbacks below.
+        if (looksLikeGuid(id)) {
+            if (const AssetDatabase* db = materialDb()) {
+                if (const AssetRecord* rec = db->findByGuid(id); rec && !rec->sourcePath.empty())
+                    candidates.push_back(fs::path(VULKAN_ASSETS_DIR) / rec->sourcePath);
+            }
+        }
+
         if (raw.is_absolute()) {
             candidates.push_back(raw);
         } else {
             if (!scenePath_.empty())
                 candidates.push_back(fs::path(scenePath_).parent_path() / raw);
             candidates.push_back(fs::path(VULKAN_MODEL_DIR) / raw);
+            candidates.push_back(fs::path(VULKAN_ASSETS_DIR) / raw);
             candidates.push_back(raw);
         }
 
