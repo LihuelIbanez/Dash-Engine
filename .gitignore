@@ -16,6 +16,9 @@ compile_commands.json
 # ImGui layout state
 imgui.ini
 
+# Runtime logs
+*.logcd
+
 # macOS
 .DS_Store
 

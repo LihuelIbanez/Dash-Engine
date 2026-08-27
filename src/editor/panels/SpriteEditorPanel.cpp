@@ -1,6 +1,6 @@
 #include "SpriteEditorPanel.h"
 #include "IconsFontAwesome6.h"
-#include "stb_image.h"
+#include "game/rendering/stb_image.h"
 #include "stb_image_write.h"
 #include "AppPaths.h"
 #include "SceneData.h"

@@ -122,8 +122,17 @@ nlohmann::json SceneData::toJson() const
         ej["id"]   = e.id;
         ej["type"] = (e.type == EntityData::Type::Player) ? "Player" : "Enemy";
         ej["name"] = e.name;
-        ej["x"]    = e.x;
-        ej["y"]    = e.y;
+
+        // TransformComponent (when present) is the authoritative position source.
+        float ex = e.x, ey = e.y;
+        for (auto& c : e.components) {
+            if (auto* tf = std::get_if<TransformComponent>(&c)) {
+                ex = tf->x; ey = tf->y;
+                break;
+            }
+        }
+        ej["x"] = ex;
+        ej["y"] = ey;
         if (e.type == EntityData::Type::Player)
             ej["class"] = e.charClass;
         if (!e.prefabGuid.empty()) {
@@ -428,8 +437,13 @@ bool SceneData::loadFromJson(const nlohmann::json& j, const std::string& assetsR
     for (auto& ed : entities) {
         for (auto& comp : ed.components) {
             if (auto* tf = std::get_if<TransformComponent>(&comp)) {
-                tf->x = ed.x;
-                tf->y = ed.y;
+                // TransformComponent is authoritative; mirror it into the legacy
+                // x/y fields (not the other way around) so direct component edits
+                // survive a save/load round-trip, and re-clamp in case it drifted.
+                tf->x = std::max(0.f, std::min((float)(WORLD_W - 1), tf->x));
+                tf->y = std::max(0.f, std::min((float)(WORLD_H - 1), tf->y));
+                ed.x = tf->x;
+                ed.y = tf->y;
                 if (sceneVersion < 3) {
                     tf->z = 0.0f;
                     tf->scale = 1.0f;

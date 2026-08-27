@@ -1,5 +1,5 @@
 #include "TextureCache.h"
-#include "stb_image.h"
+#include "game/rendering/stb_image.h"
 #include <SDL2/SDL.h>
 
 TextureCache& TextureCache::instance()

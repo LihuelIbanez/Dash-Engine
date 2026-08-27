@@ -2,7 +2,7 @@
 // test_sprite_editor — pure SpriteOps and serialization checks (D45)
 // ═════════════════════════════════════════════════════════════════════════════
 #include "SpriteOps.h"
-#include "stb_image.h"
+#include "game/rendering/stb_image.h"
 #include "stb_image_write.h"
 #include <nlohmann/json.hpp>
 #include <algorithm>

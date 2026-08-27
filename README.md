@@ -50,14 +50,15 @@ Terrain 3D + Gravity [███████████████████�
 
 **Dash-Engine** es un engine de RPG isométrico de acción con su propio editor de niveles integrado, inspirado en Diablo II para el gameplay y en Unity/Unreal para el flujo de trabajo del editor.
 
-El proyecto compila dos binarios desde un mismo código base compartido:
+El proyecto compila tres binarios desde un mismo código base compartido:
 
 | Binario | Descripción |
 |---|---|
 | `DashEngine` | Editor visual de niveles (Dear ImGui, estilo Unreal) |
-| `VulkanBootstrap` | Runtime 3D Vulkan standalone (sin GUI de editor) |
+| `VulkanBootstrap` | Runtime 3D Vulkan standalone (sin GUI de editor); usado por Build & Run del editor y por `dash vulkan` |
+| `IsometricRPG` | Runtime 2D legado (SDL2 renderer) mantenido como modo alternativo vía `dash game`; no participa del pipeline Build & Run |
 
-Ambos comparten la librería estática `game_core` que contiene el mundo, las entidades, pathfinding y profiling.
+Los tres comparten la librería estática `game_core` que contiene el mundo, las entidades, pathfinding y profiling.
 
 ---
 
@@ -199,7 +200,7 @@ Dash-Engine/
 - Instrumentado: Game::update(), Game::render()
 
 ### Testing Automatizado
-- Suite automatizada en `ctest` (editor, runtime y capa SQLite).
+- Suite automatizada en `ctest` (editor, runtime y capa SQLite): **26/26 tests en verde** (última verificación: 2026-08-27).
 - Incluye cobertura para:
   - Serialización de escenas y comandos undo/redo.
   - Sistemas runtime (pathfinding, save/load, gameplay database).

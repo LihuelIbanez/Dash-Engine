@@ -64,7 +64,13 @@ static void test_valid_scene()
     std::printf("  test_valid_scene\n");
 
     World world;
-    world.generate(42); // walkable terrain
+    // Deterministic fully-walkable terrain: don't depend on procedural
+    // generation output for a given seed (fragile against generator changes).
+    for (int y = 0; y < WORLD_H; ++y)
+        for (int x = 0; x < WORLD_W; ++x) {
+            world.grid[y][x].type = TileType::Grass;
+            world.grid[y][x].walkable = true;
+        }
 
     SceneData scene;
     scene.entities.push_back(makeEntity(1, EntityData::Type::Player, 8.f, 8.f, "Hero"));

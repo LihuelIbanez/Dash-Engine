@@ -114,7 +114,7 @@ endif()
 
 # ── stb (header-only image read/write for the sprite editor) ─────────────────
 set(STB_WRITE_PATH "${CMAKE_SOURCE_DIR}/src/editor/stb_image_write.h")
-set(STB_READ_PATH  "${CMAKE_SOURCE_DIR}/src/editor/stb_image.h")
+set(STB_READ_PATH  "${CMAKE_SOURCE_DIR}/src/game/rendering/stb_image.h")
 
 if(NOT EXISTS "${STB_WRITE_PATH}")
     message(STATUS "[stb] Downloading stb_image_write.h...")

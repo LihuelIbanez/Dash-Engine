@@ -192,7 +192,7 @@ static void test_scene_components_roundtrip()
 
     SceneData loaded;
     ASSERT(loaded.loadFromFile(kTempFile), "load back succeeds");
-    ASSERT_EQ(loaded.sceneVersion, 2, "loaded version is 2");
+    ASSERT_EQ(loaded.sceneVersion, SceneData::kCurrentVersion, "loaded version matches current");
     ASSERT_EQ(loaded.entities.size(), (size_t)2, "two entities loaded");
 
     // Player components

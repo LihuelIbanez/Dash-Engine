@@ -168,6 +168,7 @@ Marca como completado cuando se cumpla todo:
 | Sprint 11 - Importacion 3D | ✅ Completada | 100% (D97-D101) |
 | Sprint 12 - Portabilidad Windows | ✅ Completada | 100% (D106-D110) |
 | Sprint 13 - Visual Polish | ✅ Completada | 100% (tema VS Code, status bar, audit) |
+| Auditoria Tecnica Ago-2026 | ✅ Completada | 100% (3 bugs + 6 mejoras — ver planning/tasks/22_AUDIT_AGOSTO_2026.md) |
 
 ## Notas
 

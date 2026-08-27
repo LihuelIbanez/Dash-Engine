@@ -18,6 +18,7 @@
 #include "SpriteEditorPanel.h"
 #include "WelcomePanel.h"
 #include "EntityViewportPanel.h"
+#include "FileEditorPanel.h"
 #include "CliffBrushCommand.h"
 #include "TexturePaintCommand.h"
 #include "WaterLevelCommand.h"
@@ -210,25 +211,7 @@ private:
     SDL_Cursor* cursorMove_      = nullptr;
 
     // ── File Editor ──────────────────────────────────────────────────────────
-    struct OpenFile {
-        std::string path;
-        std::string content;
-        bool        modified = false;
-        // Undo / redo stacks
-        std::vector<std::string> undoStack;
-        std::vector<std::string> redoStack;
-        std::string              lastSnapshot; // last committed state
-    };
-    std::vector<OpenFile> openFiles_;
-    int                   activeFileTab_ = -1;
-    std::string           fileBrowserRoot_;
-    char                  fileBrowserNavBuf_[512] = {};
-    char                  fileBrowserFilter_[128] = {};
-    void openFileInEditor(const std::string& path);
-    void saveOpenFile(int idx);
-    void snapshotForUndo(OpenFile& f);
-    void undoFile(OpenFile& f);
-    void redoFile(OpenFile& f);
+    FileEditorPanel fileEditorPanel_;
 
     // ── Entity drag state (viewport drag-to-move) ────────────────────────────
     bool     draggingEntity_  = false;
@@ -248,8 +231,6 @@ private:
     void drawViewport();
     void drawBuildLog();
     void drawPerformancePanel();
-    void drawFileBrowser();
-    void drawFileEditor();
     void drawSceneSelector();
     void drawOpenDialog();
     void drawSaveDialog();
