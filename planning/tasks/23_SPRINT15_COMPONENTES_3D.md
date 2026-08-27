@@ -553,3 +553,6 @@ Pendiente: tests de resolucion de malla (15.4) y de frustum culling (15.10), que
 | 6 | Culling reduce draws al alejar la camara | ✅ 442 → 10 |
 | 7 | Editor: inspector edita mesh/material/rotacion y el preview lo refleja | ⬜ **sin verificar** |
 | 8 | Performance: frame time medido con escena densa | ⬜ **sin medir** (ver 15.9) |
+
+> Los items no cumplidos y la deuda detectada estan registrados como tareas en
+> [`24_BACKLOG_POST_SPRINT15.md`](24_BACKLOG_POST_SPRINT15.md).
