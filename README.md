@@ -229,9 +229,10 @@ Dash-Engine/
 
 - [x] Sprint 8 (D70-D76): bootstrap Vulkan en macOS (MoltenVK), swapchain, pipeline y cubo base.
 - [x] Sprint 9 (D80-D84): integración de físicas 3D y pruebas deterministas.
-- [ ] Sprint 10 (D89-D93): audio espacial, triggers por eventos, input mapping y persistencia.
-- [ ] Sprint 11 (D97-D101): importación 3D (.obj/.gltf), texturas y cache de assets.
-- [ ] Sprint 12 (D106-D110): portabilidad Windows (80% — falta CI/CD), empaquetado final.
+- [x] Sprint 10 (D89-D93): audio espacial, triggers por eventos, input mapping y persistencia.
+- [x] Sprint 11 (D97-D101): importación 3D (.obj/.gltf), texturas y cache de assets.
+- [x] Sprint 12 (D106-D110): portabilidad Windows, CI/CD y empaquetado final.
+- [ ] **Sprint 15 — Componentes 3D:** conectar `RenderComponent`/`TransformComponent` al renderer Vulkan (rotación, mallas y materiales reales), física por entidad, batching + frustum culling y cobertura de tests del pipeline 3D. Spec: [`planning/tasks/23_SPRINT15_COMPONENTES_3D.md`](planning/tasks/23_SPRINT15_COMPONENTES_3D.md).
 
 ---
 

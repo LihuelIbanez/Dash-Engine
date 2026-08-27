@@ -12,12 +12,12 @@ namespace dash::vkexp {
 
 static constexpr float kPlayerHalfHeight = 0.52f;
 
-bool PlayerController::loadFromScene(const std::string& scenePath,
+bool PlayerController::loadFromScene(const LoadedScene& scene,
                                       const TerrainMesh* terrainMesh, bool terrainMeshReady,
                                       const std::vector<float>& heightMap,
                                       int mapWidth, int mapHeight)
 {
-    if (SceneLoader::loadPlayerPosition(scenePath, x_, z_)) {
+    if (SceneLoader::loadPlayerPosition(scene, x_, z_)) {
         loaded_ = true;
         if (terrainMeshReady && terrainMesh) {
             y_ = terrainMesh->sampleHeight(x_, z_) + kPlayerHalfHeight;

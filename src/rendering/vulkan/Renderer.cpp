@@ -4,10 +4,12 @@
 #include "rendering/vulkan/CameraController.h"
 
 #include <array>
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <set>
 
@@ -30,6 +32,26 @@ using json = nlohmann::json;
 namespace {
 
 static constexpr const char* kGetPhysicalDeviceProps2Ext = "VK_KHR_get_physical_device_properties2";
+
+// Push constant block shared by the basic/textured pipelines:
+// mat4 model (16 floats) + color/alpha (4) + lightDir/intensity (4).
+constexpr size_t kInstancePushConstantFloats = 24;
+
+void buildInstancePushConstants(const Mat4& model,
+                                float r, float g, float b, float a,
+                                const LightingParams& light,
+                                float (&out)[kInstancePushConstantFloats])
+{
+    std::memcpy(out, model.m, sizeof(model.m));
+    out[16] = r;
+    out[17] = g;
+    out[18] = b;
+    out[19] = a;
+    out[20] = light.dirX;
+    out[21] = light.dirY;
+    out[22] = light.dirZ;
+    out[23] = light.intensity;
+}
 
 static bool hasValidationLayer()
 {
@@ -373,8 +395,13 @@ bool Renderer::init(WindowContext& window)
     dash::physics::Vec3 spawn{0.0f, 0.8f, 0.0f};
     bool loadedSceneSpawn = false;
     if (!scenePath_.empty()) {
+        const LoadedScene loadedScene = SceneLoader::load(scenePath_);
+        if (!loadedScene.valid) {
+            std::fprintf(stderr, "[VSTEP] Could not load scene: %s\n", scenePath_.c_str());
+        }
+
         dash::physics::Vec3 sceneSpawn{};
-        if (SceneLoader::loadSpawnPoint(scenePath_, sceneSpawn)) {
+        if (SceneLoader::loadSpawnPoint(loadedScene, sceneSpawn)) {
             spawn = sceneSpawn;
             loadedSceneSpawn = true;
             std::printf("[D84] Loaded scene spawn from %s -> (%.3f, %.3f, %.3f)\n",
@@ -383,23 +410,14 @@ bool Renderer::init(WindowContext& window)
             std::printf("[D84] Could not parse scene spawn from %s (using default).\n", scenePath_.c_str());
         }
 
-        sceneInstances_ = SceneLoader::loadInstances(scenePath_);
-        terrainInstances_ = SceneLoader::loadTerrainInstances(scenePath_, &terrainHeightMap_, &terrainMapWidth_, &terrainMapHeight_);
+        sceneInstances_ = SceneLoader::loadInstances(loadedScene);
+        terrainInstances_ = SceneLoader::loadTerrainInstances(loadedScene, &terrainHeightMap_, &terrainMapWidth_, &terrainMapHeight_);
         std::fprintf(stderr, "[VSTEP] scene instances loaded: %zu\n", sceneInstances_.size());
         std::fprintf(stderr, "[VSTEP] terrain instances loaded: %zu\n", terrainInstances_.size());
 
         // Build heightmap polygon mesh for Vulkan terrain rendering
         if (terrainPipeline_ != VK_NULL_HANDLE) {
-            // Read scene seed from JSON (default to 12345 if missing)
-            unsigned int sceneSeed = 12345;
-            {
-                std::ifstream seedIn(scenePath_);
-                if (seedIn.is_open()) {
-                    json sj;
-                    try { seedIn >> sj; } catch (...) {}
-                    sceneSeed = sj.value("worldSeed", 12345u);
-                }
-            }
+            const unsigned int sceneSeed = loadedScene.data.worldSeed;
             TerrainMesh terrainMesh;
             terrainMesh.generate(sceneSeed);
             std::vector<TerrainVkVertex> terrainVerts;
@@ -458,13 +476,15 @@ bool Renderer::init(WindowContext& window)
         }
 
             // Load player position for WASD movement
-            player_.loadFromScene(scenePath_, &terrainMesh_, terrainMeshReady_,
+            player_.loadFromScene(loadedScene, &terrainMesh_, terrainMeshReady_,
                                   terrainHeightMap_, terrainMapWidth_, terrainMapHeight_);
     }
 
     if (sceneInstances_.empty()) {
         sceneInstances_.push_back({spawn, {0.26f, 0.52f, 0.26f}, {0.30f, 0.58f, 0.95f}});
     }
+
+    resolveSceneMeshes();
 
     // Generate a small checkerboard floor when no terrain was loaded
     if (terrainInstances_.empty()) {
@@ -519,6 +539,69 @@ bool Renderer::updateCameraUbo(uint32_t imageIndex)
     return true;
 }
 
+// Resolves a mesh id to GPU buffers, loading and caching it on first use.
+// Returns nullptr to signal "use the builtin cube".
+const MeshBuffers* Renderer::resolveMesh(const std::string& meshId)
+{
+    if (meshId.empty() || meshId == "cube") return nullptr;
+
+    if (CachedModel* cached = assetCache_.get(meshId)) {
+        return cached->meshBuffers.indexCount() > 0 ? &cached->meshBuffers : nullptr;
+    }
+
+    namespace fs = std::filesystem;
+    std::error_code ec;
+
+    std::vector<fs::path> candidates;
+    const fs::path raw(meshId);
+    if (raw.is_absolute()) {
+        candidates.push_back(raw);
+    } else {
+        candidates.push_back(fs::path(VULKAN_MODEL_DIR) / raw);
+        if (!scenePath_.empty()) {
+            candidates.push_back(fs::path(scenePath_).parent_path() / raw);
+        }
+        candidates.push_back(raw);
+    }
+
+    fs::path resolved;
+    for (const auto& c : candidates) {
+        if (fs::exists(c, ec) && fs::is_regular_file(c, ec)) { resolved = c; break; }
+        ec.clear();
+    }
+
+    CachedModel model;
+    if (resolved.empty()) {
+        std::fprintf(stderr, "[AssetCache3D] Mesh not found: '%s' (using builtin cube)\n",
+                     meshId.c_str());
+    } else if (!model.meshBuffers.initFromGLTF(deviceContext_.physicalDevice(),
+                                               deviceContext_.device(),
+                                               resolved.string())) {
+        std::fprintf(stderr, "[AssetCache3D] Failed to load mesh: %s (using builtin cube)\n",
+                     resolved.string().c_str());
+        model.meshBuffers.shutdown(deviceContext_.device());
+    }
+
+    // Cache failures too, so a broken reference is not retried every load.
+    CachedModel& stored = assetCache_.store(meshId, std::move(model));
+    return stored.meshBuffers.indexCount() > 0 ? &stored.meshBuffers : nullptr;
+}
+
+void Renderer::resolveSceneMeshes()
+{
+    // Group by mesh so the draw loop rebinds buffers once per distinct mesh.
+    std::stable_sort(sceneInstances_.begin(), sceneInstances_.end(),
+                     [](const RenderInstance& a, const RenderInstance& b) {
+                         return a.meshId < b.meshId;
+                     });
+
+    sceneInstanceMeshes_.clear();
+    sceneInstanceMeshes_.reserve(sceneInstances_.size());
+    for (const auto& inst : sceneInstances_) {
+        sceneInstanceMeshes_.push_back(resolveMesh(inst.meshId));
+    }
+}
+
 void Renderer::recordDrawCommands(VkCommandBuffer cmd, uint32_t imageIndex)
 {
     VkClearValue clearValues[2]{};
@@ -544,20 +627,19 @@ void Renderer::recordDrawCommands(VkCommandBuffer cmd, uint32_t imageIndex)
     VkBuffer vertexBuffers[] = { meshBuffers_.vertexBuffer() };
     VkDeviceSize offsets[] = { 0 };
     vkCmdBindVertexBuffers(cmd, 0, 1, vertexBuffers, offsets);
-    vkCmdBindIndexBuffer(cmd, meshBuffers_.indexBuffer(), 0, VK_INDEX_TYPE_UINT16);
+    vkCmdBindIndexBuffer(cmd, meshBuffers_.indexBuffer(), 0, meshBuffers_.indexType());
 
     // Physics cube (standalone mode only)
     if (!editorBridge_.isEmbeddedPreview()) {
         const auto& lt = editorBridge_.lighting();
-        const float pc[16] = {
-            cubeTransform_.position.x * TILE_SCALE,
-            cubeTransform_.position.y,
-            cubeTransform_.position.z * TILE_SCALE,
-            0.0f,
-            0.30f, 0.30f, 0.30f, 0.0f,
-            0.86f, 0.34f, 0.34f, 1.0f,
-            lt.dirX, lt.dirY, lt.dirZ, lt.intensity
-        };
+        const Mat4 model = trs(
+            {cubeTransform_.position.x * TILE_SCALE,
+             cubeTransform_.position.y,
+             cubeTransform_.position.z * TILE_SCALE},
+            0.0f, 0.0f, 0.0f,
+            {0.30f, 0.30f, 0.30f});
+        float pc[kInstancePushConstantFloats];
+        buildInstancePushConstants(model, 0.86f, 0.34f, 0.34f, 1.0f, lt, pc);
         vkCmdPushConstants(cmd, pipelineLayout_, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), pc);
         vkCmdDrawIndexed(cmd, meshBuffers_.indexCount(), 1, 0, 0, 0);
     }
@@ -565,12 +647,12 @@ void Renderer::recordDrawCommands(VkCommandBuffer cmd, uint32_t imageIndex)
     // Fallback tile instances (used when no terrain mesh pipeline)
     for (const auto& tile : terrainInstances_) {
         const auto& lt2 = editorBridge_.lighting();
-        const float pc[16] = {
-            tile.position.x * TILE_SCALE, tile.position.y, tile.position.z * TILE_SCALE, 0.0f,
-            tile.scale.x, tile.scale.y, tile.scale.z, 0.0f,
-            tile.color.x, tile.color.y, tile.color.z, 1.0f,
-            lt2.dirX, lt2.dirY, lt2.dirZ, lt2.intensity
-        };
+        const Mat4 model = trs(
+            {tile.position.x * TILE_SCALE, tile.position.y, tile.position.z * TILE_SCALE},
+            tile.yawDeg, tile.pitchDeg, tile.rollDeg,
+            {tile.scale.x, tile.scale.y, tile.scale.z});
+        float pc[kInstancePushConstantFloats];
+        buildInstancePushConstants(model, tile.color.x, tile.color.y, tile.color.z, 1.0f, lt2, pc);
         vkCmdPushConstants(cmd, pipelineLayout_, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), pc);
         vkCmdDrawIndexed(cmd, meshBuffers_.indexCount(), 1, 0, 0, 0);
     }
@@ -627,20 +709,35 @@ void Renderer::recordDrawCommands(VkCommandBuffer cmd, uint32_t imageIndex)
             0, 1, &descriptorSets_[imageIndex], 0, nullptr);
         VkBuffer cubeVB[] = { meshBuffers_.vertexBuffer() };
         vkCmdBindVertexBuffers(cmd, 0, 1, cubeVB, terrainOffsets);
-        vkCmdBindIndexBuffer(cmd, meshBuffers_.indexBuffer(), 0, VK_INDEX_TYPE_UINT16);
+        vkCmdBindIndexBuffer(cmd, meshBuffers_.indexBuffer(), 0, meshBuffers_.indexType());
     }
 
     // Scene entity instances
-    for (const auto& instance : sceneInstances_) {
+    const MeshBuffers* boundMesh = &meshBuffers_;
+    for (size_t i = 0; i < sceneInstances_.size(); ++i) {
+        const auto& instance = sceneInstances_[i];
+        if (!instance.visible) continue;
+
+        const MeshBuffers* mesh = (i < sceneInstanceMeshes_.size() && sceneInstanceMeshes_[i])
+                                ? sceneInstanceMeshes_[i]
+                                : &meshBuffers_;
+        if (mesh != boundMesh) {
+            VkBuffer vb[] = { mesh->vertexBuffer() };
+            VkDeviceSize vbOffsets[] = { 0 };
+            vkCmdBindVertexBuffers(cmd, 0, 1, vb, vbOffsets);
+            vkCmdBindIndexBuffer(cmd, mesh->indexBuffer(), 0, mesh->indexType());
+            boundMesh = mesh;
+        }
+
         const auto& lt3 = editorBridge_.lighting();
-        const float pc[16] = {
-            instance.position.x * TILE_SCALE, instance.position.y, instance.position.z * TILE_SCALE, 0.0f,
-            instance.scale.x, instance.scale.y, instance.scale.z, 0.0f,
-            instance.color.x, instance.color.y, instance.color.z, 1.0f,
-            lt3.dirX, lt3.dirY, lt3.dirZ, lt3.intensity
-        };
+        const Mat4 model = trs(
+            {instance.position.x * TILE_SCALE, instance.position.y, instance.position.z * TILE_SCALE},
+            instance.yawDeg, instance.pitchDeg, instance.rollDeg,
+            {instance.scale.x, instance.scale.y, instance.scale.z});
+        float pc[kInstancePushConstantFloats];
+        buildInstancePushConstants(model, instance.color.x, instance.color.y, instance.color.z, 1.0f, lt3, pc);
         vkCmdPushConstants(cmd, pipelineLayout_, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), pc);
-        vkCmdDrawIndexed(cmd, meshBuffers_.indexCount(), 1, 0, 0, 0);
+        vkCmdDrawIndexed(cmd, mesh->indexCount(), 1, 0, 0, 0);
     }
 
     vkCmdEndRenderPass(cmd);

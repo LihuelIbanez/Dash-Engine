@@ -47,6 +47,11 @@ private:
     bool updateCameraUbo(uint32_t imageIndex);
     void recordDrawCommands(VkCommandBuffer cmd, uint32_t imageIndex);
 
+    // Resolves RenderComponent::mesh for every scene instance, uploading and
+    // caching referenced models. Falls back to the builtin cube when missing.
+    void resolveSceneMeshes();
+    const MeshBuffers* resolveMesh(const std::string& meshId);
+
     VkInstance instance_ = VK_NULL_HANDLE;
     VkSurfaceKHR surface_ = VK_NULL_HANDLE;
 
@@ -84,6 +89,8 @@ private:
     dash::physics::TransformProxy transformProxy_;
     dash::physics::Transform3 cubeTransform_{};
     std::vector<RenderInstance> sceneInstances_;
+    // Resolved mesh per scene instance, aligned by index with sceneInstances_.
+    std::vector<const MeshBuffers*> sceneInstanceMeshes_;
     std::vector<RenderInstance> terrainInstances_;
     std::vector<float> terrainHeightMap_;
     int terrainMapWidth_ = 0;

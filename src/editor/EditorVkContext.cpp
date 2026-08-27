@@ -651,7 +651,12 @@ void EditorVkContext::destroyOffscreenTarget()
     vkDeviceWaitIdle(dev);
 
     if (vpImGuiDesc_ != VK_NULL_HANDLE) {
-        ImGui_ImplVulkan_RemoveTexture(vpImGuiDesc_);
+        // Only valid while the ImGui Vulkan backend is alive. On shutdown the
+        // backend is torn down first, which already frees this descriptor set.
+        if (ImGui::GetCurrentContext() != nullptr &&
+            ImGui::GetIO().BackendRendererUserData != nullptr) {
+            ImGui_ImplVulkan_RemoveTexture(vpImGuiDesc_);
+        }
         vpImGuiDesc_ = VK_NULL_HANDLE;
     }
     if (vpFramebuffer_) { vkDestroyFramebuffer(dev, vpFramebuffer_, nullptr); vpFramebuffer_ = VK_NULL_HANDLE; }

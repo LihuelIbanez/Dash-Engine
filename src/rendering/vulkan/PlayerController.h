@@ -14,9 +14,9 @@ namespace dash::vkexp {
 
 class PlayerController {
 public:
-    // Load player position from scene JSON.
+    // Load player position from the parsed scene.
     // Uses terrain data for initial height placement.
-    bool loadFromScene(const std::string& scenePath,
+    bool loadFromScene(const LoadedScene& scene,
                        const TerrainMesh* terrainMesh, bool terrainMeshReady,
                        const std::vector<float>& heightMap,
                        int mapWidth, int mapHeight);

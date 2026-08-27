@@ -23,12 +23,14 @@ public:
     bool initFromData(VkPhysicalDevice physicalDevice, VkDevice device,
                       const void* vertexData, uint32_t vertexDataSize,
                       const void* indexData, uint32_t indexDataSize,
-                      uint32_t indexCount);
+                      uint32_t indexCount,
+                      VkIndexType indexType = VK_INDEX_TYPE_UINT32);
     void shutdown(VkDevice device);
 
     VkBuffer vertexBuffer() const { return vertexBuffer_; }
     VkBuffer indexBuffer() const { return indexBuffer_; }
     uint32_t indexCount() const { return indexCount_; }
+    VkIndexType indexType() const { return indexType_; }
 
 private:
     bool createBuffer(
@@ -50,6 +52,7 @@ private:
     VkBuffer indexBuffer_ = VK_NULL_HANDLE;
     VkDeviceMemory indexMemory_ = VK_NULL_HANDLE;
     uint32_t indexCount_ = 0;
+    VkIndexType indexType_ = VK_INDEX_TYPE_UINT32;
 };
 
 } // namespace dash::vkexp

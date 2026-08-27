@@ -1,7 +1,9 @@
 #include "rendering/vulkan/SceneLoader.h"
 
+#include <algorithm>
 #include <cmath>
 #include <fstream>
+#include <variant>
 
 #include <nlohmann/json.hpp>
 
@@ -9,46 +11,19 @@ namespace dash::vkexp {
 
 using json = nlohmann::json;
 
-bool SceneLoader::loadSpawnPoint(const std::string& scenePath, dash::physics::Vec3& outSpawn)
+namespace {
+
+// Ground offset applied so entities sit on top of the terrain instead of
+// intersecting it. TransformComponent::z is added on top of this.
+constexpr float kPlayerBaseHeight = 1.0f;
+constexpr float kEnemyBaseHeight  = 0.6f;
+
+} // namespace
+
+LoadedScene SceneLoader::load(const std::string& scenePath)
 {
-    std::ifstream in(scenePath);
-    if (!in.is_open()) return false;
+    LoadedScene out;
 
-    json j;
-    try {
-        in >> j;
-    } catch (...) {
-        return false;
-    }
-
-    if (!j.contains("entities") || !j["entities"].is_array()) return false;
-
-    const auto& entities = j["entities"];
-    const json* selected = nullptr;
-    for (const auto& e : entities) {
-        if (!e.is_object()) continue;
-        if (e.value("type", std::string{}) == "Player") {
-            selected = &e;
-            break;
-        }
-    }
-    if (!selected && !entities.empty() && entities[0].is_object()) {
-        selected = &entities[0];
-    }
-    if (!selected) return false;
-
-    const float sx = selected->value("x", 0.0f);
-    const float sy = selected->value("y", 0.0f);
-
-    // Dash scenes store horizontal position in (x, y). Vulkan baseline uses y-up,
-    // so map scene y to z and keep a default spawn height on physics y.
-    outSpawn = {sx, 0.8f, sy};
-    return true;
-}
-
-std::vector<RenderInstance> SceneLoader::loadInstances(const std::string& scenePath)
-{
-    std::vector<RenderInstance> out;
     std::ifstream in(scenePath);
     if (!in.is_open()) return out;
 
@@ -59,28 +34,101 @@ std::vector<RenderInstance> SceneLoader::loadInstances(const std::string& sceneP
         return out;
     }
 
-    if (!j.contains("entities") || !j["entities"].is_array()) return out;
+    if (!out.data.loadFromJson(j)) return out;
 
-    for (const auto& e : j["entities"]) {
-        if (!e.is_object()) continue;
-        const float ex = e.value("x", 0.0f);
-        const float ez = e.value("y", 0.0f);
-        float ey = 0.6f;
-        dash::physics::Vec3 color{0.82f, 0.34f, 0.34f};
-        dash::physics::Vec3 scale{0.22f, 0.40f, 0.22f};
-        bool isPlayer = false;
-        if (e.contains("type") && e["type"].is_string()) {
-            const std::string t = e["type"].get<std::string>();
-            if (t == "Player") {
-                ey = 1.0f;
-                color = {0.30f, 0.58f, 0.95f};
-                scale = {0.26f, 0.52f, 0.26f};
-                isPlayer = true;
+    // Tilemap is appended by the editor on export; it is not part of SceneData.
+    if (j.contains("tilemap") && j["tilemap"].is_array()) {
+        const auto& tilemap = j["tilemap"];
+        out.tilemap.reserve(tilemap.size());
+        for (const auto& t : tilemap)
+            out.tilemap.push_back(t.is_number() ? t.get<int>() : 3);
+
+        out.worldWidth = j.value("worldWidth", 64);
+        out.worldHeight = j.value("worldHeight",
+            out.worldWidth > 0 ? static_cast<int>(out.tilemap.size()) / out.worldWidth : 0);
+    }
+
+    out.valid = true;
+    return out;
+}
+
+bool SceneLoader::loadSpawnPoint(const LoadedScene& scene, dash::physics::Vec3& outSpawn)
+{
+    if (!scene.valid || scene.data.entities.empty()) return false;
+
+    const EntityData* selected = nullptr;
+    for (const auto& e : scene.data.entities) {
+        if (e.type == EntityData::Type::Player) { selected = &e; break; }
+    }
+    if (!selected) selected = &scene.data.entities.front();
+
+    // Dash scenes store horizontal position in (x, y). Vulkan baseline uses y-up,
+    // so map scene y to z and keep a default spawn height on physics y.
+    outSpawn = {selected->x, 0.8f, selected->y};
+    return true;
+}
+
+std::vector<RenderInstance> SceneLoader::loadInstances(const LoadedScene& scene)
+{
+    std::vector<RenderInstance> out;
+    if (!scene.valid) return out;
+
+    out.reserve(scene.data.entities.size());
+    for (const auto& e : scene.data.entities) {
+        const bool isPlayer = (e.type == EntityData::Type::Player);
+
+        RenderInstance inst;
+        inst.isPlayer = isPlayer;
+        inst.color = isPlayer ? dash::physics::Vec3{0.30f, 0.58f, 0.95f}
+                              : dash::physics::Vec3{0.82f, 0.34f, 0.34f};
+        const dash::physics::Vec3 baseScale = isPlayer
+            ? dash::physics::Vec3{0.26f, 0.52f, 0.26f}
+            : dash::physics::Vec3{0.22f, 0.40f, 0.22f};
+        const float baseHeight = isPlayer ? kPlayerBaseHeight : kEnemyBaseHeight;
+
+        inst.position = {e.x, baseHeight, e.y};
+        inst.scale = baseScale;
+
+        for (const auto& c : e.components) {
+            if (const auto* tf = std::get_if<TransformComponent>(&c)) {
+                inst.position = {tf->x, baseHeight + tf->z, tf->y};
+                inst.yawDeg = tf->yawDeg;
+                inst.pitchDeg = tf->pitchDeg;
+                inst.rollDeg = tf->rollDeg;
+                const float s = tf->scale > 0.0f ? tf->scale : 1.0f;
+                inst.scale = {baseScale.x * s, baseScale.y * s, baseScale.z * s};
+            } else if (const auto* rc = std::get_if<RenderComponent>(&c)) {
+                inst.visible = rc->visible;
+                inst.layer = rc->layer;
+                inst.renderMode = rc->renderMode;
+                if (!rc->mesh.empty()) inst.meshId = rc->mesh;
+                if (!rc->material.empty()) inst.materialId = rc->material;
             }
         }
-        out.push_back({{ex, ey, ez}, scale, color, isPlayer});
+
+        out.push_back(std::move(inst));
     }
     return out;
+}
+
+bool SceneLoader::loadPlayerPosition(const LoadedScene& scene, float& outX, float& outZ)
+{
+    if (!scene.valid) return false;
+
+    for (const auto& e : scene.data.entities) {
+        if (e.type != EntityData::Type::Player) continue;
+        outX = e.x;
+        outZ = e.y;
+        for (const auto& c : e.components) {
+            if (const auto* tf = std::get_if<TransformComponent>(&c)) {
+                outX = tf->x;
+                outZ = tf->y;
+                break;
+            }
+        }
+        return true;
+    }
+    return false;
 }
 
 dash::physics::Vec3 SceneLoader::getTileColor(int tileType)
@@ -125,36 +173,8 @@ float SceneLoader::sampleTerrainHeight(const std::vector<float>& mapHeights, int
     return mapHeights[static_cast<size_t>(tz * mapWidth + tx)];
 }
 
-bool SceneLoader::loadPlayerPosition(const std::string& scenePath, float& outX, float& outZ)
-{
-    std::ifstream in(scenePath);
-    if (!in.is_open()) return false;
-
-    json j;
-    try {
-        in >> j;
-    } catch (...) {
-        return false;
-    }
-
-    if (!j.contains("entities") || !j["entities"].is_array()) return false;
-
-    for (const auto& e : j["entities"]) {
-        if (!e.is_object()) continue;
-        if (e.contains("type") && e["type"].is_string()) {
-            const std::string t = e["type"].get<std::string>();
-            if (t == "Player") {
-                outX = e.value("x", 32.0f);
-                outZ = e.value("y", 32.0f);
-                return true;
-            }
-        }
-    }
-    return false;
-}
-
 std::vector<RenderInstance> SceneLoader::loadTerrainInstances(
-    const std::string& scenePath,
+    const LoadedScene& scene,
     std::vector<float>* outHeightMap,
     int* outMapWidth,
     int* outMapHeight)
@@ -164,21 +184,11 @@ std::vector<RenderInstance> SceneLoader::loadTerrainInstances(
     if (outMapWidth) *outMapWidth = 0;
     if (outMapHeight) *outMapHeight = 0;
 
-    std::ifstream in(scenePath);
-    if (!in.is_open()) return out;
+    if (!scene.valid) return out;
 
-    json j;
-    try {
-        in >> j;
-    } catch (...) {
-        return out;
-    }
-
-    // Try to load tilemap from JSON
-    if (j.contains("tilemap") && j["tilemap"].is_array()) {
-        const auto& tilemap = j["tilemap"];
-        const int worldWidth = j.value("worldWidth", 64);
-        const int worldHeight = j.value("worldHeight", worldWidth > 0 ? static_cast<int>(tilemap.size()) / worldWidth : 0);
+    if (!scene.tilemap.empty() && scene.worldWidth > 0) {
+        const int worldWidth = scene.worldWidth;
+        const int worldHeight = scene.worldHeight;
 
         if (outHeightMap && worldWidth > 0 && worldHeight > 0) {
             outHeightMap->assign(static_cast<size_t>(worldWidth * worldHeight), 0.0f);
@@ -186,11 +196,11 @@ std::vector<RenderInstance> SceneLoader::loadTerrainInstances(
             if (outMapHeight) *outMapHeight = worldHeight;
         }
 
-        for (int idx = 0; idx < static_cast<int>(tilemap.size()); ++idx) {
+        for (int idx = 0; idx < static_cast<int>(scene.tilemap.size()); ++idx) {
             const int y = idx / worldWidth;
             const int x = idx % worldWidth;
 
-            const int tileType = tilemap[idx].is_number() ? tilemap[idx].get<int>() : 3;
+            const int tileType = scene.tilemap[static_cast<size_t>(idx)];
             const dash::physics::Vec3 color = getTileColor(tileType);
             const float h = getTileHeight(tileType);
 
@@ -198,27 +208,26 @@ std::vector<RenderInstance> SceneLoader::loadTerrainInstances(
                 (*outHeightMap)[static_cast<size_t>(idx)] = h;
             }
 
-            out.push_back({
-                {static_cast<float>(x), h, static_cast<float>(y)},
-                {0.48f, 0.03f, 0.48f},
-                color
-            });
+            RenderInstance tile;
+            tile.position = {static_cast<float>(x), h, static_cast<float>(y)};
+            tile.scale = {0.48f, 0.03f, 0.48f};
+            tile.color = color;
+            out.push_back(std::move(tile));
         }
         return out;
     }
 
-    // Fallback: Generate checkerboard around entities if no tilemap
+    // Fallback: checkerboard around the entities when the scene has no tilemap
     int minX = 28;
     int maxX = 36;
     int minZ = 28;
     int maxZ = 36;
 
-    if (j.contains("entities") && j["entities"].is_array() && !j["entities"].empty()) {
+    if (!scene.data.entities.empty()) {
         bool first = true;
-        for (const auto& e : j["entities"]) {
-            if (!e.is_object()) continue;
-            const int ex = static_cast<int>(std::round(e.value("x", 0.0f)));
-            const int ez = static_cast<int>(std::round(e.value("y", 0.0f)));
+        for (const auto& e : scene.data.entities) {
+            const int ex = static_cast<int>(std::round(e.x));
+            const int ez = static_cast<int>(std::round(e.y));
             if (first) {
                 minX = maxX = ex;
                 minZ = maxZ = ez;
@@ -239,12 +248,12 @@ std::vector<RenderInstance> SceneLoader::loadTerrainInstances(
     for (int z = minZ; z <= maxZ; ++z) {
         for (int x = minX; x <= maxX; ++x) {
             const bool checker = ((x + z) & 1) == 0;
-            out.push_back({
-                {static_cast<float>(x), -1.05f, static_cast<float>(z)},
-                {0.48f, 0.03f, 0.48f},
-                checker ? dash::physics::Vec3{0.24f, 0.34f, 0.24f}
-                        : dash::physics::Vec3{0.18f, 0.28f, 0.18f}
-            });
+            RenderInstance tile;
+            tile.position = {static_cast<float>(x), -1.05f, static_cast<float>(z)};
+            tile.scale = {0.48f, 0.03f, 0.48f};
+            tile.color = checker ? dash::physics::Vec3{0.24f, 0.34f, 0.24f}
+                                 : dash::physics::Vec3{0.18f, 0.28f, 0.18f};
+            out.push_back(std::move(tile));
         }
     }
     return out;

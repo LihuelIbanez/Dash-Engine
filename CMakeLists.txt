@@ -165,6 +165,7 @@ file(GLOB CORE_SOURCES
     "src/core/components/*.cpp"
     "src/core/input/*.cpp"
     "src/entities/*.cpp"
+    "src/scene/*.cpp"
     "src/world/*.cpp"
     "src/game/nav/*.cpp"
     "src/game/physics/*.cpp"
@@ -178,6 +179,7 @@ target_include_directories(game_core PUBLIC
     src/core/profiling
     src/core/input
     src/entities
+    src/scene
     src/world
     src/rendering
     src/game/data

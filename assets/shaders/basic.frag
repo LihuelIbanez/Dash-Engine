@@ -7,8 +7,7 @@ layout(location = 2) in vec3 vWorldPos;
 layout(location = 0) out vec4 outColor;
 
 layout(push_constant) uniform InstancePC {
-    vec4 offset;
-    vec4 scale;
+    mat4 model;
     vec4 color;
     vec4 lightDir; // xyz = direction, w = intensity
 } pc;

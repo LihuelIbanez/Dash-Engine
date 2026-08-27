@@ -36,7 +36,6 @@ file(GLOB TEST_CMD_SOURCES "${CMAKE_SOURCE_DIR}/src/editor/commands/*.cpp")
 
 add_executable(test_scene_serialization
     test_scene_serialization.cpp
-    ${CMAKE_SOURCE_DIR}/src/editor/SceneData.cpp
 )
 target_include_directories(test_scene_serialization PRIVATE
     ${CMAKE_SOURCE_DIR}/src
@@ -56,7 +55,6 @@ add_test(NAME test_scene_serialization COMMAND test_scene_serialization)
 # ── Undo/redo needs editor command sources ────────────────────────────────────
 add_executable(test_undo_redo_commands
     test_undo_redo_commands.cpp
-    ${CMAKE_SOURCE_DIR}/src/editor/SceneData.cpp
     ${TEST_CMD_SOURCES}
 )
 target_include_directories(test_undo_redo_commands PRIVATE
@@ -81,7 +79,6 @@ dash_add_test(test_component_serialization test_component_serialization.cpp)
 # ── EntityRegistry + scene migration (D24) ────────────────────────────────────
 add_executable(test_entity_registry
     test_entity_registry.cpp
-    ${CMAKE_SOURCE_DIR}/src/editor/SceneData.cpp
 )
 target_include_directories(test_entity_registry PRIVATE
     ${CMAKE_SOURCE_DIR}/src
@@ -102,7 +99,6 @@ add_test(NAME test_entity_registry COMMAND test_entity_registry)
 # ── MoveEntity and EditProperty commands ─────────────────────────────────────
 add_executable(test_move_edit_commands
     test_move_edit_commands.cpp
-    ${CMAKE_SOURCE_DIR}/src/editor/SceneData.cpp
     ${TEST_CMD_SOURCES}
 )
 target_include_directories(test_move_edit_commands PRIVATE
@@ -326,7 +322,6 @@ add_executable(test_project_manager
     ${CMAKE_SOURCE_DIR}/src/editor/project/ProjectManifest.cpp
     ${CMAKE_SOURCE_DIR}/src/editor/project/ProjectManager.cpp
     ${CMAKE_SOURCE_DIR}/src/editor/project/ProjectDataMigrator.cpp
-    ${CMAKE_SOURCE_DIR}/src/editor/SceneData.cpp
     ${CMAKE_SOURCE_DIR}/src/core/db/SqliteDb.cpp
     ${CMAKE_SOURCE_DIR}/src/core/db/SqliteStatement.cpp
     ${CMAKE_SOURCE_DIR}/src/core/db/SchemaManager.cpp
@@ -358,7 +353,6 @@ add_executable(test_project_data_migrator
     test_project_data_migrator.cpp
     ${CMAKE_SOURCE_DIR}/src/editor/project/ProjectManifest.cpp
     ${CMAKE_SOURCE_DIR}/src/editor/project/ProjectDataMigrator.cpp
-    ${CMAKE_SOURCE_DIR}/src/editor/SceneData.cpp
     ${CMAKE_SOURCE_DIR}/src/core/db/SqliteDb.cpp
     ${CMAKE_SOURCE_DIR}/src/core/db/SqliteStatement.cpp
     ${CMAKE_SOURCE_DIR}/src/core/db/SchemaManager.cpp
@@ -468,7 +462,6 @@ add_executable(test_gameplay_db_sqlite
     ${CMAKE_SOURCE_DIR}/src/game/data/GameplayDatabase.cpp
     ${CMAKE_SOURCE_DIR}/src/editor/project/ProjectManifest.cpp
     ${CMAKE_SOURCE_DIR}/src/editor/project/ProjectDataMigrator.cpp
-    ${CMAKE_SOURCE_DIR}/src/editor/SceneData.cpp
     ${CMAKE_SOURCE_DIR}/src/core/db/SqliteDb.cpp
     ${CMAKE_SOURCE_DIR}/src/core/db/SqliteStatement.cpp
     ${CMAKE_SOURCE_DIR}/src/core/db/SchemaManager.cpp
@@ -498,7 +491,6 @@ add_executable(test_sqlite_cutover_performance
     test_sqlite_cutover_performance.cpp
     ${CMAKE_SOURCE_DIR}/src/editor/project/ProjectManifest.cpp
     ${CMAKE_SOURCE_DIR}/src/editor/project/ProjectDataMigrator.cpp
-    ${CMAKE_SOURCE_DIR}/src/editor/SceneData.cpp
     ${CMAKE_SOURCE_DIR}/src/editor/scene/SceneRepositorySqlite.cpp
     ${CMAKE_SOURCE_DIR}/src/game/data/GameplayDatabase.cpp
     ${CMAKE_SOURCE_DIR}/src/core/db/SqliteDb.cpp
@@ -531,7 +523,6 @@ add_executable(migrate_project_data
     migrate_project_data.cpp
     ${CMAKE_SOURCE_DIR}/src/editor/project/ProjectManifest.cpp
     ${CMAKE_SOURCE_DIR}/src/editor/project/ProjectDataMigrator.cpp
-    ${CMAKE_SOURCE_DIR}/src/editor/SceneData.cpp
     ${CMAKE_SOURCE_DIR}/src/core/db/SqliteDb.cpp
     ${CMAKE_SOURCE_DIR}/src/core/db/SqliteStatement.cpp
     ${CMAKE_SOURCE_DIR}/src/core/db/SchemaManager.cpp
@@ -611,4 +602,27 @@ if(TARGET assimp::assimp)
     target_compile_options(test_model_import_pipeline PRIVATE ${DASH_COMPILE_FLAGS})
     add_test(NAME test_model_import_pipeline COMMAND test_model_import_pipeline)
 endif()
+
+# ── Scene components → RenderInstance mapping (Sprint 15) ───────────────────
+# SceneLoader has no Vulkan dependency, so this runs headless in CI.
+add_executable(test_scene_loader_3d
+    test_scene_loader_3d.cpp
+    ${CMAKE_SOURCE_DIR}/src/rendering/vulkan/SceneLoader.cpp
+)
+target_include_directories(test_scene_loader_3d PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/src/core
+    ${CMAKE_SOURCE_DIR}/src/core/components
+    ${CMAKE_SOURCE_DIR}/src/scene
+    ${CMAKE_SOURCE_DIR}/src/world
+    ${CMAKE_SOURCE_DIR}/src/rendering
+    ${SDL2_INCLUDE_DIRS}
+)
+target_link_libraries(test_scene_loader_3d PRIVATE
+    game_core
+    nlohmann_json::nlohmann_json
+    ${SDL2_LIBRARIES}
+)
+target_compile_options(test_scene_loader_3d PRIVATE ${DASH_COMPILE_FLAGS})
+add_test(NAME test_scene_loader_3d COMMAND test_scene_loader_3d)
 

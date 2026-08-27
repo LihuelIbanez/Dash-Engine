@@ -25,8 +25,10 @@ Este directorio separa las tareas por semana para ejecutar el escalado del edito
 | Sprint 12 - Portabilidad Windows | ✅ Completada | D106-D110 (CMakePresets, Packaging, CI/CD, docs) |
 | Sprint 13 - Visual Polish | ✅ Completada | Tema VS Code Dark+, status bar, audit funcional |
 | Sprint 14 - Terreno 3D y Gravedad | ✅ Completada | TILE_SCALE, smooth normals, AO, Blinn-Phong shaders, fog, terrain-following |
+| Auditoria Tecnica Ago-2026 | ✅ Completada | 3 bugs corregidos + 6 mejoras (ctest 26/26) |
+| Sprint 15 - Componentes 3D | 🟡 En progreso | Fase 1 completada: RenderInstance extendido, mat4 model en shaders, SceneLoader sobre SceneData |
 
-**Estado:** Todos los sprints completados (1-14).
+**Estado:** Sprints 1-14 completados. Sprint 15 en curso (ver 23_SPRINT15_COMPONENTES_3D.md).
 
 ## Funcionalidades ya implementadas (fuera del plan)
 
@@ -96,6 +98,12 @@ El proyecto ya cuenta con una base funcional significativa:
 
 ### Sprint 14
 - 21_SPRINT14_TERRAIN_3D_GRAVITY.md
+
+### Auditoria Tecnica (Agosto 2026)
+- 22_AUDIT_AGOSTO_2026.md (bugs corregidos + puntos de mejora)
+
+### Sprint 15
+- 23_SPRINT15_COMPONENTES_3D.md (componentes 3D, mallas/materiales, fisica por entidad, batching, tests)
 
 ### General
 - 99_ACCEPTANCE_CHECKLIST.md

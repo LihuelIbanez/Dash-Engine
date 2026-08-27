@@ -104,6 +104,46 @@ inline Mat4 lookAt(const Vec3& eye, const Vec3& center, const Vec3& up)
     return out;
 }
 
+// Column-major model matrix: M = T * Ry(yaw) * Rx(pitch) * Rz(roll) * S.
+inline Mat4 trs(const Vec3& position,
+                float yawDeg, float pitchDeg, float rollDeg,
+                const Vec3& scale)
+{
+    constexpr float kDeg2Rad = 3.14159265358979323846f / 180.0f;
+    const float cy = std::cos(yawDeg * kDeg2Rad);
+    const float sy = std::sin(yawDeg * kDeg2Rad);
+    const float cp = std::cos(pitchDeg * kDeg2Rad);
+    const float sp = std::sin(pitchDeg * kDeg2Rad);
+    const float cr = std::cos(rollDeg * kDeg2Rad);
+    const float sr = std::sin(rollDeg * kDeg2Rad);
+
+    const float r00 = cy * cr + sy * sp * sr;
+    const float r01 = -cy * sr + sy * sp * cr;
+    const float r02 = sy * cp;
+    const float r10 = cp * sr;
+    const float r11 = cp * cr;
+    const float r12 = -sp;
+    const float r20 = -sy * cr + cy * sp * sr;
+    const float r21 = sy * sr + cy * sp * cr;
+    const float r22 = cy * cp;
+
+    Mat4 out{};
+    out.m[0]  = r00 * scale.x;
+    out.m[1]  = r10 * scale.x;
+    out.m[2]  = r20 * scale.x;
+    out.m[4]  = r01 * scale.y;
+    out.m[5]  = r11 * scale.y;
+    out.m[6]  = r21 * scale.y;
+    out.m[8]  = r02 * scale.z;
+    out.m[9]  = r12 * scale.z;
+    out.m[10] = r22 * scale.z;
+    out.m[12] = position.x;
+    out.m[13] = position.y;
+    out.m[14] = position.z;
+    out.m[15] = 1.0f;
+    return out;
+}
+
 // ─── Vulkan memory helpers ───────────────────────────────────────────────────
 
 inline uint32_t findMemoryType(VkPhysicalDevice physicalDevice, uint32_t typeFilter, VkMemoryPropertyFlags properties)

@@ -12,18 +12,16 @@ layout(set = 0, binding = 0) uniform CameraUBO {
 } ubo;
 
 layout(push_constant) uniform InstancePC {
-    vec4 offset;   // xyz = position, w = unused
-    vec4 scale;    // xyz = scale, w = unused
+    mat4 model;
     vec4 color;    // xyz = color, w = alpha
     vec4 lightDir; // xyz = light direction, w = intensity
 } pc;
 
 void main()
 {
-    vec3 instanceScale = max(pc.scale.xyz, vec3(0.001));
-    vec3 worldPos = (inPos * instanceScale) + pc.offset.xyz;
-    gl_Position = ubo.viewProj * vec4(worldPos, 1.0);
+    vec4 worldPos = pc.model * vec4(inPos, 1.0);
+    gl_Position = ubo.viewProj * worldPos;
     vColor = clamp(pc.color.xyz, 0.0, 1.0);
-    vNormal = inNormal;
-    vWorldPos = worldPos;
+    vNormal = transpose(inverse(mat3(pc.model))) * inNormal;
+    vWorldPos = worldPos.xyz;
 }

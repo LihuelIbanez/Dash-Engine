@@ -19,6 +19,7 @@ MeshBuffers::MeshBuffers(MeshBuffers&& other) noexcept
     , indexBuffer_(other.indexBuffer_)
     , indexMemory_(other.indexMemory_)
     , indexCount_(other.indexCount_)
+    , indexType_(other.indexType_)
 {
     other.vertexBuffer_ = VK_NULL_HANDLE;
     other.vertexMemory_ = VK_NULL_HANDLE;
@@ -35,6 +36,7 @@ MeshBuffers& MeshBuffers::operator=(MeshBuffers&& other) noexcept
         indexBuffer_ = other.indexBuffer_;
         indexMemory_ = other.indexMemory_;
         indexCount_ = other.indexCount_;
+        indexType_ = other.indexType_;
         other.vertexBuffer_ = VK_NULL_HANDLE;
         other.vertexMemory_ = VK_NULL_HANDLE;
         other.indexBuffer_ = VK_NULL_HANDLE;
@@ -184,13 +186,15 @@ bool MeshBuffers::initCube(VkPhysicalDevice physicalDevice, VkDevice device)
     vkUnmapMemory(device, indexMemory_);
 
     indexCount_ = static_cast<uint32_t>(indices.size());
+    indexType_ = VK_INDEX_TYPE_UINT16;
     return true;
 }
 
 bool MeshBuffers::initFromData(VkPhysicalDevice physicalDevice, VkDevice device,
                                 const void* vertexData, uint32_t vertexDataSize,
                                 const void* indexData, uint32_t indexDataSize,
-                                uint32_t numIndices)
+                                uint32_t numIndices,
+                                VkIndexType indexType)
 {
     if (!createBuffer(physicalDevice, device, vertexDataSize,
                       VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
@@ -217,6 +221,7 @@ bool MeshBuffers::initFromData(VkPhysicalDevice physicalDevice, VkDevice device,
     vkUnmapMemory(device, indexMemory_);
 
     indexCount_ = numIndices;
+    indexType_ = indexType;
     return true;
 }
 
