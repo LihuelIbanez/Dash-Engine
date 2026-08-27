@@ -159,7 +159,48 @@ static void test_ai_roundtrip()
     check(AIComponent::Behavior::Chase,  "AI Chase roundtrip");
     check(AIComponent::Behavior::Flee,   "AI Flee roundtrip");
 }
+// ── PhysicsComponent roundtrip ──────────────────────────────────────────
+static void test_physics_roundtrip()
+{
+    std::printf("  test_physics_roundtrip\n");
 
+    PhysicsComponent orig;
+    orig.shape = static_cast<int>(ColliderShape::Box);
+    orig.halfExtentX = 0.5f;
+    orig.halfExtentY = 1.25f;
+    orig.halfExtentZ = 0.75f;
+    orig.mass = 4.5f;
+    orig.isStatic = true;
+
+    nlohmann::json j = componentToJson(ComponentVariant{orig});
+    ASSERT(j["type"] == "Physics", "Physics type tag");
+
+    ComponentVariant back = componentFromJson(j);
+    ASSERT(std::holds_alternative<PhysicsComponent>(back), "variant holds PhysicsComponent");
+
+    auto& p = std::get<PhysicsComponent>(back);
+    ASSERT_FEQ(p.halfExtentX, 0.5f,  "halfExtentX");
+    ASSERT_FEQ(p.halfExtentY, 1.25f, "halfExtentY");
+    ASSERT_FEQ(p.halfExtentZ, 0.75f, "halfExtentZ");
+    ASSERT_FEQ(p.mass, 4.5f, "mass");
+    ASSERT(p.isStatic, "isStatic");
+    ASSERT(p.shape == static_cast<int>(ColliderShape::Box), "shape");
+}
+
+// ── Defaults when fields are absent ─────────────────────────────────────
+static void test_physics_defaults()
+{
+    std::printf("  test_physics_defaults\n");
+
+    nlohmann::json j;
+    j["type"] = "Physics";
+    ComponentVariant back = componentFromJson(j);
+    auto& p = std::get<PhysicsComponent>(back);
+
+    ASSERT_FEQ(p.mass, 1.0f, "default mass");
+    ASSERT(!p.isStatic, "dynamic by default");
+    ASSERT_FEQ(p.halfExtentX, 0.3f, "default halfExtentX");
+}
 // ── Unknown type throws ───────────────────────────────────────────────────────
 static void test_unknown_type_throws()
 {
@@ -180,7 +221,8 @@ static void test_type_name_roundtrip()
 
     auto types = {
         ComponentType::Transform, ComponentType::Render, ComponentType::Health,
-        ComponentType::Mana, ComponentType::Stats, ComponentType::Combat, ComponentType::AI
+        ComponentType::Mana, ComponentType::Stats, ComponentType::Combat, ComponentType::AI,
+        ComponentType::Physics
     };
     for (auto t : types) {
         std::string name = componentTypeName(t);
@@ -201,6 +243,8 @@ int main()
     test_stats_roundtrip();
     test_combat_roundtrip();
     test_ai_roundtrip();
+    test_physics_roundtrip();
+    test_physics_defaults();
     test_unknown_type_throws();
     test_type_name_roundtrip();
 

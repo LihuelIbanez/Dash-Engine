@@ -27,6 +27,9 @@ public:
 
     static std::vector<RenderInstance> loadInstances(const LoadedScene& scene);
 
+    // Physics bodies declared by entities carrying a PhysicsComponent.
+    static std::vector<PhysicsSpawn> loadPhysicsBodies(const LoadedScene& scene);
+
     static bool loadPlayerPosition(const LoadedScene& scene, float& outX, float& outZ);
 
     static std::vector<RenderInstance> loadTerrainInstances(

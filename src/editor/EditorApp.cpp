@@ -1742,7 +1742,7 @@ void EditorApp::drawPropertiesPanel()
     // Collect component types not yet present on this entity
     static int addSel = 0;
     std::vector<ComponentType> missing;
-    for (int i = 0; i <= static_cast<int>(ComponentType::AI); ++i) {
+    for (int i = 0; i <= static_cast<int>(ComponentType::Physics); ++i) {
         ComponentType ct = static_cast<ComponentType>(i);
         bool found = false;
         for (const auto& comp : e.components)
@@ -1768,6 +1768,7 @@ void EditorApp::drawPropertiesPanel()
             case ComponentType::Stats:     newComp = StatsComponent{};     break;
             case ComponentType::Combat:    newComp = CombatComponent{};    break;
             case ComponentType::AI:        newComp = AIComponent{};        break;
+            case ComponentType::Physics:   newComp = PhysicsComponent{};   break;
             }
             commandStack_.execute(
                 std::make_unique<AddComponentCommand>(e.id, newComp),

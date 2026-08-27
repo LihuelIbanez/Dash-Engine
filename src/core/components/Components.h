@@ -13,6 +13,7 @@ enum class ComponentType : int {
     Stats     = 4,
     Combat    = 5,
     AI        = 6,
+    Physics   = 7,
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -78,9 +79,22 @@ struct AIComponent {
     float    patrolRadius   = 3.f;
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
+enum class ColliderShape : int {
+    Box = 0,
+};
+
+struct PhysicsComponent {
+    int   shape = static_cast<int>(ColliderShape::Box);
+    float halfExtentX = 0.3f;
+    float halfExtentY = 0.3f;
+    float halfExtentZ = 0.3f;
+    float mass = 1.f;
+    bool  isStatic = false;
+};
+
+// ────────────────────────────────────────────────────────────────────
 // ComponentVariant — type-safe union of all component types
-// ─────────────────────────────────────────────────────────────────────────────
+// ────────────────────────────────────────────────────────────────────
 using ComponentVariant = std::variant<
     TransformComponent,
     RenderComponent,
@@ -88,5 +102,6 @@ using ComponentVariant = std::variant<
     ManaComponent,
     StatsComponent,
     CombatComponent,
-    AIComponent
+    AIComponent,
+    PhysicsComponent
 >;

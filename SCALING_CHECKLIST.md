@@ -149,19 +149,19 @@ Spec completa: `planning/tasks/23_SPRINT15_COMPONENTES_3D.md`
 
 ### 23) Mallas y materiales reales (Fase 2)
 - [x] 15.4 Resolucion de `RenderComponent::mesh` via `AssetCache3D`.
-- [ ] 15.5 `MaterialAsset` minimo + importer.
-- [ ] 15.6 Implementacion Vulkan de `RenderMode::BillboardSprite`.
+- [x] 15.5 `MaterialAsset` minimo (importer y listado en Asset Browser pendientes).
+- [x] 15.6 Implementacion Vulkan de `RenderMode::BillboardSprite`.
 
 ### 24) Fisica por entidad (Fase 3)
-- [ ] 15.7 `PhysicsComponent` serializable + inspector + migracion de escena.
-- [ ] 15.8 Cuerpos fisicos por entidad y eventos de colision.
+- [x] 15.7 `PhysicsComponent` serializable + inspector + bump de version de escena (v6).
+- [x] 15.8 Cuerpos fisicos por entidad y eventos de colision tipados.
 
 ### 25) Rendimiento (Fase 4)
-- [ ] 15.9 Batching por malla e instancing via SSBO.
-- [ ] 15.10 Frustum culling y ordenamiento por capa.
+- [ ] 15.9 Batching por malla e instancing — **postergada**: el culling ya redujo los draws 97.7%, medir antes de optimizar.
+- [x] 15.10 Frustum culling y ordenamiento por capa (442 instancias → 10 dibujadas).
 
 ### 26) Cobertura de tests (Fase 5)
-- [~] 15.11 Tests headless de `SceneLoader` (hecho) y construccion de `RenderInstance`; faltan mesh resolution y culling.
+- [x] 15.11 Tests headless: `test_scene_loader_3d`, `test_material_asset`, `test_frustum_culling`.
 
 ## Definition of Done (Escalado inicial)
 
@@ -194,7 +194,7 @@ Marca como completado cuando se cumpla todo:
 | Sprint 12 - Portabilidad Windows | ✅ Completada | 100% (D106-D110) |
 | Sprint 13 - Visual Polish | ✅ Completada | 100% (tema VS Code, status bar, audit) |
 | Auditoria Tecnica Ago-2026 | ✅ Completada | 100% (3 bugs + 6 mejoras — ver planning/tasks/22_AUDIT_AGOSTO_2026.md) |
-| Sprint 15 - Componentes 3D | 🟡 En progreso | Fase 1 completada (ver planning/tasks/23_SPRINT15_COMPONENTES_3D.md) |
+| Sprint 15 - Componentes 3D | 🟡 En progreso | Fases 1-3 + culling (ver planning/tasks/23_SPRINT15_COMPONENTES_3D.md) |
 
 ## Notas
 

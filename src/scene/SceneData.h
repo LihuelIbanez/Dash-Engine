@@ -68,7 +68,10 @@ struct TextureOverride {
 // SceneData – everything needed to describe one scenario / level
 // ─────────────────────────────────────────────────────────────────────────────
 struct SceneData {
-    static constexpr int kCurrentVersion = 5;
+    // v6 adds PhysicsComponent. No data migration is needed (the component is
+    // optional), but the bump makes older builds reject the scene up-front
+    // instead of failing on an unknown component type.
+    static constexpr int kCurrentVersion = 6;
 
     struct Render3DSettings {
         bool  useVulkan3D = true;

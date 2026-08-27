@@ -9,7 +9,7 @@
 
 const ComponentMeta& getComponentMeta(ComponentType type)
 {
-    static const std::array<ComponentMeta, 7> kReg = {
+    static const std::array<ComponentMeta, 8> kReg = {
         ComponentMeta{"Transform", ComponentType::Transform, {
             {"x", PropertyType::Float, offsetof(TransformComponent, x), {}},
             {"y", PropertyType::Float, offsetof(TransformComponent, y), {}},
@@ -54,9 +54,17 @@ const ComponentMeta& getComponentMeta(ComponentType type)
             {"detectionRange", PropertyType::Float, offsetof(AIComponent, detectionRange), {}},
             {"patrolRadius",   PropertyType::Float, offsetof(AIComponent, patrolRadius),   {}},
         }},
+        ComponentMeta{"Physics", ComponentType::Physics, {
+            {"shape",       PropertyType::Enum,  offsetof(PhysicsComponent, shape),       {"Box"}},
+            {"halfExtentX", PropertyType::Float, offsetof(PhysicsComponent, halfExtentX), {}},
+            {"halfExtentY", PropertyType::Float, offsetof(PhysicsComponent, halfExtentY), {}},
+            {"halfExtentZ", PropertyType::Float, offsetof(PhysicsComponent, halfExtentZ), {}},
+            {"mass",        PropertyType::Float, offsetof(PhysicsComponent, mass),        {}},
+            {"isStatic",    PropertyType::Bool,  offsetof(PhysicsComponent, isStatic),    {}},
+        }},
     };
     int idx = static_cast<int>(type);
-    if (idx < 0 || idx >= 7)
+    if (idx < 0 || idx >= 8)
         throw std::runtime_error("getComponentMeta: unknown ComponentType");
     return kReg[idx];
 }
@@ -73,7 +81,8 @@ ComponentType getVariantType(const ComponentVariant& comp)
         else if constexpr (std::is_same_v<T, ManaComponent>)    return ComponentType::Mana;
         else if constexpr (std::is_same_v<T, StatsComponent>)   return ComponentType::Stats;
         else if constexpr (std::is_same_v<T, CombatComponent>)  return ComponentType::Combat;
-        else                                                     return ComponentType::AI;
+        else if constexpr (std::is_same_v<T, AIComponent>)      return ComponentType::AI;
+        else                                                     return ComponentType::Physics;
     }, comp);
 }
 

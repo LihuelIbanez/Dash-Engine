@@ -53,3 +53,11 @@ struct LootDropEvent {
     std::vector<DroppedItem> items;
 };
 
+// Emitted when two physics bodies start or stop overlapping.
+struct CollisionEvent {
+    enum class Phase : int { Enter = 0, Stay = 1, Exit = 2 };
+    Phase    phase = Phase::Enter;
+    uint64_t entityA = 0;   // 0 = body not mapped to a scene entity
+    uint64_t entityB = 0;
+};
+

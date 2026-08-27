@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include <vulkan/vulkan.h>
@@ -9,6 +10,7 @@
 #include "rendering/mesh/MeshBuffers.h"
 #include "rendering/textures/TextureLoader.h"
 #include "assets/cache/AssetCache3D.h"
+#include "assets/MaterialAsset.h"
 #include "rendering/platform/WindowContext.h"
 #include "rendering/vulkan/DeviceContext.h"
 #include "rendering/vulkan/EditorBridge.h"
@@ -19,6 +21,8 @@
 #include "rendering/vulkan/RenderTypes.h"
 #include "game/physics/PhysicsWorld.h"
 #include "game/physics/TransformProxy.h"
+#include "events/EventDispatcher.h"
+#include "events/GameEvents.h"
 #include "input/InputBindings3D.h"
 #include "world/TerrainMesh.h"
 
@@ -52,6 +56,16 @@ private:
     void resolveSceneMeshes();
     const MeshBuffers* resolveMesh(const std::string& meshId);
 
+    // Resolves RenderComponent::material, allocating one descriptor set per
+    // material per swapchain image so textures can be bound per draw.
+    // Registers a physics body per entity carrying a PhysicsComponent.
+    void spawnSceneryPhysicsBodies(const LoadedScene& scene);
+    // Copies simulated body positions back into their render instances.
+    void syncPhysicsToInstances();
+
+    bool resolveSceneMaterials();
+    void destroySceneMaterials();
+
     VkInstance instance_ = VK_NULL_HANDLE;
     VkSurfaceKHR surface_ = VK_NULL_HANDLE;
 
@@ -81,6 +95,9 @@ private:
     VkPipeline waterPipeline_ = VK_NULL_HANDLE;
     MeshBuffers waterMeshBuffers_;
 
+    VkPipelineLayout billboardPipelineLayout_ = VK_NULL_HANDLE;
+    VkPipeline billboardPipeline_ = VK_NULL_HANDLE;
+
     bool initialized_ = false;
 
     AssetCache3D assetCache_;
@@ -91,6 +108,18 @@ private:
     std::vector<RenderInstance> sceneInstances_;
     // Resolved mesh per scene instance, aligned by index with sceneInstances_.
     std::vector<const MeshBuffers*> sceneInstanceMeshes_;
+
+    struct MaterialGpu {
+        MaterialAsset asset;
+        TextureResource texture{};
+        bool ownsTexture = false;
+        std::vector<VkDescriptorSet> sets;  // one per swapchain image
+    };
+    std::vector<MaterialGpu> materials_;
+    // Index into materials_ per scene instance; -1 = default descriptor set.
+    std::vector<int> sceneInstanceMaterials_;
+    VkDescriptorPool materialDescriptorPool_ = VK_NULL_HANDLE;
+
     std::vector<RenderInstance> terrainInstances_;
     std::vector<float> terrainHeightMap_;
     int terrainMapWidth_ = 0;
@@ -100,6 +129,14 @@ private:
     int floorBodyId_ = -1;
     int cubeBodyId_ = -1;
     float fixedAccumulator_ = 0.0f;
+
+    // Physics bodies spawned from PhysicsComponent, keyed by body id.
+    std::unordered_map<int, uint64_t> bodyToEntity_;
+    EventDispatcher events_;
+
+    // Frustum culling counters from the most recent recorded frame.
+    uint32_t lastDrawnInstances_ = 0;
+    uint32_t lastCulledInstances_ = 0;
 
     CameraController camera_;
     PlayerController player_;

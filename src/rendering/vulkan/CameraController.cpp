@@ -160,4 +160,25 @@ Mat4 CameraController::computeViewProjection(float aspectRatio) const
     return multiply(proj, view);
 }
 
+Vec3 CameraController::forwardVector() const
+{
+    const float yaw = yawDegrees_ * 0.0174532925f;
+    const float pitch = pitchDegrees_ * 0.0174532925f;
+    return normalize({
+        std::cos(yaw) * std::cos(pitch),
+        std::sin(pitch),
+        std::sin(yaw) * std::cos(pitch)
+    });
+}
+
+Vec3 CameraController::rightVector() const
+{
+    return normalize(cross(forwardVector(), {0.0f, 1.0f, 0.0f}));
+}
+
+Vec3 CameraController::upVector() const
+{
+    return cross(rightVector(), forwardVector());
+}
+
 } // namespace dash::vkexp

@@ -200,7 +200,7 @@ Dash-Engine/
 - Instrumentado: Game::update(), Game::render()
 
 ### Testing Automatizado
-- Suite automatizada en `ctest` (editor, runtime y capa SQLite): **26/26 tests en verde** (última verificación: 2026-08-27).
+- Suite automatizada en `ctest` (editor, runtime y capa SQLite): **29/29 tests en verde** (última verificación: 2026-08-27).
 - Incluye cobertura para:
   - Serialización de escenas y comandos undo/redo.
   - Sistemas runtime (pathfinding, save/load, gameplay database).
@@ -232,7 +232,7 @@ Dash-Engine/
 - [x] Sprint 10 (D89-D93): audio espacial, triggers por eventos, input mapping y persistencia.
 - [x] Sprint 11 (D97-D101): importación 3D (.obj/.gltf), texturas y cache de assets.
 - [x] Sprint 12 (D106-D110): portabilidad Windows, CI/CD y empaquetado final.
-- [ ] **Sprint 15 — Componentes 3D:** conectar `RenderComponent`/`TransformComponent` al renderer Vulkan (rotación, mallas y materiales reales), física por entidad, batching + frustum culling y cobertura de tests del pipeline 3D. Spec: [`planning/tasks/23_SPRINT15_COMPONENTES_3D.md`](planning/tasks/23_SPRINT15_COMPONENTES_3D.md).
+- [ ] **Sprint 15 — Componentes 3D** (en progreso): `RenderComponent`/`TransformComponent` conectados al renderer Vulkan (rotación real, mallas GLTF y materiales por entidad), billboards, física por entidad con eventos de colisión tipados y frustum culling. Pendiente: instancing (15.9). Spec: [`planning/tasks/23_SPRINT15_COMPONENTES_3D.md`](planning/tasks/23_SPRINT15_COMPONENTES_3D.md).
 
 ---
 

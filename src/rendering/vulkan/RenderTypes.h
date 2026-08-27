@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <string>
 
 #include "game/physics/PhysicsWorld.h"
@@ -27,6 +28,17 @@ struct RenderInstance {
     int renderMode = static_cast<int>(InstanceRenderMode::Mesh3D);
     int layer = 0;
     bool visible = true;
+
+    uint64_t entityId = 0;
+};
+
+// A physics body requested by an entity's PhysicsComponent.
+struct PhysicsSpawn {
+    uint64_t entityId = 0;
+    dash::physics::Vec3 position{};
+    dash::physics::Vec3 halfExtents{0.3f, 0.3f, 0.3f};
+    float mass = 1.0f;
+    bool isStatic = false;
 };
 
 } // namespace dash::vkexp

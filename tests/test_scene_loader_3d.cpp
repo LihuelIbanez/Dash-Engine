@@ -205,6 +205,59 @@ static void test_multiple_meshes_preserved()
     ASSERT_EQ(cubeCount, 2, "player default + explicit cube");
 }
 
+// ── Test: only entities with PhysicsComponent produce bodies ────────────────
+static void test_physics_bodies_from_components()
+{
+    std::printf("  test_physics_bodies_from_components\n");
+
+    SceneData scene;
+    scene.createDefault();
+    // Player: transform only, no physics -> must NOT spawn a body.
+    scene.entities[0].components.clear();
+    scene.entities[0].components.push_back(TransformComponent{1.f, 2.f});
+
+    EntityData dynamic;
+    dynamic.id   = scene.allocateEntityId();
+    dynamic.type = EntityData::Type::Enemy;
+    dynamic.name = "Crate";
+    dynamic.x = 10.f; dynamic.y = 12.f;
+    TransformComponent dtf; dtf.x = 10.f; dtf.y = 12.f; dtf.z = 2.f;
+    dynamic.components.push_back(dtf);
+    PhysicsComponent dp;
+    dp.halfExtentX = 0.5f; dp.halfExtentY = 0.6f; dp.halfExtentZ = 0.7f;
+    dp.mass = 3.f; dp.isStatic = false;
+    dynamic.components.push_back(dp);
+    scene.entities.push_back(dynamic);
+
+    EntityData staticBody;
+    staticBody.id   = scene.allocateEntityId();
+    staticBody.type = EntityData::Type::Enemy;
+    staticBody.name = "Wall";
+    staticBody.x = 20.f; staticBody.y = 20.f;
+    staticBody.components.push_back(TransformComponent{20.f, 20.f});
+    PhysicsComponent sp; sp.isStatic = true;
+    staticBody.components.push_back(sp);
+    scene.entities.push_back(staticBody);
+
+    ASSERT(scene.saveToFile(kTempScene), "scene saved");
+
+    const auto loaded = SceneLoader::load(kTempScene);
+    const auto bodies = SceneLoader::loadPhysicsBodies(loaded);
+    ASSERT_EQ(bodies.size(), (size_t)2, "only entities with PhysicsComponent spawn bodies");
+    if (bodies.size() < 2) return;
+
+    const auto& b0 = bodies[0];
+    ASSERT_EQ(b0.entityId, dynamic.id, "body maps back to its entity");
+    ASSERT_FEQ(b0.position.x, 10.f, "body x from transform");
+    ASSERT_FEQ(b0.position.z, 12.f, "body z from transform y");
+    ASSERT_FEQ(b0.position.y, kEnemyBaseHeight + 2.f, "body height includes transform z");
+    ASSERT_FEQ(b0.halfExtents.y, 0.6f, "half extents preserved");
+    ASSERT_FEQ(b0.mass, 3.f, "mass preserved");
+    ASSERT(!b0.isStatic, "dynamic flag preserved");
+
+    ASSERT(bodies[1].isStatic, "static flag preserved");
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 int main()
 {
@@ -216,6 +269,7 @@ int main()
     test_player_position_uses_transform();
     test_missing_file();
     test_multiple_meshes_preserved();
+    test_physics_bodies_from_components();
 
     std::error_code ec;
     fs::remove(kTempScene, ec);

@@ -626,3 +626,23 @@ target_link_libraries(test_scene_loader_3d PRIVATE
 target_compile_options(test_scene_loader_3d PRIVATE ${DASH_COMPILE_FLAGS})
 add_test(NAME test_scene_loader_3d COMMAND test_scene_loader_3d)
 
+# ── MaterialAsset serialization (Sprint 15) ────────────────────────────────
+add_executable(test_material_asset
+    test_material_asset.cpp
+    ${CMAKE_SOURCE_DIR}/src/assets/MaterialAsset.cpp
+)
+target_include_directories(test_material_asset PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/src/assets
+)
+target_link_libraries(test_material_asset PRIVATE nlohmann_json::nlohmann_json)
+target_compile_options(test_material_asset PRIVATE ${DASH_COMPILE_FLAGS})
+add_test(NAME test_material_asset COMMAND test_material_asset)
+
+# ── Frustum culling math (Sprint 15) ───────────────────────────────────────
+# Header-only and Vulkan-free, so this runs anywhere.
+add_executable(test_frustum_culling test_frustum_culling.cpp)
+target_include_directories(test_frustum_culling PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_compile_options(test_frustum_culling PRIVATE ${DASH_COMPILE_FLAGS})
+add_test(NAME test_frustum_culling COMMAND test_frustum_culling)
+

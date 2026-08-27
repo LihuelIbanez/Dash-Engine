@@ -79,6 +79,7 @@ std::vector<RenderInstance> SceneLoader::loadInstances(const LoadedScene& scene)
 
         RenderInstance inst;
         inst.isPlayer = isPlayer;
+        inst.entityId = e.id;
         inst.color = isPlayer ? dash::physics::Vec3{0.30f, 0.58f, 0.95f}
                               : dash::physics::Vec3{0.82f, 0.34f, 0.34f};
         const dash::physics::Vec3 baseScale = isPlayer
@@ -129,6 +130,37 @@ bool SceneLoader::loadPlayerPosition(const LoadedScene& scene, float& outX, floa
         return true;
     }
     return false;
+}
+
+std::vector<PhysicsSpawn> SceneLoader::loadPhysicsBodies(const LoadedScene& scene)
+{
+    std::vector<PhysicsSpawn> out;
+    if (!scene.valid) return out;
+
+    for (const auto& e : scene.data.entities) {
+        const PhysicsComponent* phys = nullptr;
+        const TransformComponent* tf = nullptr;
+        for (const auto& c : e.components) {
+            if (const auto* p = std::get_if<PhysicsComponent>(&c)) phys = p;
+            else if (const auto* t = std::get_if<TransformComponent>(&c)) tf = t;
+        }
+        if (!phys) continue;
+
+        const bool isPlayer = (e.type == EntityData::Type::Player);
+        const float baseHeight = isPlayer ? kPlayerBaseHeight : kEnemyBaseHeight;
+
+        PhysicsSpawn spawn;
+        spawn.entityId = e.id;
+        spawn.position = tf ? dash::physics::Vec3{tf->x, baseHeight + tf->z, tf->y}
+                            : dash::physics::Vec3{e.x, baseHeight, e.y};
+        spawn.halfExtents = {std::max(0.01f, phys->halfExtentX),
+                             std::max(0.01f, phys->halfExtentY),
+                             std::max(0.01f, phys->halfExtentZ)};
+        spawn.mass = std::max(0.0001f, phys->mass);
+        spawn.isStatic = phys->isStatic;
+        out.push_back(spawn);
+    }
+    return out;
 }
 
 dash::physics::Vec3 SceneLoader::getTileColor(int tileType)

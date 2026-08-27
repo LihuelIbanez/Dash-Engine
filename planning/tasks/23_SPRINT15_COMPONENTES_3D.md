@@ -4,7 +4,7 @@
 
 Cerrar la desconexion entre el modelo de componentes del editor y el renderer Vulkan. Hoy `RenderComponent` y los campos 3D de `TransformComponent` son datos muertos: `SceneLoader` solo lee `x`, `y` y `type` del JSON y hardcodea color, escala y altura, por lo que toda entidad se dibuja como el mismo cubo. La infraestructura de importacion 3D (Assimp, `MeshBuffers::loadFromFile`, `AssetCache3D`) existe desde Sprint 11 pero ninguna entidad la usa.
 
-**Estado: 🟡 EN PROGRESO — Fase 1 completada (15.1, 15.2, 15.3) + 15.4. Tests: 27/27 en verde.**
+**Estado: 🟡 EN PROGRESO — Fases 1, 2, 3 completadas y Fase 4 parcial (15.10). Tests: 29/29 en verde. Pendiente: 15.9 (instancing, postergada con justificacion).**
 
 ### Diagnostico de partida (auditoria 2026-08-27)
 
@@ -189,6 +189,8 @@ Con 4 entidades apuntando a la misma malla: **1 sola carga desde disco, 1 sola e
 
 ## Tarea 15.5 — `MaterialAsset` minimo
 
+**Estado: ✅ Completada**
+
 ### Objetivo
 Dar consumidor al campo `RenderComponent::material`, que hoy es un string sin efecto.
 
@@ -202,7 +204,9 @@ Definir un material serializable con textura albedo, color base y parametros esp
 
 ### Archivos creados
 1. `src/assets/MaterialAsset.h` / `.cpp` — Estructura y serializacion
-2. `src/assets/importers/MaterialImporter.h` / `.cpp` — Importer
+
+### Archivos previstos pero no creados
+1. ~~`src/assets/importers/MaterialImporter.h` / `.cpp`~~ — ver "Decisiones de alcance"
 
 ### Archivos modificados
 1. `src/assets/ImportManager.cpp` — Registro del importer
@@ -213,9 +217,44 @@ Definir un material serializable con textura albedo, color base y parametros esp
 - Dos entidades con la misma malla y materiales distintos se ven diferentes.
 - Asset Browser lista los materiales con su GUID.
 
+### Implementacion
+
+#### Prerequisito no previsto en el spec: binding de texturas por draw
+El diseno original tenia **un solo descriptor set por imagen de swapchain**, con `binding 1` apuntando a una unica `defaultTexture_` global (`maxSets = swapchain_.imageCount()`). Sin resolver eso, materiales distintos no pueden verse diferentes. Se evaluaron dos caminos:
+
+1. Set 1 dedicado a material — mas limpio a largo plazo, pero cambia el pipeline layout compartido por los 4 pipelines (basic, textured, terrain, water) y obliga a tocar todos los shaders.
+2. **N sets con el layout actual** (uno por material x imagen), bindeando el correcto por draw.
+
+Se eligio la **opcion 2**: cero cambios de shaders y de pipeline layout, mucho menor riesgo, y suficiente para 15.5 y 15.6.
+
+#### Cambios
+- `src/assets/MaterialAsset.h/.cpp`: asset serializable con `guid`, `name`, `albedoTexture` y `baseColor`.
+- `Renderer::resolveSceneMaterials()`: recolecta los material ids distintos, carga cada definicion y su textura albedo, crea un **pool de descriptors separado** (`materialDescriptorPool_`) dimensionado como `materiales x imagenes` y escribe un set por combinacion. El pool es aparte del original porque los materiales solo se conocen despues de cargar la escena, mientras que `createDescriptors()` corre antes.
+- El loop de dibujo bindea el descriptor set solo cuando cambia el material, y multiplica `baseColor` sobre el color de instancia.
+- El orden de instancias es por `meshId` y luego `materialId`, para minimizar rebinds de ambos.
+- `destroySceneMaterials()` libera texturas propias y el pool; se invoca desde `shutdown()`.
+
+#### Decisiones de alcance
+- `"default"` (valor por defecto de `RenderComponent::material`) se trata igual que vacio: usa el descriptor set global. Sin esto, cada entidad sin material explicito generaba un warning espurio y descriptor sets desperdiciados (se veia como `Resolved 5 material(s)` en vez de 4).
+- **No** se agregaron campos `specularStrength`/`shininess` al asset aunque el spec los mencionaba: los shaders actuales no los consumen, y agregarlos habria creado exactamente el tipo de dato muerto que esta auditoria vino a eliminar. Se agregaran cuando el modelo de iluminacion los use.
+- El importer (`MaterialImporter`) y el listado en Asset Browser quedan pendientes; el renderer resuelve los materiales por path directo. El criterio "Asset Browser lista los materiales" no esta cumplido todavia.
+
+### Verificacion realizada
+Escena con 4 materiales: textura real, solo color base, textura rota y definicion inexistente.
+```
+[Material] Definition not found: 'no_existe.mat.json' (using defaults)
+[Material] '/tmp/mattest/broken.mat.json': albedo texture 'no_existe.png' unavailable (using white)
+[Material] Resolved 4 material(s).
+[TextureLoader] Loaded texture 4096x2048 from .../Material__wolf_col_tga_diffuse_jpeg.jpg
+[D76] Smoke test: 120 frames rendered successfully.
+```
+Test `test_material_asset` (round-trip, defaults, archivo faltante, JSON malformado).
+
 ---
 
 ## Tarea 15.6 — Implementar `RenderMode::BillboardSprite`
+
+**Estado: ✅ Completada**
 
 ### Objetivo
 Dar implementacion Vulkan al modo billboard, hoy presente en el enum y editable desde el inspector pero sin efecto.
@@ -239,11 +278,31 @@ Pipeline de quad orientado a camara que usa `RenderComponent::sprite`.
 - Cambiar `renderMode` en el inspector alterna entre malla 3D y billboard sin reiniciar.
 - El billboard mantiene su orientacion al rotar la camara.
 
+### Implementacion
+- `assets/shaders/billboard.vert/.frag`: el quad se genera **proceduralmente desde `gl_VertexIndex`** (6 vertices, sin vertex buffer ni index buffer). El fragment descarta pixeles con alpha < 0.05.
+- `PipelineBuilder::createBillboardPipeline()`: `vertexBindingDescriptionCount = 0`, alpha blending, depth test ON y depth write OFF (para que los sprites transparentes no se ocluyan entre si).
+- `CameraController::forwardVector()/rightVector()/upVector()`: ejes de camara, con la misma matematica que `computeViewProjection()`.
+- Los billboards se saltan en el pase opaco y se dibujan en un **segundo pase despues**, para blending correcto contra las mallas.
+
+#### Decision de diseno: ejes de camara por push constant
+Orientar el quad requiere los ejes right/up de la camara. La opcion obvia era agregar la matriz `view` al `CameraUBO`, pero ese UBO lo declaran **todos** los shaders (basic, textured, terrain, water) y tocarlo arriesgaba regresiones en un renderer que ya funcionaba. En su lugar el billboard tiene su **propio push constant range** (20 floats: center, size, color, camRight, camUp), aislado del resto de pipelines. Cero impacto sobre los shaders existentes.
+
+### Verificacion realizada
+Escena mezclando 2 mallas 3D y 2 billboards con materiales distintos:
+```
+[Material] Resolved 2 material(s).
+[Billboard] Graphics pipeline created successfully.
+[TextureLoader] Loaded texture 4096x2048 from .../Material__wolf_col_tga_diffuse_jpeg.jpg
+[D76] Smoke test: 120 frames rendered successfully.
+```
+
 ---
 
 ## Fase 3 — Fisica por entidad
 
 ## Tarea 15.7 — `PhysicsComponent`
+
+**Estado: ✅ Completada**
 
 ### Objetivo
 Permitir que las entidades de escena tengan cuerpo fisico. Hoy `PhysicsWorld` solo administra el cubo de demo y un plano estatico.
@@ -267,9 +326,23 @@ Nuevo componente serializable, editable por el inspector generico y con soporte 
 - Escenas viejas cargan sin el componente y sin errores.
 - `test_component_serialization` cubre el round-trip del componente nuevo.
 
+### Implementacion
+- `PhysicsComponent{shape, halfExtentX/Y/Z, mass, isStatic}` + enum `ColliderShape`, con `ComponentType::Physics = 7` (sin reordenar los ids existentes).
+- Serializacion en `ComponentSerialization.cpp` (nombre, to/from JSON con defaults).
+- `Reflection.cpp`: `ComponentMeta` registrado, con el array de registro ampliado de 7 a 8 y el bound check actualizado. Esto lo hace editable desde el Inspector generico con undo/redo, sin escribir UI especifica.
+- `EditorApp.cpp`: el menu "Add Component" iteraba hasta `ComponentType::AI` hardcodeado; ahora llega hasta `Physics` y el `switch` de construccion lo contempla.
+
+#### Sobre el bump de version
+`kCurrentVersion` 5 → 6. **No hay migracion de datos**: el componente es opcional y las escenas viejas cargan sin el. El bump existe para que un build anterior **rechace la escena por version** con un mensaje claro, en vez de fallar con `Unknown component type: Physics` al parsear. Se documento asi en el header en vez de escribir una migracion vacia.
+
+### Verificacion realizada
+Escena legacy sin `sceneVersion` sigue cargando (`scene instances loaded: 6`). Tests `test_physics_roundtrip` y `test_physics_defaults`, mas el round-trip nombre↔tipo extendido.
+
 ---
 
 ## Tarea 15.8 — Cuerpos fisicos por entidad y eventos de colision
+
+**Estado: ✅ Completada**
 
 ### Objetivo
 Instanciar un cuerpo en `PhysicsWorld` por cada entidad con `PhysicsComponent` y conectar las colisiones al `EventDispatcher` existente.
@@ -292,11 +365,39 @@ Reemplazar el registro hardcodeado del cubo demo por un registro derivado de la 
 - `test_physics_determinism` sigue pasando.
 - Escena sin `PhysicsComponent` se comporta como hoy.
 
+### Implementacion
+- `SceneLoader::loadPhysicsBodies()` devuelve una lista de `PhysicsSpawn` **separada** de los `RenderInstance`, para no mezclar datos de fisica dentro de una estructura de render. `RenderInstance` solo gano `entityId`, que es el nexo entre ambas listas (y sirve tambien para seleccion/picking).
+- `Renderer::spawnSceneryPhysicsBodies()` crea un cuerpo por entidad con `PhysicsComponent` y mantiene `bodyToEntity_` (bodyId → entityId). Los cuerpos estaticos se registran con masa 0.
+- `Renderer::syncPhysicsToInstances()` copia las posiciones simuladas de vuelta a las instancias tras cada paso de fisica.
+- Nuevo evento tipado `CollisionEvent{phase, entityA, entityB}` en `GameEvents.h`, emitido por el `EventDispatcher` del renderer. Los cuerpos no mapeados a una entidad (piso y cubo demo de Sprint 9) reportan `entityId = 0`, que es la semantica documentada de "sin entidad asociada".
+
+### Verificacion realizada
+Escena con 3 cajas dinamicas, 1 cuerpo estatico y 1 entidad sin `PhysicsComponent`:
+```
+[VSTEP] scene instances loaded: 6
+[Physics] Spawned 4 body(ies) from PhysicsComponent.
+[D82] Collision Enter: 1 <-> 4 (entities 2 <-> 5)
+[D82] Collision Enter: 1 <-> 2 (entities 2 <-> 3)
+[D76] Smoke test: 120 frames rendered successfully.
+```
+6 instancias pero solo 4 cuerpos: la entidad sin componente no genera uno. Las colisiones resuelven a entity ids reales. `test_physics_determinism` sin regresion.
+
 ---
 
 ## Fase 4 — Rendimiento
 
 ## Tarea 15.9 — Batching por malla e instancing
+
+**Estado: ⏸️ Postergada — ver nota de reevaluacion**
+
+### Nota de reevaluacion (tras completar 15.10)
+El spec asumia que el cuello de botella era "1 draw call + 1 push constant por entidad". Con **frustum culling ya implementado**, la escena de 442 entidades emite **10 draws**, no 442: el culling captura la mayor parte del beneficio que se le atribuia al instancing, y a un costo mucho menor.
+
+El instancing sigue teniendo valor para escenas donde muchas entidades **si** estan en camara simultaneamente (multitudes, vegetacion densa), pero:
+- La via por SSBO obliga a agregar un binding al `descriptorSetLayout_` **compartido por los 5 pipelines** (basic, textured, terrain, water, billboard) y por todos los descriptor sets de material.
+- La via por vertex buffer con `VK_VERTEX_INPUT_RATE_INSTANCE` evita tocar los descriptors, pero exige un pipeline y un shader adicionales, mas gestion de buffers de instancia por frame.
+
+Ambas son cambios de superficie amplia sobre un render path que hoy funciona y esta verificado. **Recomendacion:** hacerlo como tarea aislada, con una escena de benchmark que demuestre el cuello de botella primero (medir antes de optimizar), en vez de cerrarlo al final de este sprint.
 
 ### Objetivo
 Eliminar el cuello de botella de 1 draw call + 1 push constant por entidad, que no escala mas alla de ~100 entidades.
@@ -321,6 +422,8 @@ Agrupar instancias por malla y emitir draws instanciados con los transforms en u
 
 ## Tarea 15.10 — Frustum culling y ordenamiento por capa
 
+**Estado: ✅ Completada**
+
 ### Objetivo
 No emitir trabajo por geometria fuera de camara y respetar `RenderComponent::layer` para el blending correcto.
 
@@ -338,6 +441,23 @@ Culling por AABB contra el frustum antes de construir los batches; orden estable
 ### Criterio de aceptacion
 - Contador de entidades visibles baja al alejar la camara del cluster de entidades.
 - Sin z-fighting ni parpadeo en translucidos.
+
+### Implementacion
+- `src/rendering/Frustum.h`: extraccion de los 6 planos por Gribb-Hartmann desde la matriz view-projection, y test AABB por "vertice positivo". Se dejo **libre de tipos Vulkan** a proposito para poder testearlo headless; opera sobre un `float[16]` column-major.
+- Plano near tomado como `row2` (no `row3 + row2`), que es lo correcto para el rango de profundidad [0,1] de Vulkan en vez del [-1,1] de OpenGL.
+- El culling se aplica tanto a las mallas opacas como a los billboards.
+- Orden de instancias ahora es **layer → mesh → material**: la capa manda porque define el orden de dibujo (transparencias), y el agrupamiento por mesh/material solo reduce rebinds dentro de una misma capa.
+- Contadores `lastDrawnInstances_` / `lastCulledInstances_` reportados al final del smoke test.
+
+### Verificacion realizada
+Test unitario `test_frustum_culling` (22 aserciones): puntos al frente visibles, geometria detras de la camara / mas alla del plano lejano / muy lateral descartada, caja grande a caballo del frustum conservada (sin falsos negativos), y barrido sobre el eje de vision.
+
+En runtime, escena con 442 entidades esparcidas en un mundo de 256x256:
+```
+[VSTEP] scene instances loaded: 442
+[Culling] Last frame: 10 drawn, 432 culled (of 442 instances).
+```
+**97.7% menos draw calls.**
 
 ---
 
@@ -378,37 +498,58 @@ Pendiente: tests de resolucion de malla (15.4) y de frustum culling (15.10), que
 
 ## Resumen de archivos
 
+## Resumen de archivos
+
+> Refleja lo **efectivamente entregado**. Los archivos que el plan original preveia
+> pero que no se implementaron estan listados aparte, mas abajo.
+
 | Archivo | Cambios |
 |---------|---------|
-| `src/rendering/vulkan/RenderTypes.h` | `RenderInstance` extendido (rotacion, mesh, material, visible, layer) |
-| `src/rendering/vulkan/SceneLoader.h/.cpp` | Consume `SceneData`; parseo unico |
-| `src/rendering/vulkan/Renderer.h/.cpp` | Matriz modelo, `AssetCache3D` real, cuerpos fisicos, batching, culling |
-| `src/rendering/vulkan/PipelineBuilder.cpp` | Push constants nuevos, pipeline billboard |
-| `src/rendering/vulkan/CameraController.cpp` | Planos del frustum |
-| `src/rendering/vulkan/VkMath.h` | Helpers TRS / normal matrix |
-| `assets/shaders/basic.vert` | `mat4 model`, normal matrix, SSBO de instancias |
-| `assets/shaders/textured.vert` | `mat4 model`, normal matrix |
-| `assets/shaders/billboard.vert/.frag` | Nuevos |
-| `src/core/components/Components.h` | `PhysicsComponent` |
-| `src/core/components/ComponentSerialization.cpp` | Serializacion del componente nuevo |
-| `src/core/components/Reflection.cpp` | Metadata para el inspector |
-| `src/core/events/GameEvents.h` | Evento de colision |
-| `src/assets/MaterialAsset.h/.cpp` | Nuevo |
-| `src/assets/importers/MaterialImporter.h/.cpp` | Nuevo |
-| `src/assets/ImportManager.cpp` | Registro del importer |
-| `src/assets/AssetTypes.h` | `AssetType::Material` |
-| `src/editor/SceneData.cpp` | Bump de version + migracion |
-| `tests/test_scene_loader_3d.cpp` | Nuevo |
-| `tests/test_render_instance_build.cpp` | Nuevo |
-| `tests/CMakeLists.txt` | Registro de tests |
-| `CMakeLists.txt` | Shaders nuevos, `SceneData` en `vulkan_experimental` |
+| `src/rendering/vulkan/RenderTypes.h` | `RenderInstance` extendido (rotacion, mesh, material, visible, layer, entityId); `PhysicsSpawn` |
+| `src/rendering/vulkan/SceneLoader.h/.cpp` | Consume `SceneData`; parseo unico; `loadPhysicsBodies()` |
+| `src/rendering/vulkan/Renderer.h/.cpp` | Matriz modelo, `AssetCache3D` real, materiales por descriptor set, billboards, cuerpos fisicos, culling |
+| `src/rendering/vulkan/PipelineBuilder.h/.cpp` | Push constants 64→96 bytes, `createBillboardPipeline()` |
+| `src/rendering/vulkan/CameraController.h/.cpp` | `forwardVector()/rightVector()/upVector()` |
+| `src/rendering/vulkan/VkMath.h` | Helper `trs()` (composicion TRS column-major) |
+| `src/rendering/Frustum.h` | **Nuevo** — planos del frustum y test AABB, libre de Vulkan |
+| `src/rendering/mesh/MeshBuffers.h/.cpp` | `indexType()` por malla (fix uint16/uint32) |
+| `assets/shaders/basic.vert/.frag` | `mat4 model` + normal matrix |
+| `assets/shaders/textured.vert` | `mat4 model` + normal matrix |
+| `assets/shaders/billboard.vert/.frag` | **Nuevos** |
+| `src/core/components/Components.h` | `PhysicsComponent` + `ColliderShape` |
+| `src/core/components/ComponentSerialization.cpp` | Serializacion de `PhysicsComponent` |
+| `src/core/components/Reflection.cpp` | Metadata para el inspector (registro 7→8) |
+| `src/core/events/GameEvents.h` | `CollisionEvent` tipado |
+| `src/assets/MaterialAsset.h/.cpp` | **Nuevo** |
+| `src/scene/SceneData.h/.cpp` | **Movido** desde `src/editor/`; bump a v6 |
+| `src/editor/EditorApp.cpp` | Menu "Add Component" incluye `Physics` |
+| `src/editor/EditorVkContext.cpp` | Fix de segfault al cerrar (bug preexistente) |
+| `tests/test_scene_loader_3d.cpp` | **Nuevo** |
+| `tests/test_material_asset.cpp` | **Nuevo** |
+| `tests/test_frustum_culling.cpp` | **Nuevo** |
+| `tests/test_component_serialization.cpp` | Cobertura de `PhysicsComponent` |
+| `tests/CMakeLists.txt` | Registro de tests; `SceneData.cpp` ya no se compila suelto |
+| `CMakeLists.txt` | Shaders billboard, `MaterialAsset.cpp`, `SceneData` en `game_core` |
+
+### Previsto en el plan pero NO implementado
+
+| Archivo | Motivo |
+|---------|---------|
+| `src/assets/importers/MaterialImporter.h/.cpp` | Fuera de alcance de 15.5; el renderer resuelve materiales por path directo |
+| `src/assets/ImportManager.cpp` (registro) | Depende del importer anterior |
+| `src/assets/AssetTypes.h` (`AssetType::Material`) | Idem: sin importer no hay tipo de asset que registrar |
+| `tests/test_render_instance_build.cpp` | Su cobertura quedo dentro de `test_scene_loader_3d.cpp` |
+| SSBO de instancias en `basic.vert` | Tarea 15.9, postergada (ver nota de reevaluacion) |
 
 ## Verificacion
 
-1. `cmake --build build --parallel` — compila sin errores ni warnings nuevos
-2. `ctest --test-dir build` — 100% en verde, incluidos los tests nuevos
-3. Editor: inspector permite editar mesh/material/rotacion y el preview lo refleja
-4. `VulkanBootstrap`: escena con mallas importadas, rotaciones y billboards
-5. Fisica: entidades con collider colisionan; `test_physics_determinism` sin regresion
-6. Performance: escena de 500 entidades con draw calls agrupados y frame time estable
-7. Escenas de version anterior cargan sin errores (migracion automatica)
+| # | Criterio | Estado |
+|---|---|---|
+| 1 | `cmake --build build --parallel` sin errores | ✅ |
+| 2 | `ctest` 100% en verde (29/29) | ✅ |
+| 3 | `VulkanBootstrap`: mallas importadas, rotaciones y billboards | ✅ verificado visualmente |
+| 4 | Fisica: entidades con collider colisionan; `test_physics_determinism` sin regresion | ✅ por logs |
+| 5 | Escenas de version anterior cargan sin errores | ✅ |
+| 6 | Culling reduce draws al alejar la camara | ✅ 442 → 10 |
+| 7 | Editor: inspector edita mesh/material/rotacion y el preview lo refleja | ⬜ **sin verificar** |
+| 8 | Performance: frame time medido con escena densa | ⬜ **sin medir** (ver 15.9) |

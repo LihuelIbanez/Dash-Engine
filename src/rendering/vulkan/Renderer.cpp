@@ -12,11 +12,13 @@
 #include <filesystem>
 #include <fstream>
 #include <set>
+#include <unordered_map>
 
 #include <GLFW/glfw3.h>
 #include <nlohmann/json.hpp>
 
 #include "game/physics/DebugPhysicsDraw.h"
+#include "rendering/Frustum.h"
 #include "rendering/vulkan/PipelineBuilder.h"
 #include "rendering/mesh/TerrainVertex.h"
 #include "world/TerrainMesh.h"
@@ -345,6 +347,25 @@ bool Renderer::createPipeline()
                      waterPipelineError.c_str());
     }
 
+    // Camera-facing sprites (RenderMode::BillboardSprite)
+    const std::string billboardVert = std::string(VULKAN_SHADER_DIR) + "/billboard.vert.spv";
+    const std::string billboardFrag = std::string(VULKAN_SHADER_DIR) + "/billboard.frag.spv";
+
+    std::string billboardPipelineError;
+    if (!PipelineBuilder::createBillboardPipeline(
+            deviceContext_.device(),
+            swapchain_.extent(),
+            swapchain_.renderPass(),
+            descriptorSetLayout_,
+            billboardVert,
+            billboardFrag,
+            billboardPipelineLayout_,
+            billboardPipeline_,
+            billboardPipelineError)) {
+        std::fprintf(stderr, "[D78] Billboard pipeline creation failed: %s (non-fatal)\n",
+                     billboardPipelineError.c_str());
+    }
+
     return true;
 }
 
@@ -384,9 +405,27 @@ bool Renderer::init(WindowContext& window)
     }
     physicsWorld_.setGravity({0.0f, -9.8f, 0.0f});
     physicsWorld_.setRestitution(0.20f);
-    physicsWorld_.setCollisionCallback([](const dash::physics::CollisionEvent& ev) {
+    physicsWorld_.setCollisionCallback([this](const dash::physics::CollisionEvent& ev) {
+        auto entityOf = [this](int bodyId) -> uint64_t {
+            auto it = bodyToEntity_.find(bodyId);
+            return it == bodyToEntity_.end() ? 0ull : it->second;
+        };
+
+        ::CollisionEvent out;
+        switch (ev.type) {
+            case dash::physics::CollisionEventType::Enter: out.phase = ::CollisionEvent::Phase::Enter; break;
+            case dash::physics::CollisionEventType::Stay:  out.phase = ::CollisionEvent::Phase::Stay;  break;
+            default:                                       out.phase = ::CollisionEvent::Phase::Exit;  break;
+        }
+        out.entityA = entityOf(ev.a);
+        out.entityB = entityOf(ev.b);
+        events_.emit(out);
+
         if (ev.type == dash::physics::CollisionEventType::Enter) {
-            std::printf("[D82] Collision Enter: %d <-> %d\n", ev.a, ev.b);
+            std::printf("[D82] Collision Enter: %d <-> %d (entities %llu <-> %llu)\n",
+                        ev.a, ev.b,
+                        static_cast<unsigned long long>(out.entityA),
+                        static_cast<unsigned long long>(out.entityB));
         }
     });
 
@@ -478,6 +517,8 @@ bool Renderer::init(WindowContext& window)
             // Load player position for WASD movement
             player_.loadFromScene(loadedScene, &terrainMesh_, terrainMeshReady_,
                                   terrainHeightMap_, terrainMapWidth_, terrainMapHeight_);
+
+        spawnSceneryPhysicsBodies(loadedScene);
     }
 
     if (sceneInstances_.empty()) {
@@ -485,7 +526,7 @@ bool Renderer::init(WindowContext& window)
     }
 
     resolveSceneMeshes();
-
+    resolveSceneMaterials();
     // Generate a small checkerboard floor when no terrain was loaded
     if (terrainInstances_.empty()) {
         for (int z = -3; z <= 3; ++z) {
@@ -589,16 +630,225 @@ const MeshBuffers* Renderer::resolveMesh(const std::string& meshId)
 
 void Renderer::resolveSceneMeshes()
 {
-    // Group by mesh so the draw loop rebinds buffers once per distinct mesh.
+    // Layer drives draw order (transparency); mesh/material grouping only
+    // reduces rebinds within a layer.
     std::stable_sort(sceneInstances_.begin(), sceneInstances_.end(),
                      [](const RenderInstance& a, const RenderInstance& b) {
-                         return a.meshId < b.meshId;
+                         if (a.layer != b.layer) return a.layer < b.layer;
+                         if (a.meshId != b.meshId) return a.meshId < b.meshId;
+                         return a.materialId < b.materialId;
                      });
 
     sceneInstanceMeshes_.clear();
     sceneInstanceMeshes_.reserve(sceneInstances_.size());
     for (const auto& inst : sceneInstances_) {
         sceneInstanceMeshes_.push_back(resolveMesh(inst.meshId));
+    }
+}
+
+void Renderer::destroySceneMaterials()
+{
+    VkDevice dev = deviceContext_.device();
+    if (dev == VK_NULL_HANDLE) return;
+
+    for (auto& m : materials_) {
+        if (m.ownsTexture) TextureLoader::destroy(dev, m.texture);
+    }
+    materials_.clear();
+    sceneInstanceMaterials_.clear();
+
+    if (materialDescriptorPool_ != VK_NULL_HANDLE) {
+        vkDestroyDescriptorPool(dev, materialDescriptorPool_, nullptr);
+        materialDescriptorPool_ = VK_NULL_HANDLE;
+    }
+}
+
+bool Renderer::resolveSceneMaterials()
+{
+    destroySceneMaterials();
+
+    sceneInstanceMaterials_.assign(sceneInstances_.size(), -1);
+
+    // Collect distinct material ids. "default" is the RenderComponent default
+    // value and means "no material asset", same as empty.
+    std::unordered_map<std::string, int> indexById;
+    for (size_t i = 0; i < sceneInstances_.size(); ++i) {
+        const std::string& id = sceneInstances_[i].materialId;
+        if (id.empty() || id == "default") continue;
+
+        auto it = indexById.find(id);
+        if (it == indexById.end()) {
+            const int idx = static_cast<int>(materials_.size());
+            indexById.emplace(id, idx);
+            materials_.push_back(MaterialGpu{});
+            materials_.back().asset.name = id;
+            sceneInstanceMaterials_[i] = idx;
+        } else {
+            sceneInstanceMaterials_[i] = it->second;
+        }
+    }
+
+    if (materials_.empty()) return true;
+
+    namespace fs = std::filesystem;
+    VkDevice dev = deviceContext_.device();
+    std::error_code ec;
+
+    // Load each material definition and its albedo texture.
+    for (auto& [id, idx] : indexById) {
+        MaterialGpu& mat = materials_[static_cast<size_t>(idx)];
+
+        std::vector<fs::path> candidates;
+        const fs::path raw(id);
+        if (raw.is_absolute()) {
+            candidates.push_back(raw);
+        } else {
+            if (!scenePath_.empty())
+                candidates.push_back(fs::path(scenePath_).parent_path() / raw);
+            candidates.push_back(fs::path(VULKAN_MODEL_DIR) / raw);
+            candidates.push_back(raw);
+        }
+
+        bool loaded = false;
+        for (const auto& c : candidates) {
+            if (fs::exists(c, ec) && fs::is_regular_file(c, ec) && mat.asset.loadFromFile(c.string())) {
+                loaded = true;
+                break;
+            }
+            ec.clear();
+        }
+        if (!loaded) {
+            std::fprintf(stderr, "[Material] Definition not found: '%s' (using defaults)\n", id.c_str());
+        }
+
+        // Resolve the albedo texture relative to the material file when possible.
+        if (!mat.asset.albedoTexture.empty()) {
+            std::vector<fs::path> texCandidates;
+            const fs::path texRaw(mat.asset.albedoTexture);
+            if (texRaw.is_absolute()) {
+                texCandidates.push_back(texRaw);
+            } else {
+                texCandidates.push_back(fs::path(VULKAN_MODEL_DIR) / texRaw);
+                if (!scenePath_.empty())
+                    texCandidates.push_back(fs::path(scenePath_).parent_path() / texRaw);
+                texCandidates.push_back(texRaw);
+            }
+
+            for (const auto& c : texCandidates) {
+                if (!fs::exists(c, ec) || !fs::is_regular_file(c, ec)) { ec.clear(); continue; }
+                if (TextureLoader::loadFromFile(deviceContext_.physicalDevice(), dev,
+                                                deviceContext_.graphicsQueue(),
+                                                frameGraph_.commandPool(),
+                                                c.string(), mat.texture)) {
+                    mat.ownsTexture = true;
+                }
+                break;
+            }
+            if (!mat.ownsTexture) {
+                std::fprintf(stderr, "[Material] '%s': albedo texture '%s' unavailable (using white)\n",
+                             id.c_str(), mat.asset.albedoTexture.c_str());
+            }
+        }
+    }
+
+    // One descriptor set per material per swapchain image.
+    const uint32_t images = swapchain_.imageCount();
+    const uint32_t setCount = static_cast<uint32_t>(materials_.size()) * images;
+
+    std::array<VkDescriptorPoolSize, 2> poolSizes = {{
+        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, setCount},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setCount}
+    }};
+    VkDescriptorPoolCreateInfo poolInfo{};
+    poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    poolInfo.maxSets = setCount;
+    poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
+    poolInfo.pPoolSizes = poolSizes.data();
+    if (vkCreateDescriptorPool(dev, &poolInfo, nullptr, &materialDescriptorPool_) != VK_SUCCESS) {
+        std::fprintf(stderr, "[Material] Failed to create descriptor pool.\n");
+        destroySceneMaterials();
+        return false;
+    }
+
+    for (auto& mat : materials_) {
+        mat.sets.assign(images, VK_NULL_HANDLE);
+        std::vector<VkDescriptorSetLayout> layouts(images, descriptorSetLayout_);
+        VkDescriptorSetAllocateInfo alloc{};
+        alloc.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+        alloc.descriptorPool = materialDescriptorPool_;
+        alloc.descriptorSetCount = images;
+        alloc.pSetLayouts = layouts.data();
+        if (vkAllocateDescriptorSets(dev, &alloc, mat.sets.data()) != VK_SUCCESS) {
+            std::fprintf(stderr, "[Material] Failed to allocate descriptor sets.\n");
+            destroySceneMaterials();
+            return false;
+        }
+
+        const TextureResource& tex = mat.ownsTexture ? mat.texture : defaultTexture_;
+        for (uint32_t i = 0; i < images; ++i) {
+            VkDescriptorBufferInfo bufferInfo{};
+            bufferInfo.buffer = uniformBuffers_[i];
+            bufferInfo.offset = 0;
+            bufferInfo.range = sizeof(CameraUBO);
+
+            VkDescriptorImageInfo imageInfo{};
+            imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            imageInfo.imageView = tex.imageView;
+            imageInfo.sampler = tex.sampler;
+
+            std::array<VkWriteDescriptorSet, 2> writes{};
+            writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            writes[0].dstSet = mat.sets[i];
+            writes[0].dstBinding = 0;
+            writes[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+            writes[0].descriptorCount = 1;
+            writes[0].pBufferInfo = &bufferInfo;
+
+            writes[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            writes[1].dstSet = mat.sets[i];
+            writes[1].dstBinding = 1;
+            writes[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            writes[1].descriptorCount = 1;
+            writes[1].pImageInfo = &imageInfo;
+
+            vkUpdateDescriptorSets(dev, static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
+        }
+    }
+
+    std::fprintf(stderr, "[Material] Resolved %zu material(s).\n", materials_.size());
+    return true;
+}
+
+void Renderer::spawnSceneryPhysicsBodies(const LoadedScene& scene)
+{
+    bodyToEntity_.clear();
+
+    const auto spawns = SceneLoader::loadPhysicsBodies(scene);
+    for (const auto& s : spawns) {
+        // Static bodies get zero mass so the builtin backend keeps them fixed.
+        const int bodyId = physicsWorld_.createDynamicBox(
+            s.position, s.halfExtents, s.isStatic ? 0.0f : s.mass);
+        if (bodyId < 0) continue;
+        bodyToEntity_[bodyId] = s.entityId;
+    }
+
+    if (!spawns.empty()) {
+        std::fprintf(stderr, "[Physics] Spawned %zu body(ies) from PhysicsComponent.\n",
+                     spawns.size());
+    }
+}
+
+void Renderer::syncPhysicsToInstances()
+{
+    if (bodyToEntity_.empty()) return;
+
+    for (const auto& [bodyId, entityId] : bodyToEntity_) {
+        const dash::physics::Vec3 p = physicsWorld_.position(bodyId);
+        for (auto& inst : sceneInstances_) {
+            if (inst.entityId != entityId) continue;
+            inst.position = p;
+            break;
+        }
     }
 }
 
@@ -713,10 +963,31 @@ void Renderer::recordDrawCommands(VkCommandBuffer cmd, uint32_t imageIndex)
     }
 
     // Scene entity instances
+    const float aspect = static_cast<float>(swapchain_.extent().width)
+                       / static_cast<float>(swapchain_.extent().height);
+    const Mat4 viewProj = camera_.computeViewProjection(aspect);
+    const dash::Frustum frustum = dash::Frustum::fromViewProj(viewProj.m);
+
     const MeshBuffers* boundMesh = &meshBuffers_;
+    int boundMaterial = -1;
+    bool hasBillboards = false;
+    uint32_t drawn = 0, culled = 0;
     for (size_t i = 0; i < sceneInstances_.size(); ++i) {
         const auto& instance = sceneInstances_[i];
         if (!instance.visible) continue;
+        if (instance.renderMode == static_cast<int>(InstanceRenderMode::BillboardSprite)) {
+            hasBillboards = true;
+            continue;  // drawn in the transparent pass below
+        }
+
+        if (!frustum.intersectsAabb(instance.position.x * TILE_SCALE,
+                                    instance.position.y,
+                                    instance.position.z * TILE_SCALE,
+                                    instance.scale.x, instance.scale.y, instance.scale.z)) {
+            ++culled;
+            continue;
+        }
+        ++drawn;
 
         const MeshBuffers* mesh = (i < sceneInstanceMeshes_.size() && sceneInstanceMeshes_[i])
                                 ? sceneInstanceMeshes_[i]
@@ -729,16 +1000,93 @@ void Renderer::recordDrawCommands(VkCommandBuffer cmd, uint32_t imageIndex)
             boundMesh = mesh;
         }
 
+        const int matIdx = (i < sceneInstanceMaterials_.size()) ? sceneInstanceMaterials_[i] : -1;
+        if (matIdx != boundMaterial) {
+            VkDescriptorSet set = (matIdx >= 0 && !materials_[static_cast<size_t>(matIdx)].sets.empty())
+                                ? materials_[static_cast<size_t>(matIdx)].sets[imageIndex]
+                                : descriptorSets_[imageIndex];
+            vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout_,
+                                    0, 1, &set, 0, nullptr);
+            boundMaterial = matIdx;
+        }
+
+        float cr = instance.color.x, cg = instance.color.y, cb = instance.color.z;
+        if (matIdx >= 0) {
+            const auto& base = materials_[static_cast<size_t>(matIdx)].asset.baseColor;
+            cr *= base[0]; cg *= base[1]; cb *= base[2];
+        }
+
         const auto& lt3 = editorBridge_.lighting();
         const Mat4 model = trs(
             {instance.position.x * TILE_SCALE, instance.position.y, instance.position.z * TILE_SCALE},
             instance.yawDeg, instance.pitchDeg, instance.rollDeg,
             {instance.scale.x, instance.scale.y, instance.scale.z});
         float pc[kInstancePushConstantFloats];
-        buildInstancePushConstants(model, instance.color.x, instance.color.y, instance.color.z, 1.0f, lt3, pc);
+        buildInstancePushConstants(model, cr, cg, cb, 1.0f, lt3, pc);
         vkCmdPushConstants(cmd, pipelineLayout_, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), pc);
         vkCmdDrawIndexed(cmd, mesh->indexCount(), 1, 0, 0, 0);
     }
+
+    // Leave the default set bound for the next frame's terrain/tile passes.
+    if (boundMaterial != -1) {
+        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout_,
+                                0, 1, &descriptorSets_[imageIndex], 0, nullptr);
+    }
+
+    // ── Billboard sprites (transparent, drawn after the opaque pass) ─────
+    if (hasBillboards && billboardPipeline_ != VK_NULL_HANDLE) {
+        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, billboardPipeline_);
+
+        const Vec3 camRight = camera_.rightVector();
+        const Vec3 camUp = camera_.upVector();
+        int boundBillboardMaterial = -2;
+
+        for (size_t i = 0; i < sceneInstances_.size(); ++i) {
+            const auto& instance = sceneInstances_[i];
+            if (!instance.visible) continue;
+            if (instance.renderMode != static_cast<int>(InstanceRenderMode::BillboardSprite)) continue;
+
+            if (!frustum.intersectsAabb(instance.position.x * TILE_SCALE,
+                                        instance.position.y,
+                                        instance.position.z * TILE_SCALE,
+                                        instance.scale.x, instance.scale.y, instance.scale.x)) {
+                ++culled;
+                continue;
+            }
+            ++drawn;
+
+            const int matIdx = (i < sceneInstanceMaterials_.size()) ? sceneInstanceMaterials_[i] : -1;
+            if (matIdx != boundBillboardMaterial) {
+                VkDescriptorSet set = (matIdx >= 0 && !materials_[static_cast<size_t>(matIdx)].sets.empty())
+                                    ? materials_[static_cast<size_t>(matIdx)].sets[imageIndex]
+                                    : descriptorSets_[imageIndex];
+                vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, billboardPipelineLayout_,
+                                        0, 1, &set, 0, nullptr);
+                boundBillboardMaterial = matIdx;
+            }
+
+            float cr = instance.color.x, cg = instance.color.y, cb = instance.color.z;
+            if (matIdx >= 0) {
+                const auto& base = materials_[static_cast<size_t>(matIdx)].asset.baseColor;
+                cr *= base[0]; cg *= base[1]; cb *= base[2];
+            }
+
+            const float pc[20] = {
+                instance.position.x * TILE_SCALE, instance.position.y, instance.position.z * TILE_SCALE, 0.0f,
+                instance.scale.x, instance.scale.y, 0.0f, 0.0f,
+                cr, cg, cb, 1.0f,
+                camRight.x, camRight.y, camRight.z, 0.0f,
+                camUp.x, camUp.y, camUp.z, 0.0f
+            };
+            vkCmdPushConstants(cmd, billboardPipelineLayout_,
+                               VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+                               0, sizeof(pc), pc);
+            vkCmdDraw(cmd, 6, 1, 0, 0);
+        }
+    }
+
+    lastDrawnInstances_ = drawn;
+    lastCulledInstances_ = culled;
 
     vkCmdEndRenderPass(cmd);
 }
@@ -775,6 +1123,8 @@ bool Renderer::runSmoke(WindowContext& window, uint32_t targetFrames)
                 ++substeps;
             }
             transformProxy_.syncFromPhysics(physicsWorld_, cubeBodyId_, cubeTransform_);
+            syncPhysicsToInstances();
+            events_.flush();
         }
 
         // Standalone startup helper: align camera to look at the loaded scene body
@@ -828,6 +1178,8 @@ bool Renderer::runSmoke(WindowContext& window, uint32_t targetFrames)
 
     if (renderedFrames >= targetFrames) {
         std::printf("[D76] Smoke test: %u frames rendered successfully.\n", targetFrames);
+        std::printf("[Culling] Last frame: %u drawn, %u culled (of %zu instances).\n",
+                    lastDrawnInstances_, lastCulledInstances_, sceneInstances_.size());
         return true;
     }
 
@@ -844,6 +1196,8 @@ void Renderer::shutdown()
     }
 
     frameGraph_.shutdown();
+
+    destroySceneMaterials();
 
     for (size_t i = 0; i < uniformBuffers_.size(); ++i) {
         if (uniformBuffers_[i] != VK_NULL_HANDLE) {
@@ -869,6 +1223,7 @@ void Renderer::shutdown()
     meshBuffers_.shutdown(deviceContext_.device());
     terrainMeshBuffers_.shutdown(deviceContext_.device());
     waterMeshBuffers_.shutdown(deviceContext_.device());
+
     PipelineBuilder::destroy(deviceContext_.device(), pipelineLayout_, pipeline_);
     pipelineLayout_ = VK_NULL_HANDLE;
     pipeline_ = VK_NULL_HANDLE;
@@ -884,6 +1239,10 @@ void Renderer::shutdown()
     PipelineBuilder::destroy(deviceContext_.device(), waterPipelineLayout_, waterPipeline_);
     waterPipelineLayout_ = VK_NULL_HANDLE;
     waterPipeline_ = VK_NULL_HANDLE;
+
+    PipelineBuilder::destroy(deviceContext_.device(), billboardPipelineLayout_, billboardPipeline_);
+    billboardPipelineLayout_ = VK_NULL_HANDLE;
+    billboardPipeline_ = VK_NULL_HANDLE;
 
     TextureLoader::destroy(deviceContext_.device(), defaultTexture_);
 

@@ -18,6 +18,7 @@ std::string componentTypeName(ComponentType type)
         case ComponentType::Stats:     return "Stats";
         case ComponentType::Combat:    return "Combat";
         case ComponentType::AI:        return "AI";
+        case ComponentType::Physics:   return "Physics";
         default:                       return "Unknown";
     }
 }
@@ -31,6 +32,7 @@ ComponentType componentTypeFromName(const std::string& name)
     if (name == "Stats")     return ComponentType::Stats;
     if (name == "Combat")    return ComponentType::Combat;
     if (name == "AI")        return ComponentType::AI;
+    if (name == "Physics")   return ComponentType::Physics;
     throw std::runtime_error("Unknown component type: " + name);
 }
 
@@ -120,6 +122,15 @@ nlohmann::json componentToJson(const ComponentVariant& comp)
             j["detectionRange"] = c.detectionRange;
             j["patrolRadius"]   = c.patrolRadius;
         }
+        else if constexpr (std::is_same_v<T, PhysicsComponent>) {
+            j["type"]        = "Physics";
+            j["shape"]       = c.shape;
+            j["halfExtentX"] = c.halfExtentX;
+            j["halfExtentY"] = c.halfExtentY;
+            j["halfExtentZ"] = c.halfExtentZ;
+            j["mass"]        = c.mass;
+            j["isStatic"]    = c.isStatic;
+        }
     }, comp);
     return j;
 }
@@ -192,6 +203,16 @@ ComponentVariant componentFromJson(const nlohmann::json& j)
             c.behavior       = behaviorFromName(j.value("behavior", "Idle"));
             c.detectionRange = j.value("detectionRange", 5.f);
             c.patrolRadius   = j.value("patrolRadius", 3.f);
+            return c;
+        }
+        case ComponentType::Physics: {
+            PhysicsComponent c;
+            c.shape       = j.value("shape", static_cast<int>(ColliderShape::Box));
+            c.halfExtentX = j.value("halfExtentX", 0.3f);
+            c.halfExtentY = j.value("halfExtentY", 0.3f);
+            c.halfExtentZ = j.value("halfExtentZ", 0.3f);
+            c.mass        = j.value("mass", 1.f);
+            c.isStatic    = j.value("isStatic", false);
             return c;
         }
         default:

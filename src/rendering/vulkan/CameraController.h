@@ -32,6 +32,11 @@ public:
     // Build view-projection matrix for the current camera state
     Mat4 computeViewProjection(float aspectRatio) const;
 
+    // Camera basis vectors, matching the view matrix built above.
+    Vec3 forwardVector() const;
+    Vec3 rightVector() const;
+    Vec3 upVector() const;
+
     // Accessors
     float x() const { return x_; }
     float y() const { return y_; }
