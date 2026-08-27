@@ -11,6 +11,7 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <numeric>
 #include <set>
 #include <unordered_map>
 
@@ -1097,10 +1098,18 @@ bool Renderer::runSmoke(WindowContext& window, uint32_t targetFrames)
 
     const bool infiniteRun = (targetFrames == 0);
 
+    frameMs_.clear();
+    recordMs_.clear();
+    if (!infiniteRun) {
+        frameMs_.reserve(targetFrames);
+        recordMs_.reserve(targetFrames);
+    }
+
     uint32_t renderedFrames = 0;
     auto lastTime = std::chrono::steady_clock::now();
 
     while ((infiniteRun || renderedFrames < targetFrames) && !window.shouldClose()) {
+        const auto frameT0 = std::chrono::steady_clock::now();
         window.pollEvents();
 
         if (infiniteRun) {
@@ -1153,12 +1162,20 @@ bool Renderer::runSmoke(WindowContext& window, uint32_t targetFrames)
         beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
         if (vkBeginCommandBuffer(cmd, &beginInfo) != VK_SUCCESS) break;
 
+        const auto recordT0 = std::chrono::steady_clock::now();
         recordDrawCommands(cmd, imageIndex);
+        const auto recordT1 = std::chrono::steady_clock::now();
 
         if (vkEndCommandBuffer(cmd) != VK_SUCCESS) break;
 
         if (!frameGraph_.endFrame(imageIndex)) break;
         ++renderedFrames;
+
+        if (!infiniteRun) {
+            const auto frameT1 = std::chrono::steady_clock::now();
+            frameMs_.push_back(std::chrono::duration<float, std::milli>(frameT1 - frameT0).count());
+            recordMs_.push_back(std::chrono::duration<float, std::milli>(recordT1 - recordT0).count());
+        }
 
         if (!infiniteRun && renderedFrames == targetFrames) {
             const dash::physics::Vec3 p = physicsWorld_.position(cubeBodyId_);
@@ -1180,11 +1197,41 @@ bool Renderer::runSmoke(WindowContext& window, uint32_t targetFrames)
         std::printf("[D76] Smoke test: %u frames rendered successfully.\n", targetFrames);
         std::printf("[Culling] Last frame: %u drawn, %u culled (of %zu instances).\n",
                     lastDrawnInstances_, lastCulledInstances_, sceneInstances_.size());
+        reportFrameStats(renderedFrames);
         return true;
     }
 
     std::fprintf(stderr, "[D76] Smoke test interrupted at frame %u.\n", renderedFrames);
     return false;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// reportFrameStats — baseline for the A2 benchmark. Wall-clock frame time is
+// pinned by FIFO vsync, so the command-recording column is the one that moves
+// when draw submission changes.
+// ─────────────────────────────────────────────────────────────────────────────
+void Renderer::reportFrameStats(uint32_t renderedFrames) const
+{
+    if (frameMs_.empty()) return;
+
+    // Discard the first frames: they carry swapchain and pipeline warm-up.
+    const size_t warmup = std::min<size_t>(frameMs_.size() / 10, 10);
+
+    auto summarize = [warmup](std::vector<float> v, const char* label) {
+        v.erase(v.begin(), v.begin() + static_cast<long>(warmup));
+        if (v.empty()) return;
+        std::sort(v.begin(), v.end());
+        const double sum = std::accumulate(v.begin(), v.end(), 0.0);
+        const size_t p95 = std::min(v.size() - 1,
+                                    static_cast<size_t>(std::ceil(v.size() * 0.95)) - 1);
+        std::printf("[Bench] %-16s min %7.3f  avg %7.3f  p95 %7.3f  max %7.3f ms\n",
+                    label, v.front(), sum / static_cast<double>(v.size()), v[p95], v.back());
+    };
+
+    std::printf("[Bench] Samples: %u frames (%zu discarded as warm-up), FIFO vsync.\n",
+                renderedFrames, warmup);
+    summarize(frameMs_, "frame total");
+    summarize(recordMs_, "cmd recording");
 }
 
 void Renderer::shutdown()

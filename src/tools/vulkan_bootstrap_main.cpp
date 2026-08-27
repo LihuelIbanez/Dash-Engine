@@ -1,4 +1,5 @@
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <string>
 
@@ -11,6 +12,7 @@ int main(int argc, char** argv)
     bool editorPreview = false;
     bool embeddedWindow = false;
     bool persistentRun = false;
+    unsigned int smokeFrames = 120u;
     std::string scenePath;
     std::string statePath;
     for (int i = 1; i < argc; ++i) {
@@ -24,6 +26,8 @@ int main(int argc, char** argv)
             scenePath = argv[++i];
         } else if (std::strcmp(argv[i], "--state") == 0 && i + 1 < argc) {
             statePath = argv[++i];
+        } else if (std::strcmp(argv[i], "--frames") == 0 && i + 1 < argc) {
+            smokeFrames = static_cast<unsigned int>(std::strtoul(argv[++i], nullptr, 10));
         }
     }
 
@@ -82,7 +86,7 @@ int main(int argc, char** argv)
         }
     }
 
-    const bool smokeOk = renderer.runSmoke(window, (editorPreview || persistentRun) ? 0u : 120u);
+    const bool smokeOk = renderer.runSmoke(window, (editorPreview || persistentRun) ? 0u : smokeFrames);
     renderer.shutdown();
     return smokeOk ? 0 : 1;
 }

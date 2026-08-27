@@ -12,6 +12,7 @@ Ninguno es bloqueante. Estado al momento de escribir: build sin errores, `ctest`
 
 ### A1 — Instancing por malla (tarea 15.9)
 
+- **Estado:** ❌ Descartada con datos (2026-08-27)
 - **Prioridad:** Baja (reevaluada)
 - **Objetivo:** agrupar instancias de la misma malla en un unico draw instanciado.
 
@@ -33,12 +34,22 @@ Sigue teniendo valor cuando muchas entidades estan **simultaneamente en camara**
 - Draw calls proporcionales a mallas distintas, no a entidades.
 - Mejora de frame time **medida** contra la baseline de A2.
 
-**Archivos previstos:** `src/rendering/vulkan/Renderer.h/.cpp`, `assets/shaders/basic.vert`, `src/rendering/vulkan/PipelineBuilder.cpp`.
+### Resolucion: no se implementa
+
+La precondicion se cumplio (A2) y **los datos no justifican el trabajo**. Ver la tabla de baseline en A2.
+
+1. **El frame nunca esta limitado por CPU.** El present es FIFO: `frame total` se queda en 8.33 ms desde 171 hasta 26 452 instancias visibles. El instancing solo puede reducir `cmd recording`, que no es lo que fija el frame.
+2. **El margen absoluto es despreciable en el contenido real.** Con la escena existente (442 entidades → 10 draws) el grabado no llega a 0.04 ms. El techo teorico de mejora es **menos del 0.5% del presupuesto de frame**.
+3. **Ni forzando el escenario aparece el cuello.** A 26 452 instancias visibles — 60x el contenido real, una densidad que ningun nivel del juego produce — el grabado es 1.37 ms: 16% del presupuesto, y el frame sigue clavado en vsync.
+4. **El costo/riesgo no cambio.** La via SSBO sigue tocando el `descriptorSetLayout_` compartido por los 5 pipelines.
+
+**Condicion para reabrirla.** Si aparece contenido que sostenga >20 000 instancias visibles simultaneas **y** el present deja de ser FIFO (vsync desactivado o presentacion inmediata), rehacer la medicion con `tools/gen_benchmark_scene.py` y reevaluar. La baseline de A2 queda registrada justamente para ese momento.
 
 ---
 
 ### A2 — Escena de benchmark y medicion de frame time
 
+- **Estado:** ✅ Resuelta (2026-08-27)
 - **Prioridad:** Media
 - **Objetivo:** tener una baseline reproducible de rendimiento del render 3D.
 
@@ -54,6 +65,42 @@ Sigue teniendo valor cuando muchas entidades estan **simultaneamente en camara**
 **Criterio de aceptacion:**
 - `VulkanBootstrap --scene <benchmark>` imprime estadisticas de frame time reproducibles.
 - La baseline queda registrada para comparar contra A1.
+
+### Resolucion
+
+**Hallazgo que cambio el diseño de la medicion.** `SwapchainContext::choosePresentMode()` devuelve `VK_PRESENT_MODE_FIFO_KHR` incondicionalmente: el loop esta clavado a vsync. Medir solo el frame time de pared habria dado un numero constante e **inutil** para justificar A1. Por eso se instrumentan **dos** series:
+
+| Serie | Que mide |
+|---|---|
+| `frame total` | iteracion completa del loop, dominada por el present bloqueante |
+| `cmd recording` | solo `recordDrawCommands()`, el costo de CPU que el instancing atacaria |
+
+**Cambios.**
+- `Renderer`: recolecta muestras por frame durante `runSmoke()` y las resume en `reportFrameStats()` (min/avg/p95/max). Descarta el primer 10% de frames (tope 10) como warm-up de swapchain y pipelines.
+- `vulkan_bootstrap_main.cpp`: nuevo flag `--frames N` (default 120) para controlar la duracion de la corrida.
+- `tools/gen_benchmark_scene.py`: generador de escenas con `--count`, `--spacing`, `--scale` y `--mesh`. Distribuye las entidades en una grilla cuadrada centrada en el jugador para maximizar las **simultaneamente visibles**.
+- `scenes/benchmark_dense.json`: escena versionada de 401 entidades (`--count 400 --spacing 0.6`).
+
+**Uso:**
+```
+python3 tools/gen_benchmark_scene.py --count 400 --spacing 0.6 --out scenes/benchmark_dense.json
+./build/VulkanBootstrap --scene scenes/benchmark_dense.json --frames 300
+```
+
+### Baseline medida
+
+MacBook (display ProMotion 120 Hz → techo de vsync ≈ 8.33 ms), 300 frames por corrida, malla `cube`:
+
+| Entidades | Visibles (drawn) | `cmd recording` avg | `frame total` avg |
+|---|---|---|---|
+| 401 | 171 | 0.035 ms | 8.330 ms |
+| 1 001 | 455 | 0.091 ms | 8.332 ms |
+| 2 501 | 1 087 | 0.175 ms | 8.335 ms |
+| 5 001 | 2 195 | 0.340 ms | 8.330 ms |
+| 20 001 | 8 854 | 0.857 ms | 8.338 ms |
+| 60 001 | 26 452 | 1.370 ms | 8.380 ms |
+
+El costo de grabado escala ~linealmente con las instancias visibles (~0.15 µs por draw). `frame total` **no se mueve** en ningun caso: el loop esta limitado por el present, no por la CPU.
 
 ---
 
@@ -245,11 +292,11 @@ Resuelta junto con C1 en el mismo cambio.
 
 | ID | Tarea | Prioridad |
 |---|---|---|
-| A2 | Escena de benchmark y medicion de frame time | Media |
 | A3 | `MaterialImporter` + Asset Browser | Media |
 | B1 | Verificar Inspector con componentes nuevos | Media |
-| A1 | Instancing por malla | Baja (requiere A2) |
 | C3 | `popen()` del pipeline de build | Baja |
+| ~~A2~~ | ~~Escena de benchmark y medicion de frame time~~ | ✅ Resuelta |
 | ~~B2~~ | ~~Picos de frame de ~1.2 s en el editor~~ | ✅ Resuelta |
 | ~~C1~~ | ~~Artefactos mutables en `.library/`~~ | ✅ Resuelta |
 | ~~C2~~ | ~~Clarificar `library/` vs `.library/`~~ | ✅ Resuelta |
+| ~~A1~~ | ~~Instancing por malla~~ | ❌ Descartada con datos |

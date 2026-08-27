@@ -66,6 +66,9 @@ private:
     bool resolveSceneMaterials();
     void destroySceneMaterials();
 
+    // Prints min/avg/p95/max for the samples collected during runSmoke().
+    void reportFrameStats(uint32_t renderedFrames) const;
+
     VkInstance instance_ = VK_NULL_HANDLE;
     VkSurfaceKHR surface_ = VK_NULL_HANDLE;
 
@@ -137,6 +140,11 @@ private:
     // Frustum culling counters from the most recent recorded frame.
     uint32_t lastDrawnInstances_ = 0;
     uint32_t lastCulledInstances_ = 0;
+
+    // Per-frame timing samples collected during runSmoke(). recordMs_ isolates
+    // CPU command recording, which wall-clock frame time hides under FIFO vsync.
+    std::vector<float> frameMs_;
+    std::vector<float> recordMs_;
 
     CameraController camera_;
     PlayerController player_;
