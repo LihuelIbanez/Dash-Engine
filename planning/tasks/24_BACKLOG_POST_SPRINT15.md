@@ -166,21 +166,72 @@ Sin ningun `Definition not found`: ambas vias resuelven y la compatibilidad por 
 
 ### B1 — Verificar el Inspector con los componentes nuevos
 
+- **Estado:** ✅ Verificada (2026-08-27) — **4 de 7 pasan; 3 defectos registrados**
 - **Prioridad:** Media
 - **Objetivo:** confirmar en el editor que la edicion de componentes se refleja en el preview.
 
 **Contexto.** Es el criterio de aceptacion 7 del Sprint 15, sin verificar. `PhysicsComponent` quedo editable "gratis" gracias a la reflexion, y `RenderComponent`/`TransformComponent` ahora llegan al renderer, pero **nadie lo probo desde la UI**. La verificacion hasta ahora fue por logs y por `VulkanBootstrap`, no por el editor.
 
-**Checklist de verificacion manual:**
-- [ ] El Inspector muestra `Physics` en el desplegable "Add Component".
-- [ ] Agregar y quitar `PhysicsComponent` funciona con Cmd+Z / Cmd+Shift+Z.
-- [ ] Editar `yawDeg` de un `TransformComponent` rota la entidad en el viewport.
-- [ ] Editar `RenderComponent::mesh` cambia la malla sin reiniciar.
-- [ ] Editar `RenderComponent::visible` oculta la entidad.
-- [ ] Cambiar `renderMode` alterna entre malla 3D y billboard.
-- [ ] Guardar y recargar la escena preserva todo lo anterior.
+**Checklist de verificacion:**
+- [x] El Inspector muestra `Physics` en el desplegable "Add Component".
+- [x] Agregar y quitar `PhysicsComponent` funciona con Cmd+Z / Cmd+Shift+Z.
+- [ ] Editar `yawDeg` de un `TransformComponent` rota la entidad en el viewport. → **B1-a**
+- [ ] Editar `RenderComponent::mesh` cambia la malla sin reiniciar. → **B1-b**
+- [x] Editar `RenderComponent::visible` oculta la entidad.
+- [ ] Cambiar `renderMode` alterna entre malla 3D y billboard. → **B1-c**
+- [x] Guardar y recargar la escena preserva todo lo anterior.
 
 **Criterio de aceptacion:** checklist completo, o los defectos encontrados registrados como bugs.
+
+### Resolucion
+
+**Hallazgo estructural.** El editor **no usa** `dash::vkexp::Renderer`. Su viewport se dibuja en `EditorApp::renderWorldToTexture()`, un camino de render propio y mucho mas simple, y `VulkanBootstrap` solo se lanza para Play / Build & Run. Todo el trabajo del Sprint 15 aterrizo en `Renderer` (culling, billboards, materiales, mallas por `RenderComponent`), pero **el viewport del editor nunca se actualizo**.
+
+De los datos de entidad, `renderWorldToTexture()` lee unicamente:
+
+```cpp
+for (const auto& comp : e.components) {
+    if (auto* tf = std::get_if<TransformComponent>(&comp))
+        wz = tf->z;
+    if (auto* rc = std::get_if<RenderComponent>(&comp))
+        visible = rc->visible;
+}
+```
+
+Es decir: `z` y `visible`. Ignora `yawDeg`/`pitchDeg`/`rollDeg`/`scale`, ignora `mesh` y `material`, e ignora `renderMode`. La malla se elige por una regla fija (`isPlayer ? cube : wolf`).
+
+**Cobertura automatizada agregada.** Los comandos de componentes no tenian **ningun** test: `test_undo_redo_commands` cubre paint/place/erase y `test_move_edit_commands` cubre move/name/class/position. `tests/test_component_commands.cpp` (nuevo, 47 aserciones) cubre lo verificable sin UI:
+
+- `Physics` esta registrado en la reflexion con sus 6 campos (es lo que alimenta el desplegable "Add Component").
+- `AddComponentCommand` / `RemoveComponentCommand`: apply / undo / redo conservando valores exactos.
+- `EditComponentFieldCommand` sobre `yawDeg` (Float), `mesh` (String), `visible` (Bool) y `renderMode` (Enum): apply / undo / redo.
+- Round-trip de escena preservando los cuatro campos mas `PhysicsComponent`.
+
+Esto confirma que **el modelo de datos y el undo/redo estan bien**: lo que falta es que el viewport del editor consuma esos campos.
+
+---
+
+### B1-a — El viewport del editor ignora la rotacion y la escala del Transform
+
+- **Prioridad:** Media
+- **Sintoma:** editar `yawDeg`, `pitchDeg`, `rollDeg` o `scale` no cambia nada en el viewport.
+- **Causa:** `EditorApp::renderWorldToTexture()` arma su push constant con posicion y una escala fija (`useWolf ? 0.4f : 0.30f`); nunca lee los angulos del `TransformComponent`.
+- **Nota:** `dash::vkexp::Renderer` **si** los aplica, asi que la rotacion se ve al entrar en Play pero no al editar.
+- **Criterio de aceptacion:** mover el slider de `yawDeg` rota la entidad en el viewport en el mismo frame.
+
+### B1-b — El viewport del editor ignora `RenderComponent::mesh`
+
+- **Prioridad:** Media
+- **Sintoma:** cambiar `mesh` no cambia el modelo dibujado.
+- **Causa:** la malla se decide con `bool useWolf = !isPlayer && wolfAvailable;`. Solo existen dos mallas cableadas (cube y wolf) y el campo `mesh` no participa.
+- **Criterio de aceptacion:** el viewport resuelve la malla por `RenderComponent::mesh` a traves del cache de assets, con fallback a cube.
+
+### B1-c — El viewport del editor no implementa `renderMode` billboard
+
+- **Prioridad:** Baja
+- **Sintoma:** poner `renderMode = BillboardSprite` sigue dibujando la malla 3D.
+- **Causa:** `renderWorldToTexture()` solo tiene el pass de `basicPipeline()`; no hay pipeline de billboard en el contexto del editor.
+- **Criterio de aceptacion:** alternar `renderMode` cambia el dibujado en el viewport, como ya ocurre en `Renderer::recordDrawCommands()`.
 
 ---
 
@@ -328,10 +379,13 @@ Resuelta junto con C1 en el mismo cambio.
 
 | ID | Tarea | Prioridad |
 |---|---|---|
-| B1 | Verificar Inspector con componentes nuevos | Media |
+| B1-a | El viewport del editor ignora rotacion/escala del Transform | Media |
+| B1-b | El viewport del editor ignora `RenderComponent::mesh` | Media |
 | C3 | `popen()` del pipeline de build | Baja |
+| B1-c | El viewport del editor no implementa `renderMode` billboard | Baja |
 | ~~A2~~ | ~~Escena de benchmark y medicion de frame time~~ | ✅ Resuelta |
 | ~~A3~~ | ~~`MaterialImporter` + Asset Browser~~ | ✅ Resuelta |
+| ~~B1~~ | ~~Verificar Inspector con componentes nuevos~~ | ✅ Verificada (3 bugs) |
 | ~~B2~~ | ~~Picos de frame de ~1.2 s en el editor~~ | ✅ Resuelta |
 | ~~C1~~ | ~~Artefactos mutables en `.library/`~~ | ✅ Resuelta |
 | ~~C2~~ | ~~Clarificar `library/` vs `.library/`~~ | ✅ Resuelta |

@@ -117,6 +117,28 @@ target_link_libraries(test_move_edit_commands PRIVATE
 target_compile_options(test_move_edit_commands PRIVATE ${DASH_COMPILE_FLAGS})
 add_test(NAME test_move_edit_commands COMMAND test_move_edit_commands)
 
+# ── Add/Remove/EditComponentField commands (backlog B1) ──────────────────────
+add_executable(test_component_commands
+    test_component_commands.cpp
+    ${TEST_CMD_SOURCES}
+)
+target_include_directories(test_component_commands PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/src/core
+    ${CMAKE_SOURCE_DIR}/src/core/components
+    ${CMAKE_SOURCE_DIR}/src/entities
+    ${CMAKE_SOURCE_DIR}/src/world
+    ${CMAKE_SOURCE_DIR}/src/rendering
+    ${CMAKE_SOURCE_DIR}/src/editor
+    ${CMAKE_SOURCE_DIR}/src/editor/commands
+    ${SDL2_INCLUDE_DIRS}
+)
+target_link_libraries(test_component_commands PRIVATE
+    game_core nlohmann_json::nlohmann_json ${SDL2_LIBRARIES}
+)
+target_compile_options(test_component_commands PRIVATE ${DASH_COMPILE_FLAGS})
+add_test(NAME test_component_commands COMMAND test_component_commands)
+
 # ── World seed determinism ────────────────────────────────────────────────────
 dash_add_test(test_world_seed_determinism test_world_seed_determinism.cpp)
 
