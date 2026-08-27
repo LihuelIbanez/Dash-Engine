@@ -6,6 +6,8 @@ Items identificados al cerrar las Fases 1-4 del Sprint 15 (ver `23_SPRINT15_COMP
 
 Ninguno es bloqueante. Estado al momento de escribir: build sin errores, `ctest` 29/29 en verde.
 
+> **Cierre (2026-08-27):** las 8 tareas quedaron resueltas y `ctest` pasa 32/32. La verificacion de B1 abrio 3 defectos nuevos (B1-a/b/c), unico pendiente. Ver el resumen al final.
+
 ---
 
 ## Grupo A — Trabajo de Sprint 15 pendiente
@@ -364,6 +366,7 @@ Resuelta junto con C1 en el mismo cambio.
 
 ### C3 — Revisar los `popen()` restantes del pipeline de build
 
+- **Estado:** ✅ Resuelta (2026-08-27)
 - **Prioridad:** Baja (hardening)
 - **Objetivo:** cerrar el pendiente deliberado de MEJORA-6 de la auditoria de agosto.
 
@@ -373,20 +376,76 @@ Resuelta junto con C1 en el mismo cambio.
 
 **Criterio de aceptacion:** subprocesos lanzados con arrays de argumentos, conservando la captura incremental de salida.
 
+### Resolucion
+
+**Revalidacion de la premisa.** Se reviso si seguia siendo cierto que ningun dato de usuario alcanza un shell. Las tres invocaciones existentes:
+
+| Sitio | Entrada interpolada | ¿Controlable por el usuario? |
+|---|---|---|
+| `EditorApp.cpp` `std::system("where cmake ...")` | literal | no |
+| `EditorApp.cpp` `popen` de Build & Run | `BUILD_DIR` (constante de compilacion) | no |
+| `GameBuildPipeline.cpp` `runCommandCapture` | **parametro `buildDir`** | no *en el unico call site* |
+
+La premisa se sostenia, pero con un matiz que la debilitaba: `GameBuildPipeline::build()` recibe `buildDir` como **parametro**, no como constante. La garantia no era estructural, dependia de que el unico llamador pasara `BUILD_DIR`. Cualquier llamador futuro reabria el agujero en silencio. Por eso se implemento en vez de diferirse.
+
+**Cambios.**
+- `src/editor/project/ProcessRunner.{h,cpp}`: `runProcessCapture(argv, onLine)`. En POSIX usa `posix_spawnp` con un pipe manual que recibe stdout y stderr, y transmite el output **linea por linea** mientras el proceso corre. Devuelve el codigo de salida del hijo, o -1 si no arranco.
+- El constructo `cd "<dir>" && make ...` desaparece: `cmake --build <dir>` toma el directorio como argumento, asi que ya no hace falta un shell para cambiar de directorio.
+- `GameBuildPipeline` y `EditorApp::buildAndRun()` pasan a armar un `std::vector<std::string>` de argumentos.
+- En Windows `_popen` no tiene forma argv, asi que se conserva, pero cada argumento se re-entrecomilla escapando `"` y `\` en vez de concatenarse crudo.
+
+**Verificacion.** `tests/test_process_runner.cpp` (nuevo, 9 aserciones):
+- captura de salida y propagacion del codigo de salida (incluido != 0);
+- ejecutable inexistente devuelve error en vez de colgarse;
+- **no hay inyeccion**: pasar `"inofensivo; touch <canary>"` como argumento no crea el canary y el texto llega literal. Idem con un intento de escape por comillas (`"; touch <canary>; echo "`).
+
+Contraprueba de que el test no es vacuo: el mismo string via shell (`sh -c`) **si** ejecuta el `touch`. Es decir, el test falla contra la implementacion anterior.
+
+Se verifico ademas que el argv real del pipeline (`cmake --build <dir> --target VulkanBootstrap --parallel`) sigue devolviendo exit 0 y capturando la salida de forma incremental.
+
 ---
 
 ## Resumen
+
+Las 8 tareas originales quedaron cerradas. La verificacion de B1 abrio 3 defectos nuevos, que son lo unico pendiente.
+
+### Pendiente
 
 | ID | Tarea | Prioridad |
 |---|---|---|
 | B1-a | El viewport del editor ignora rotacion/escala del Transform | Media |
 | B1-b | El viewport del editor ignora `RenderComponent::mesh` | Media |
-| C3 | `popen()` del pipeline de build | Baja |
 | B1-c | El viewport del editor no implementa `renderMode` billboard | Baja |
-| ~~A2~~ | ~~Escena de benchmark y medicion de frame time~~ | ✅ Resuelta |
-| ~~A3~~ | ~~`MaterialImporter` + Asset Browser~~ | ✅ Resuelta |
-| ~~B1~~ | ~~Verificar Inspector con componentes nuevos~~ | ✅ Verificada (3 bugs) |
-| ~~B2~~ | ~~Picos de frame de ~1.2 s en el editor~~ | ✅ Resuelta |
-| ~~C1~~ | ~~Artefactos mutables en `.library/`~~ | ✅ Resuelta |
-| ~~C2~~ | ~~Clarificar `library/` vs `.library/`~~ | ✅ Resuelta |
-| ~~A1~~ | ~~Instancing por malla~~ | ❌ Descartada con datos |
+
+Los tres comparten causa: `EditorApp::renderWorldToTexture()` es un camino de render propio que no se actualizo con el Sprint 15. Conviene encararlos juntos.
+
+### Cerradas
+
+| ID | Tarea | Resultado |
+|---|---|---|
+| A1 | Instancing por malla | ❌ Descartada con datos |
+| A2 | Escena de benchmark y medicion de frame time | ✅ Resuelta |
+| A3 | `MaterialImporter` + Asset Browser | ✅ Resuelta |
+| B1 | Verificar Inspector con componentes nuevos | ✅ Verificada (4/7; 3 bugs abiertos) |
+| B2 | Picos de frame de ~1.2 s en el editor | ✅ Resuelta |
+| C1 | Artefactos mutables en `.library/` | ✅ Resuelta |
+| C2 | Clarificar `library/` vs `.library/` | ✅ Resuelta |
+| C3 | `popen()` del pipeline de build | ✅ Resuelta |
+
+### Bugs preexistentes corregidos de paso
+
+| Hallazgo | Donde aparecio |
+|---|---|
+| El `FileWatcher` anulaba su propio throttle y hasheaba 363 MB por frame | B2 |
+| El mapeo `AssetType` ↔ string estaba triplicado y guardaba Prefab/Sprite/Model como `Unknown` | A3 |
+| Los comandos Add/Remove/EditComponentField no tenian ningun test | B1 |
+
+### Cobertura de tests
+
+De 29 a 32 tests en `ctest`:
+
+| Test | Cubre |
+|---|---|
+| `test_material_importer` | A3: deteccion de tipo, alta con GUID, reimport incremental, round-trip de `AssetType` |
+| `test_component_commands` | B1: reflexion de Physics, apply/undo/redo de los 3 comandos, round-trip de escena |
+| `test_process_runner` | C3: captura incremental, codigo de salida y ausencia de inyeccion de shell |

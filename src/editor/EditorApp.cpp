@@ -24,6 +24,7 @@
 #include "TextureCache.h"
 #include "db/DbMode.h"
 #include "project/GameBuildPipeline.h"
+#include "project/ProcessRunner.h"
 #include "project/ProjectDataMigrator.h"
 #include "scene/SceneRepositorySqlite.h"
 
@@ -3682,7 +3683,7 @@ void EditorApp::buildAndRun()
             "C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\Common7\\IDE\\CommonExtensions\\Microsoft\\CMake\\CMake\\bin\\cmake.exe",
         };
         for (const char* p : vsCandidates) {
-            if (fs::exists(p)) { cmakeExe = "\"" + std::string(p) + "\""; break; }
+            if (fs::exists(p)) { cmakeExe = p; break; }
         }
     }
     if (cmakeExe.empty()) {
@@ -3690,30 +3691,22 @@ void EditorApp::buildAndRun()
         addLog("        To build VulkanBootstrap manually: dash build -Vulkan");
         return;
     }
-    std::string cmd = cmakeExe + " --build \"" + std::string(BUILD_DIR)
-                    + "\" --target VulkanBootstrap --config Release 2>&1";
-    FILE* pipe = _popen(cmd.c_str(), "r");
+    const std::vector<std::string> buildArgv = {
+        cmakeExe, "--build", BUILD_DIR, "--target", "VulkanBootstrap", "--config", "Release"
+    };
 #else
-    std::string cmd = "cd \"" + std::string(BUILD_DIR)
-                    + "\" && make VulkanBootstrap 2>&1";
-    FILE* pipe = popen(cmd.c_str(), "r");
+    const std::vector<std::string> buildArgv = {
+        "cmake", "--build", BUILD_DIR, "--target", "VulkanBootstrap", "--parallel"
+    };
 #endif
-    if (!pipe) {
+
+    const int ret = runProcessCapture(buildArgv, [this](const std::string& line) {
+        addLog(line);
+    });
+    if (ret < 0) {
         addLog("ERROR: Could not start build.");
         return;
     }
-
-    char buf[256];
-    while (fgets(buf, sizeof(buf), pipe)) {
-        std::string line(buf);
-        if (!line.empty() && line.back() == '\n') line.pop_back();
-        if (!line.empty()) addLog(line);
-    }
-#ifdef _WIN32
-    int ret = _pclose(pipe);
-#else
-    int ret = pclose(pipe);
-#endif
 
     if (ret == 0) {
         addLog("[VOK] Build OK. Launching Vulkan runtime...");

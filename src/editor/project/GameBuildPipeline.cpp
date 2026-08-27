@@ -1,4 +1,5 @@
 #include "GameBuildPipeline.h"
+#include "ProcessRunner.h"
 
 #include <nlohmann/json.hpp>
 #include <array>
@@ -33,30 +34,15 @@ fs::path resolveBuiltExecutable(const std::string& buildDir, const std::string& 
     return {};
 }
 
-bool runCommandCapture(const std::string& cmd, std::vector<std::string>& out)
+bool runCommandCapture(const std::vector<std::string>& argv, std::vector<std::string>& out)
 {
-#ifdef _WIN32
-    FILE* pipe = _popen(cmd.c_str(), "r");
-#else
-    FILE* pipe = popen(cmd.c_str(), "r");
-#endif
-    if (!pipe) {
-        out.push_back("[ERROR] Could not start command: " + cmd);
+    const int rc = runProcessCapture(argv, [&out](const std::string& line) {
+        out.push_back(line);
+    });
+    if (rc < 0) {
+        out.push_back("[ERROR] Could not start command: " + argv.front());
         return false;
     }
-
-    std::array<char, 512> buf{};
-    while (fgets(buf.data(), static_cast<int>(buf.size()), pipe)) {
-        std::string line(buf.data());
-        if (!line.empty() && line.back() == '\n') line.pop_back();
-        if (!line.empty()) out.push_back(line);
-    }
-
-#ifdef _WIN32
-    int rc = _pclose(pipe);
-#else
-    int rc = pclose(pipe);
-#endif
     return rc == 0;
 }
 
@@ -114,8 +100,12 @@ GameBuildPipeline::BuildResult GameBuildPipeline::build(const ProjectManifest& m
     const bool skipBuild = (skipBuildEnv && std::string(skipBuildEnv) == "1");
     if (!skipBuild) {
         res.log.push_back("[BuildPipeline] Building target VulkanBootstrap...");
-        std::string cmd = "cd \"" + buildDir + "\" && cmake --build . --target VulkanBootstrap --parallel 2>&1";
-        if (!runCommandCapture(cmd, res.log)) {
+        // cmake --build takes the directory as an argument, so no shell (and no
+        // "cd <dir> &&") is involved even when buildDir contains spaces.
+        const std::vector<std::string> argv = {
+            "cmake", "--build", buildDir, "--target", "VulkanBootstrap", "--parallel"
+        };
+        if (!runCommandCapture(argv, res.log)) {
             res.log.push_back("[ERROR] Build failed.");
             return res;
         }

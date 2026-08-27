@@ -139,6 +139,17 @@ target_link_libraries(test_component_commands PRIVATE
 target_compile_options(test_component_commands PRIVATE ${DASH_COMPILE_FLAGS})
 add_test(NAME test_component_commands COMMAND test_component_commands)
 
+# ── ProcessRunner: subprocesos sin shell (backlog C3) ────────────────────────
+add_executable(test_process_runner
+    test_process_runner.cpp
+    ${CMAKE_SOURCE_DIR}/src/editor/project/ProcessRunner.cpp
+)
+target_include_directories(test_process_runner PRIVATE
+    ${CMAKE_SOURCE_DIR}/src/editor/project
+)
+target_compile_options(test_process_runner PRIVATE ${DASH_COMPILE_FLAGS})
+add_test(NAME test_process_runner COMMAND test_process_runner)
+
 # ── World seed determinism ────────────────────────────────────────────────────
 dash_add_test(test_world_seed_determinism test_world_seed_determinism.cpp)
 
@@ -444,6 +455,7 @@ add_executable(test_game_build_pipeline
     test_game_build_pipeline.cpp
     ${CMAKE_SOURCE_DIR}/src/editor/project/ProjectManifest.cpp
     ${CMAKE_SOURCE_DIR}/src/editor/project/GameBuildPipeline.cpp
+    ${CMAKE_SOURCE_DIR}/src/editor/project/ProcessRunner.cpp
 )
 target_include_directories(test_game_build_pipeline PRIVATE
     ${CMAKE_SOURCE_DIR}/src
