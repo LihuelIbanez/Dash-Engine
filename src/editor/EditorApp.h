@@ -10,11 +10,13 @@
 #include "AssetBrowserPanel.h"
 #include "AssetInspectorPanel.h"
 #include "PlaySession.h"
+#include "PlaybackController.h"
 #include "Game.h"
 #include "Reflection.h"
 #include "EntityRegistry.h"
 #include "ContentValidator.h"
 #include "ValidationPanel.h"
+#include "RuntimeInspectorPanel.h"
 #include "SpriteEditorPanel.h"
 #include "AudioPanel.h"
 #include "WelcomePanel.h"
@@ -56,6 +58,15 @@ private:
     std::unique_ptr<Game> playGame_;     // live game instance during Play
     void enterPlayMode();
     void exitPlayMode();
+
+    // ── Play-mode transport (pause / step / slow motion) ─────────────────────
+    dash::playmode::PlaybackController playback_;
+    void drawPlaybackControls();
+    void handlePlaybackShortcut(SDL_Keycode key);
+    // Path polled by the runtime (VulkanBootstrap --state).
+    std::string playbackStatePath() const;
+    void syncPlaybackStateFile(bool force = false);
+    std::string playbackSpeedLabel() const;
 
     // ── Scene ────────────────────────────────────────────────────────────────
     SceneData    scene_;
@@ -146,10 +157,11 @@ private:
 
     // ── Content Validation ─────────────────────────────────────────
     ContentValidator             contentValidator_;
-    ValidationPanel              validationPanel_;
-    std::vector<ValidationIssue> validationIssues_;
+    ValidationPanel              validationPanel_;    std::vector<ValidationIssue> validationIssues_;
     bool                         showValidationPanel_ = false;
-    bool                         showAboutModal_      = false;
+    // ── Runtime inspection ────────────────────────────
+    RuntimeInspectorPanel        runtimeInspectorPanel_;
+    bool                         showRuntimeInspector_ = false;    bool                         showAboutModal_      = false;
     bool                         showMigrationLogModal_ = false;
     bool                         migrationLastSuccess_ = false;
     std::string                  migrationSummaryText_;

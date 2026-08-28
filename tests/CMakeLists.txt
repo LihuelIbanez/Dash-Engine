@@ -835,3 +835,35 @@ if(TARGET assimp::assimp)
 endif()
 target_compile_options(test_audio_importer PRIVATE ${DASH_COMPILE_FLAGS})
 add_test(NAME test_audio_importer COMMAND test_audio_importer)
+
+# ── Play-mode transport: contador de step, pausa y timeScale ─────────────────
+# PlaybackController es header-only y no depende de ImGui/SDL: se testea solo.
+add_executable(test_playback_controller test_playback_controller.cpp)
+target_include_directories(test_playback_controller PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/src/editor/playmode
+)
+target_compile_options(test_playback_controller PRIVATE ${DASH_COMPILE_FLAGS})
+add_test(NAME test_playback_controller COMMAND test_playback_controller)
+
+# ── RuntimeInspector: diff vs snapshot, filtro y buffer del historial ────────
+# Solo la logica pura del panel (header-only), sin ImGui ni ventana.
+add_executable(test_runtime_inspector
+    test_runtime_inspector.cpp
+)
+target_include_directories(test_runtime_inspector PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/src/core
+    ${CMAKE_SOURCE_DIR}/src/core/components
+    ${CMAKE_SOURCE_DIR}/src/entities
+    ${CMAKE_SOURCE_DIR}/src/scene
+    ${CMAKE_SOURCE_DIR}/src/world
+    ${CMAKE_SOURCE_DIR}/src/rendering
+    ${CMAKE_SOURCE_DIR}/src/editor
+    ${SDL2_INCLUDE_DIRS}
+)
+target_link_libraries(test_runtime_inspector PRIVATE
+    game_core nlohmann_json::nlohmann_json ${SDL2_LIBRARIES}
+)
+target_compile_options(test_runtime_inspector PRIVATE ${DASH_COMPILE_FLAGS})
+add_test(NAME test_runtime_inspector COMMAND test_runtime_inspector)

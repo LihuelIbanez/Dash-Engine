@@ -801,6 +801,9 @@ void EditorApp::run()
 {
     constexpr float TARGET_FRAME_MS = 1000.0f / 60.0f; // 60 fps cap
 
+    // A runtime can be launched at any moment; leave a valid transport on disk.
+    syncPlaybackStateFile(true);
+
     while (running_) {
         uint32_t frameStart = SDL_GetTicks();
         Profiler::instance().beginFrame();
@@ -818,6 +821,12 @@ void EditorApp::run()
                     else
                         performUndo();
                 }
+            }
+
+            // Transport shortcuts, ignored while a text field owns the keyboard.
+            if (ev.type == SDL_KEYDOWN && ev.key.repeat == 0 &&
+                !ImGui::GetIO().WantTextInput) {
+                handlePlaybackShortcut(ev.key.keysym.sym);
             }
         }
 
@@ -915,6 +924,10 @@ void EditorApp::run()
                     validationIssues_ = contentValidator_.validate(scene_, world_, assetDb_);
                     addLog("Validation: " + std::to_string(validationIssues_.size()) + " issue(s) found.");
                 });
+        if (showRuntimeInspector_)
+            runtimeInspectorPanel_.draw(scene_, editorMode_ == EditorMode::Play,
+                                        selectedEntityId_, nullptr,
+                                        [this](const std::string& m){ addLog(m); });
         if (spriteEditor_.isOpen)
             spriteEditor_.draw();
         if (showAudioPanel_)
@@ -952,7 +965,10 @@ void EditorApp::run()
                                      : std::string("No Project");
             std::string title = "DashEngine - \"" + projectTitle + "\"";
             if (scene_.modified) title += " *";
-            if (editorMode_ == EditorMode::Play) title += "  [PLAYING]";
+            if (editorMode_ == EditorMode::Play) {
+                title += playback_.paused() ? "  [PAUSED]" : "  [PLAYING]";
+                title += "  " + playbackSpeedLabel();
+            }
             SDL_SetWindowTitle(window_, title.c_str());
         }
 
@@ -973,9 +989,13 @@ void EditorApp::run()
             float x = vp->WorkPos.x + 10.f;
 
             // Mode indicator
-            const char* modeText = (editorMode_ == EditorMode::Edit) ? "EDIT" : "PLAYING";
-            dl->AddText({x, textY}, IM_COL32(255, 255, 255, 255), modeText);
-            x += ImGui::CalcTextSize(modeText).x + 20.f;
+            std::string modeText = "EDIT";
+            if (editorMode_ == EditorMode::Play) {
+                modeText = playback_.paused() ? "PAUSED" : "PLAYING";
+                modeText += "  " + playbackSpeedLabel();
+            }
+            dl->AddText({x, textY}, IM_COL32(255, 255, 255, 255), modeText.c_str());
+            x += ImGui::CalcTextSize(modeText.c_str()).x + 20.f;
 
             // Scene name
             if (!scene_.sceneName.empty()) {
@@ -997,6 +1017,9 @@ void EditorApp::run()
             dl->AddText({vp->WorkPos.x + barW - fpsW - 10.f, textY},
                         IM_COL32(255, 255, 255, 200), fpsStr);
         }
+
+        // Push the transport to the runtime after the UI had a chance to change it.
+        syncPlaybackStateFile();
 
         // Render
         ImGui::Render();
@@ -1066,6 +1089,7 @@ void EditorApp::drawMenuBar()
         ImGui::MenuItem("Entity Viewport", nullptr, &showEntityViewport_);
         ImGui::MenuItem("Scene Selector", nullptr, &showSceneSelector_);
         ImGui::MenuItem("Validation Panel", nullptr, &showValidationPanel_);
+        ImGui::MenuItem("Runtime Inspector", nullptr, &showRuntimeInspector_);
         ImGui::Separator();
         ImGui::MenuItem("Auto-Reload Assets", nullptr, &autoReload_);
         ImGui::EndMenu();
@@ -1244,6 +1268,11 @@ void EditorApp::drawToolbar()
         ImGui::PushStyleColor(ImGuiCol_ButtonActive,  {0.710f, 0.150f, 0.150f, 1.f});
         if (ImGui::Button(ICON_FA_STOP "  Stop  ", {110, 34})) exitPlayMode();
         ImGui::PopStyleColor(3);
+
+        ImGui::SameLine();
+        ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+        ImGui::SameLine();
+        drawPlaybackControls();
     }
 
     ImGui::SameLine();
@@ -1281,6 +1310,120 @@ void EditorApp::drawToolbar()
     ImGui::PopStyleColor(3);
 
     ImGui::End();
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Play-mode transport – pause / step / time scale
+// ═════════════════════════════════════════════════════════════════════════════
+namespace {
+constexpr float       kPlaybackSpeeds[]      = { 0.25f, 0.5f, 1.0f, 2.0f };
+constexpr const char* kPlaybackSpeedLabels[] = { "0.25x", "0.5x", "1x", "2x" };
+constexpr int         kPlaybackSpeedCount    = 4;
+} // namespace
+
+void EditorApp::drawPlaybackControls()
+{
+    const bool paused = playback_.paused();
+
+    if (ImGui::Button(paused ? ICON_FA_PLAY "  Resume  " : ICON_FA_PAUSE "  Pause  ", {130, 34}))
+        playback_.togglePause();
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("%s the running game (F6)", paused ? "Resume" : "Pause");
+
+    ImGui::SameLine();
+    ImGui::BeginDisabled(!paused);
+    if (ImGui::Button(ICON_FA_FORWARD_STEP "  Step  ", {110, 34}))
+        playback_.requestStep();
+    ImGui::EndDisabled();
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+        ImGui::SetTooltip("Advance a single frame (F10)");
+
+    ImGui::SameLine();
+    int speedIndex = 2;
+    for (int i = 0; i < kPlaybackSpeedCount; ++i) {
+        if (std::fabs(playback_.timeScale() - kPlaybackSpeeds[i]) < 0.001f) {
+            speedIndex = i;
+            break;
+        }
+    }
+    ImGui::SetNextItemWidth(90);
+    if (ImGui::Combo("##playbackSpeed", &speedIndex, kPlaybackSpeedLabels, kPlaybackSpeedCount))
+        playback_.setTimeScale(kPlaybackSpeeds[speedIndex]);
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("Simulation speed");
+}
+
+std::string EditorApp::playbackSpeedLabel() const
+{
+    char buf[24];
+    std::snprintf(buf, sizeof(buf), "%gx", static_cast<double>(playback_.timeScale()));
+    return buf;
+}
+
+void EditorApp::handlePlaybackShortcut(SDL_Keycode key)
+{
+    switch (key) {
+    case SDLK_F5:
+        if (editorMode_ == EditorMode::Edit) enterPlayMode();
+        else                                 exitPlayMode();
+        break;
+    case SDLK_F6:
+        if (editorMode_ == EditorMode::Play) {
+            playback_.togglePause();
+            addLog(playback_.paused() ? "[Play] Paused." : "[Play] Resumed.");
+        }
+        break;
+    case SDLK_F10:
+        // Stepping only makes sense while paused, so pause first if needed.
+        if (editorMode_ == EditorMode::Play) {
+            playback_.setPaused(true);
+            playback_.requestStep();
+        }
+        break;
+    default:
+        break;
+    }
+}
+
+std::string EditorApp::playbackStatePath() const
+{
+    return std::string(BUILD_DIR) + "/generated/vulkan_viewport_state.json";
+}
+
+void EditorApp::syncPlaybackStateFile(bool force)
+{
+    const bool dirty = playback_.consumeDirty();
+    if (!dirty && !force) return;
+
+    const fs::path path = fs::path(playbackStatePath());
+    std::error_code ec;
+    fs::create_directories(path.parent_path(), ec);
+
+    // Merge instead of overwrite: other blocks (camera, viewport…) may live here.
+    json state = json::object();
+    {
+        std::ifstream in(path);
+        if (in.is_open()) {
+            try { in >> state; } catch (...) { state = json::object(); }
+        }
+    }
+    if (!state.is_object()) state = json::object();
+
+    state["playback"] = {
+        {"paused",     playback_.paused()},
+        {"timeScale",  playback_.timeScale()},
+        {"stepSerial", playback_.stepSerial()},
+    };
+
+    // Write-then-rename so the polling runtime never reads a half-written file.
+    const fs::path tmp = fs::path(path).concat(".tmp");
+    {
+        std::ofstream out(tmp, std::ios::trunc);
+        if (!out.is_open()) return;
+        out << state.dump(2);
+    }
+    fs::rename(tmp, path, ec);
+    if (ec) fs::remove(tmp, ec);
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -2308,12 +2451,15 @@ void EditorApp::drawViewport()
 
     // Play-mode overlay indicator
     if (editorMode_ == EditorMode::Play) {
+        const std::string overlay = playback_.paused()
+            ? "PAUSED " + playbackSpeedLabel()
+            : "PLAYING " + playbackSpeedLabel();
         ImVec2 wp = ImGui::GetWindowPos();
         ImGui::GetWindowDrawList()->AddRectFilled(
-            {wp.x + 8, wp.y + 30}, {wp.x + 120, wp.y + 56},
+            {wp.x + 8, wp.y + 30}, {wp.x + 140, wp.y + 56},
             IM_COL32(200, 40, 40, 200), 4.f);
         ImGui::GetWindowDrawList()->AddText(
-            {wp.x + 16, wp.y + 34}, IM_COL32(255, 255, 255, 255), "PLAYING");
+            {wp.x + 16, wp.y + 34}, IM_COL32(255, 255, 255, 255), overlay.c_str());
     }
 
     ImGui::End();
@@ -3689,6 +3835,10 @@ void EditorApp::enterPlayMode()
 
     editorMode_ = EditorMode::Play;
 
+    // Never inherit pause/speed from a previous session.
+    playback_.reset();
+    syncPlaybackStateFile(true);
+
     // Center camera on player entity
     for (const auto& e : scene_.entities) {
         if (e.type == EntityData::Type::Player) {
@@ -3710,6 +3860,8 @@ void EditorApp::exitPlayMode()
     playSession_.restore(scene_, world_);
     clearSelection();
     editorMode_ = EditorMode::Edit;
+    playback_.reset();
+    syncPlaybackStateFile(true);
     addLog("Exited Play mode (scene restored).");
 
     // ── Apply hot-reload changes that were deferred during Play ──────────────
@@ -3839,6 +3991,11 @@ void EditorApp::buildAndRun()
             runArgs.emplace_back("--scene");
             runArgs.push_back(tempScene);
         }
+        // Transport channel: the runtime polls this file for pause/step/timeScale.
+        playback_.reset();
+        syncPlaybackStateFile(true);
+        runArgs.emplace_back("--state");
+        runArgs.push_back(playbackStatePath());
 
         {
             std::string argsLog = "[VSTEP] Build&Run launch args:";
