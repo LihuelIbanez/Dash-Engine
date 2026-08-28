@@ -9,6 +9,8 @@
 
 #include "rendering/mesh/MeshBuffers.h"
 #include "rendering/textures/TextureLoader.h"
+#include "rendering/animation/AnimationPlayer.h"
+#include "rendering/animation/BonePalette.h"
 #include "assets/cache/AssetCache3D.h"
 #include "assets/AssetDatabase.h"
 #include "assets/MaterialAsset.h"
@@ -73,6 +75,13 @@ private:
     // on first use so scenes that reference materials by path never read it.
     const AssetDatabase* materialDb();
 
+    // Bone palette ring plus its dynamic-offset descriptor, shared by every
+    // skinned draw in a frame.
+    bool createBoneResources();
+    void destroyBoneResources();
+    // Advances every animated instance and fills its palette slot.
+    void updateSkinnedInstances(float dt, std::vector<InstanceResources>& res);
+
     // Prints min/avg/p95/max for the samples collected during runSmoke().
     void reportFrameStats(uint32_t renderedFrames) const;
 
@@ -111,6 +120,17 @@ private:
 
     VkPipelineLayout billboardPipelineLayout_ = VK_NULL_HANDLE;
     VkPipeline billboardPipeline_ = VK_NULL_HANDLE;
+
+    VkPipelineLayout skinnedPipelineLayout_ = VK_NULL_HANDLE;
+    VkPipeline skinnedPipeline_ = VK_NULL_HANDLE;
+    VkDescriptorSetLayout boneSetLayout_ = VK_NULL_HANDLE;
+    VkDescriptorPool boneDescriptorPool_ = VK_NULL_HANDLE;
+    VkDescriptorSet boneSet_ = VK_NULL_HANDLE;
+    VkBuffer boneBuffer_ = VK_NULL_HANDLE;
+    VkDeviceMemory boneMemory_ = VK_NULL_HANDLE;
+    dash::anim::BonePalette bonePalette_;
+    // One player per scene instance carrying an AnimationComponent.
+    std::unordered_map<size_t, dash::anim::AnimationPlayer> animators_;
 
     bool initialized_ = false;
 

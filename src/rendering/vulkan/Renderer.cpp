@@ -434,6 +434,21 @@ bool Renderer::init(WindowContext& window)
 
     if (!createPerFrameUniformBuffers()) return false;
 
+    // Skinning is optional: without it animated meshes just draw in bind pose.
+    if (createBoneResources()) {
+        std::string skinErr;
+        const std::string shaderDir = VULKAN_SHADER_DIR;
+        if (!PipelineBuilder::createSkinnedPipeline(
+                deviceContext_.device(), swapchain_.extent(), swapchain_.renderPass(),
+                descriptorSetLayout_, boneSetLayout_,
+                shaderDir + "/skinned.vert.spv", shaderDir + "/skinned.frag.spv",
+                skinnedPipelineLayout_, skinnedPipeline_, skinErr)) {
+            std::fprintf(stderr, "[Skin] Skinned pipeline unavailable: %s\n", skinErr.c_str());
+            skinnedPipeline_ = VK_NULL_HANDLE;
+            skinnedPipelineLayout_ = VK_NULL_HANDLE;
+        }
+    }
+
     if (!physicsWorld_.init()) {
         std::fprintf(stderr, "[D80] PhysicsWorld initialization failed.\n");
         return false;
@@ -700,9 +715,146 @@ void Renderer::resolveSceneMeshes()
     }
 }
 
-void Renderer::destroySceneMaterials()
+// ─────────────────────────────────────────────────────────────────────────────
+// Bone palette — one dynamic-offset UBO shared by every skinned draw. Slots are
+// padded to the device alignment so a whole frame fits in a single buffer.
+// ─────────────────────────────────────────────────────────────────────────────
+bool Renderer::createBoneResources()
 {
     VkDevice dev = deviceContext_.device();
+
+    VkPhysicalDeviceProperties props{};
+    vkGetPhysicalDeviceProperties(deviceContext_.physicalDevice(), &props);
+    const VkDeviceSize align = std::max<VkDeviceSize>(
+        props.limits.minUniformBufferOffsetAlignment, 1);
+
+    constexpr uint32_t kSlots = 64;
+    const uint32_t stride = static_cast<uint32_t>(
+        ((dash::anim::kBonePaletteBytes + align - 1) / align) * align);
+
+    if (!createHostVisibleBuffer(deviceContext_.physicalDevice(), dev,
+                                 static_cast<VkDeviceSize>(stride) * kSlots,
+                                 VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                                 boneBuffer_, boneMemory_)) {
+        std::fprintf(stderr, "[Skin] Failed to create bone palette buffer.\n");
+        return false;
+    }
+
+    void* mapped = nullptr;
+    if (vkMapMemory(dev, boneMemory_, 0, VK_WHOLE_SIZE, 0, &mapped) != VK_SUCCESS) {
+        std::fprintf(stderr, "[Skin] Failed to map bone palette buffer.\n");
+        return false;
+    }
+    bonePalette_.mapped = static_cast<unsigned char*>(mapped);
+    bonePalette_.slotStride = stride;
+    bonePalette_.slotCount = kSlots;
+
+    VkDescriptorSetLayoutBinding binding{};
+    binding.binding = 0;
+    binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+    binding.descriptorCount = 1;
+    binding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+
+    VkDescriptorSetLayoutCreateInfo layoutInfo{};
+    layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    layoutInfo.bindingCount = 1;
+    layoutInfo.pBindings = &binding;
+    if (vkCreateDescriptorSetLayout(dev, &layoutInfo, nullptr, &boneSetLayout_) != VK_SUCCESS)
+        return false;
+
+    VkDescriptorPoolSize poolSize{};
+    poolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+    poolSize.descriptorCount = 1;
+    VkDescriptorPoolCreateInfo poolInfo{};
+    poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    poolInfo.maxSets = 1;
+    poolInfo.poolSizeCount = 1;
+    poolInfo.pPoolSizes = &poolSize;
+    if (vkCreateDescriptorPool(dev, &poolInfo, nullptr, &boneDescriptorPool_) != VK_SUCCESS)
+        return false;
+
+    VkDescriptorSetAllocateInfo alloc{};
+    alloc.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    alloc.descriptorPool = boneDescriptorPool_;
+    alloc.descriptorSetCount = 1;
+    alloc.pSetLayouts = &boneSetLayout_;
+    if (vkAllocateDescriptorSets(dev, &alloc, &boneSet_) != VK_SUCCESS)
+        return false;
+
+    VkDescriptorBufferInfo bufInfo{};
+    bufInfo.buffer = boneBuffer_;
+    bufInfo.offset = 0;
+    bufInfo.range = dash::anim::kBonePaletteBytes;
+
+    VkWriteDescriptorSet write{};
+    write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    write.dstSet = boneSet_;
+    write.dstBinding = 0;
+    write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+    write.descriptorCount = 1;
+    write.pBufferInfo = &bufInfo;
+    vkUpdateDescriptorSets(dev, 1, &write, 0, nullptr);
+
+    std::printf("[Skin] Bone palette ready: %u slots of %u bytes (%u bones max).\n",
+                kSlots, stride, dash::anim::kBonePaletteMatrixCount);
+    return true;
+}
+
+void Renderer::destroyBoneResources()
+{
+    VkDevice dev = deviceContext_.device();
+    if (dev == VK_NULL_HANDLE) return;
+
+    if (boneDescriptorPool_ != VK_NULL_HANDLE) {
+        vkDestroyDescriptorPool(dev, boneDescriptorPool_, nullptr);
+        boneDescriptorPool_ = VK_NULL_HANDLE;
+        boneSet_ = VK_NULL_HANDLE;
+    }
+    if (boneSetLayout_ != VK_NULL_HANDLE) {
+        vkDestroyDescriptorSetLayout(dev, boneSetLayout_, nullptr);
+        boneSetLayout_ = VK_NULL_HANDLE;
+    }
+    if (bonePalette_.mapped != nullptr) {
+        vkUnmapMemory(dev, boneMemory_);
+        bonePalette_ = dash::anim::BonePalette{};
+    }
+    if (boneBuffer_ != VK_NULL_HANDLE) {
+        vkDestroyBuffer(dev, boneBuffer_, nullptr);
+        boneBuffer_ = VK_NULL_HANDLE;
+    }
+    if (boneMemory_ != VK_NULL_HANDLE) {
+        vkFreeMemory(dev, boneMemory_, nullptr);
+        boneMemory_ = VK_NULL_HANDLE;
+    }
+    PipelineBuilder::destroy(dev, skinnedPipelineLayout_, skinnedPipeline_);
+    skinnedPipelineLayout_ = VK_NULL_HANDLE;
+    skinnedPipeline_ = VK_NULL_HANDLE;
+}
+
+void Renderer::updateSkinnedInstances(float dt, std::vector<InstanceResources>& res)
+{
+    if (!bonePalette_.usable()) return;
+    bonePalette_.reset();
+
+    for (auto& [index, player] : animators_) {
+        if (index >= res.size()) continue;
+        player.update(dt);
+
+        const std::vector<dash::anim::Mat4>& mats = player.boneMatrices();
+        if (mats.empty()) continue;
+
+        const int64_t offset = bonePalette_.writeSlot(mats.front().m,
+                                                      static_cast<uint32_t>(mats.size()));
+        if (offset < 0) break;  // frame ran out of slots
+
+        res[index].boneMatrices = mats.front().m;
+        res[index].boneCount = static_cast<uint32_t>(mats.size());
+        res[index].boneOffset = static_cast<uint32_t>(offset);
+    }
+}
+
+void Renderer::destroySceneMaterials()
+{    VkDevice dev = deviceContext_.device();
     if (dev == VK_NULL_HANDLE) return;
 
     for (auto& m : materials_) {
@@ -1069,6 +1221,10 @@ void Renderer::recordDrawCommands(VkCommandBuffer cmd, uint32_t imageIndex)
     drawParams.opaqueLayout      = pipelineLayout_;
     drawParams.billboardPipeline = billboardPipeline_;
     drawParams.billboardLayout   = billboardPipelineLayout_;
+    drawParams.skinnedPipeline   = skinnedPipeline_;
+    drawParams.skinnedLayout     = skinnedPipelineLayout_;
+    drawParams.boneSet           = boneSet_;
+    drawParams.bonePalette       = &bonePalette_;
     drawParams.defaultSet        = descriptorSets_[imageIndex];
     drawParams.fallbackMesh      = &meshBuffers_;
     drawParams.lights            = &sceneLights_;
@@ -1250,6 +1406,7 @@ void Renderer::shutdown()
 
     frameGraph_.shutdown();
 
+    destroyBoneResources();
     destroySceneMaterials();
 
     for (size_t i = 0; i < uniformBuffers_.size(); ++i) {

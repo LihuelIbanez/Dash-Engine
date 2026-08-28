@@ -64,6 +64,7 @@ struct InstanceResources {
     // Skinning: non-null selects the skinned pipeline for this instance.
     const float* boneMatrices = nullptr;   // boneCount * 16 floats, column-major
     uint32_t     boneCount = 0;
+    uint32_t     boneOffset = 0;           // byte offset of this instance's palette slot
 };
 
 struct SceneDrawParams {

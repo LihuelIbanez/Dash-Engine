@@ -181,6 +181,63 @@ SceneDrawStats drawSceneInstances(VkCommandBuffer cmd,
                                 params.opaqueLayout, 0, 1, &params.defaultSet, 0, nullptr);
     }
 
+    // ── Skinned meshes ──────────────────────────────────────────────────────────
+    // Each instance addresses its own palette slot through the dynamic offset,
+    // so one descriptor serves the whole frame.
+    if (hasSkinned) {
+        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, params.skinnedPipeline);
+        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                params.skinnedLayout, 0, 1, &params.defaultSet, 0, nullptr);
+
+        const MeshBuffers* boundSkinnedMesh = nullptr;
+        for (std::size_t i = 0; i < instances.size(); ++i) {
+            const RenderInstance& inst = instances[i];
+            if (!inst.visible || isBillboard(inst)) continue;
+
+            const InstanceResources& res = resourcesAt(resources, i);
+            const MeshBuffers* mesh = res.mesh ? res.mesh : params.fallbackMesh;
+            if (!wantsSkinning(res, mesh, params)) continue;
+
+            if (!frustum.intersectsAabb(inst.position.x * TILE_SCALE,
+                                        inst.position.y,
+                                        inst.position.z * TILE_SCALE,
+                                        inst.scale.x, inst.scale.y, inst.scale.z)) {
+                ++stats.culled;
+                continue;
+            }
+            ++stats.drawn;
+
+            if (mesh != boundSkinnedMesh) {
+                VkBuffer vb[] = { mesh->vertexBuffer() };
+                VkDeviceSize offsets[] = { 0 };
+                vkCmdBindVertexBuffers(cmd, 0, 1, vb, offsets);
+                vkCmdBindIndexBuffer(cmd, mesh->indexBuffer(), 0, mesh->indexType());
+                boundSkinnedMesh = mesh;
+            }
+
+            const uint32_t dynamicOffset = res.boneOffset;
+            vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                    params.skinnedLayout, 1, 1, &params.boneSet,
+                                    1, &dynamicOffset);
+
+            const Mat4 model = trs(
+                {inst.position.x * TILE_SCALE, inst.position.y, inst.position.z * TILE_SCALE},
+                inst.yawDeg, inst.pitchDeg, inst.rollDeg,
+                {inst.scale.x, inst.scale.y, inst.scale.z});
+
+            float pc[kInstancePushConstantFloats];
+            buildInstancePushConstants(model,
+                                       inst.color.x * res.tint[0],
+                                       inst.color.y * res.tint[1],
+                                       inst.color.z * res.tint[2],
+                                       1.0f, lighting, pc, lightCount);
+            vkCmdPushConstants(cmd, params.skinnedLayout,
+                               VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+                               0, sizeof(pc), pc);
+            vkCmdDrawIndexed(cmd, mesh->indexCount(), 1, 0, 0, 0);
+        }
+    }
+
     // ── Billboards (transparent, after the opaque pass) ──────────────────────
     if (!hasBillboards || params.billboardPipeline == VK_NULL_HANDLE) return stats;
 
