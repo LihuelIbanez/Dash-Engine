@@ -21,6 +21,21 @@ bool isBillboard(const RenderInstance& inst)
     return inst.renderMode == static_cast<int>(InstanceRenderMode::BillboardSprite);
 }
 
+// A skinned draw needs the palette, the pipeline and a mesh that actually
+// carries the .dashmesh v2 skinning stream; anything else falls back to opaque.
+bool wantsSkinning(const InstanceResources& res, const MeshBuffers* mesh,
+                   const SceneDrawParams& params)
+{
+    return res.boneMatrices != nullptr
+        && res.boneCount > 0
+        && mesh != nullptr
+        && mesh->isSkinned()
+        && params.skinnedPipeline != VK_NULL_HANDLE
+        && params.boneSet != VK_NULL_HANDLE
+        && params.bonePalette != nullptr
+        && params.bonePalette->usable();
+}
+
 } // namespace
 
 void buildInstancePushConstants(const Mat4& model,
@@ -100,6 +115,7 @@ SceneDrawStats drawSceneInstances(VkCommandBuffer cmd,
     const MeshBuffers* boundMesh = params.fallbackMesh;
     VkDescriptorSet boundSet = params.defaultSet;
     bool hasBillboards = false;
+    bool hasSkinned = false;
 
     // ── Opaque pass ─────────────────────────────────────────────────────────
     for (std::size_t i = 0; i < instances.size(); ++i) {
@@ -108,6 +124,13 @@ SceneDrawStats drawSceneInstances(VkCommandBuffer cmd,
         if (isBillboard(inst)) {
             hasBillboards = true;
             continue;  // drawn in the transparent pass below
+        }
+
+        const InstanceResources& res = resourcesAt(resources, i);
+        const MeshBuffers* mesh = res.mesh ? res.mesh : params.fallbackMesh;
+        if (wantsSkinning(res, mesh, params)) {
+            hasSkinned = true;
+            continue;  // drawn in the skinned pass below
         }
 
         if (!frustum.intersectsAabb(inst.position.x * TILE_SCALE,
@@ -119,8 +142,6 @@ SceneDrawStats drawSceneInstances(VkCommandBuffer cmd,
         }
         ++stats.drawn;
 
-        const InstanceResources& res = resourcesAt(resources, i);
-        const MeshBuffers* mesh = res.mesh ? res.mesh : params.fallbackMesh;
         if (mesh != boundMesh) {
             VkBuffer vb[] = { mesh->vertexBuffer() };
             VkDeviceSize offsets[] = { 0 };

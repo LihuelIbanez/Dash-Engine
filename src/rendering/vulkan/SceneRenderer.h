@@ -6,6 +6,7 @@
 
 #include <vulkan/vulkan.h>
 
+#include "rendering/animation/BonePalette.h"
 #include "rendering/mesh/MeshBuffers.h"
 #include "rendering/vulkan/EditorBridge.h"
 #include "rendering/vulkan/RenderTypes.h"
@@ -74,6 +75,11 @@ struct SceneDrawParams {
     VkPipelineLayout   skinnedLayout     = VK_NULL_HANDLE;
     VkDescriptorSet    defaultSet        = VK_NULL_HANDLE;
     const MeshBuffers* fallbackMesh      = nullptr;
+
+    // Bone palette for this frame: set 1 of the skinned layout, addressed with
+    // one dynamic offset per skinned draw. Null disables the skinned pass.
+    VkDescriptorSet     boneSet     = VK_NULL_HANDLE;
+    dash::anim::BonePalette* bonePalette = nullptr;
 
     // Scene lights, already in render space. Empty falls back to the single
     // directional light carried in LightingParams.

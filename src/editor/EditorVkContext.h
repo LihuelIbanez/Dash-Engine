@@ -7,6 +7,7 @@
 #include "rendering/vulkan/DeviceContext.h"
 #include "rendering/vulkan/SwapchainContext.h"
 #include "rendering/vulkan/FrameGraphLite.h"
+#include "rendering/vulkan/SceneRenderer.h"
 #include "rendering/mesh/MeshBuffers.h"
 #include "world/TerrainMesh.h"
 #include <cstdint>
@@ -36,6 +37,11 @@ public:
     // ── Camera UBO ──────────────────────────────────────────────────────────
     void updateCamera(const float viewProj[16]);
 
+    // ── Scene light UBO (set 0, binding 2) ──────────────────────────────────
+    // Only the camera block plus `count` lights are uploaded; the rest is never
+    // read by the shader.
+    void updateSceneLights(const dash::vkexp::SceneLightsUbo& ubo, int count);
+
     // ── Pipeline access ─────────────────────────────────────────────────────
     VkPipeline          terrainPipeline()       const { return terrainPipeline_; }
     VkPipelineLayout    terrainPipelineLayout() const { return terrainPipelineLayout_; }
@@ -43,6 +49,9 @@ public:
     VkPipelineLayout    waterPipelineLayout()   const { return waterPipelineLayout_; }
     VkPipeline          basicPipeline()         const { return basicPipeline_; }
     VkPipelineLayout    basicPipelineLayout()   const { return basicPipelineLayout_; }
+    // VK_NULL_HANDLE when the *_lit shaders are missing; callers must fall back.
+    VkPipeline          basicLitPipeline()       const { return basicLitPipeline_; }
+    VkPipelineLayout    basicLitPipelineLayout() const { return basicLitPipelineLayout_; }
     VkPipeline          billboardPipeline()       const { return billboardPipeline_; }
     VkPipelineLayout    billboardPipelineLayout() const { return billboardPipelineLayout_; }
     VkDescriptorSet     sceneDescriptorSet()    const { return sceneDescSet_; }
@@ -98,6 +107,9 @@ private:
     VkBuffer              uboBuffer_       = VK_NULL_HANDLE;
     VkDeviceMemory        uboMemory_       = VK_NULL_HANDLE;
     void*                 uboMapped_       = nullptr; // persistently mapped
+    VkBuffer              lightUboBuffer_  = VK_NULL_HANDLE;
+    VkDeviceMemory        lightUboMemory_  = VK_NULL_HANDLE;
+    void*                 lightUboMapped_  = nullptr; // persistently mapped
 
     // Pipelines
     VkPipelineLayout terrainPipelineLayout_ = VK_NULL_HANDLE;
@@ -106,6 +118,8 @@ private:
     VkPipeline       waterPipeline_         = VK_NULL_HANDLE;
     VkPipelineLayout basicPipelineLayout_   = VK_NULL_HANDLE;
     VkPipeline       basicPipeline_         = VK_NULL_HANDLE;
+    VkPipelineLayout basicLitPipelineLayout_ = VK_NULL_HANDLE;
+    VkPipeline       basicLitPipeline_       = VK_NULL_HANDLE;
     VkPipelineLayout billboardPipelineLayout_ = VK_NULL_HANDLE;
     VkPipeline       billboardPipeline_       = VK_NULL_HANDLE;
 

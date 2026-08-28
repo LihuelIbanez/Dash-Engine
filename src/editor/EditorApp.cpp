@@ -2768,22 +2768,38 @@ void EditorApp::renderWorldToTexture()
 
     // ── Entity rendering ─────────────────────────────────────────────────────
     if (vkCtx_.cubeMesh().indexCount() > 0) {
-        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, vkCtx_.basicPipeline());
-        VkDescriptorSet ds = vkCtx_.sceneDescriptorSet();
-        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                vkCtx_.basicPipelineLayout(), 0, 1, &ds, 0, nullptr);
-
-        VkBuffer vb[] = { vkCtx_.cubeMesh().vertexBuffer() };
-        VkDeviceSize vbOffsets[] = { 0 };
-        vkCmdBindVertexBuffers(cmd, 0, 1, vb, vbOffsets);
-        vkCmdBindIndexBuffer(cmd, vkCtx_.cubeMesh().indexBuffer(), 0, vkCtx_.cubeMesh().indexType());
-
         // Resolve parenting first: the renderer knows nothing about parentId.
         const SceneData flatScene = dash::editor::flattenHierarchy(scene_);
         std::vector<dash::vkexp::RenderInstance> instances =
             dash::vkexp::SceneLoader::buildInstances(flatScene);
         const std::vector<dash::vkexp::SceneLight> sceneLights =
             dash::vkexp::SceneLoader::buildLights(flatScene);
+
+        // Scene lights need the "_lit" pipeline; without it (or without lights)
+        // the viewport keeps the flat directional shading it always had.
+        const bool useSceneLights = !sceneLights.empty()
+                                 && vkCtx_.basicLitPipeline() != VK_NULL_HANDLE;
+        if (useSceneLights) {
+            dash::vkexp::SceneLightsUbo lightUbo;
+            const int lightCount = dash::vkexp::packSceneLights(
+                &sceneLights, {eyeX, eyeY, eyeZ}, lightUbo);
+            vkCtx_.updateSceneLights(lightUbo, lightCount);
+        }
+
+        VkPipeline       opaquePipeline = useSceneLights ? vkCtx_.basicLitPipeline()
+                                                         : vkCtx_.basicPipeline();
+        VkPipelineLayout opaqueLayout   = useSceneLights ? vkCtx_.basicLitPipelineLayout()
+                                                         : vkCtx_.basicPipelineLayout();
+
+        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, opaquePipeline);
+        VkDescriptorSet ds = vkCtx_.sceneDescriptorSet();
+        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                opaqueLayout, 0, 1, &ds, 0, nullptr);
+
+        VkBuffer vb[] = { vkCtx_.cubeMesh().vertexBuffer() };
+        VkDeviceSize vbOffsets[] = { 0 };
+        vkCmdBindVertexBuffers(cmd, 0, 1, vb, vbOffsets);
+        vkCmdBindIndexBuffer(cmd, vkCtx_.cubeMesh().indexBuffer(), 0, vkCtx_.cubeMesh().indexType());
 
         std::vector<dash::vkexp::InstanceResources> resources(instances.size());
         for (size_t i = 0; i < instances.size(); ++i) {
@@ -2808,13 +2824,13 @@ void EditorApp::renderWorldToTexture()
         lighting.specShin = viewport3D_.specularShininess;
 
         dash::vkexp::SceneDrawParams params;
-        params.opaquePipeline    = vkCtx_.basicPipeline();
-        params.opaqueLayout      = vkCtx_.basicPipelineLayout();
+        params.opaquePipeline    = opaquePipeline;
+        params.opaqueLayout      = opaqueLayout;
         params.billboardPipeline = vkCtx_.billboardPipeline();
         params.billboardLayout   = vkCtx_.billboardPipelineLayout();
         params.defaultSet        = ds;
         params.fallbackMesh      = &vkCtx_.cubeMesh();
-        params.lights            = &sceneLights;
+        params.lights            = useSceneLights ? &sceneLights : nullptr;
         std::memcpy(params.viewProj.m, viewProj, sizeof(params.viewProj.m));
 
         // Billboard basis, same derivation as CameraController.

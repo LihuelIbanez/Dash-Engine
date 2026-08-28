@@ -54,6 +54,23 @@ public:
         VkPipeline& outPipeline,
         std::string& outError);
 
+    // Linear-blend skinning. Two vertex bindings: 0 = the static Vertex stream
+    // shared with the basic pipeline, 1 = the .dashmesh v2 SkinnedVertex stream.
+    // `boneSetLayout` becomes set 1 and must hold the bone palette at binding 0;
+    // set 0 and the push constant range match createBasicPipeline so the scene
+    // descriptor stays bound across a pipeline switch.
+    static bool createSkinnedPipeline(
+        VkDevice device,
+        VkExtent2D extent,
+        VkRenderPass renderPass,
+        VkDescriptorSetLayout descriptorSetLayout,
+        VkDescriptorSetLayout boneSetLayout,
+        const std::string& vertSpvPath,
+        const std::string& fragSpvPath,
+        VkPipelineLayout& outPipelineLayout,
+        VkPipeline& outPipeline,
+        std::string& outError);
+
     static void destroy(VkDevice device, VkPipelineLayout pipelineLayout, VkPipeline pipeline);
 };
 

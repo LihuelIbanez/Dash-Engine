@@ -4,6 +4,8 @@
 #include "imgui_impl_vulkan.h"
 #include "imgui_impl_sdl2.h"
 #include <SDL2/SDL_vulkan.h>
+#include <algorithm>
+#include <cstddef>
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
@@ -460,7 +462,8 @@ bool EditorVkContext::createTerrainTextureArray()
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Scene descriptors (camera UBO at binding 0, dummy sampler at binding 1)
+// Scene descriptors (camera UBO at binding 0, dummy sampler at binding 1,
+// scene lights UBO at binding 2)
 // ─────────────────────────────────────────────────────────────────────────────
 bool EditorVkContext::createSceneDescriptors()
 {
@@ -475,14 +478,19 @@ bool EditorVkContext::createSceneDescriptors()
     samplerB.binding = 1; samplerB.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
     samplerB.descriptorCount = 1; samplerB.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
-    std::array<VkDescriptorSetLayoutBinding, 2> bindings = {uboB, samplerB};
+    // Matches the runtime layout so the *_lit fragment variants are usable here.
+    VkDescriptorSetLayoutBinding lightsB{};
+    lightsB.binding = 2; lightsB.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    lightsB.descriptorCount = 1; lightsB.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+    std::array<VkDescriptorSetLayoutBinding, 3> bindings = {uboB, samplerB, lightsB};
     VkDescriptorSetLayoutCreateInfo lci{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
-    lci.bindingCount = 2; lci.pBindings = bindings.data();
+    lci.bindingCount = static_cast<uint32_t>(bindings.size()); lci.pBindings = bindings.data();
     if (vkCreateDescriptorSetLayout(dev, &lci, nullptr, &sceneDescLayout_) != VK_SUCCESS)
         return false;
 
     std::array<VkDescriptorPoolSize, 2> poolSizes = {{
-        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1},
+        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 2},
         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1}
     }};
     VkDescriptorPoolCreateInfo pci{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
@@ -505,6 +513,18 @@ bool EditorVkContext::createSceneDescriptors()
     vkMapMemory(dev, uboMemory_, 0, 64, 0, &uboMapped_);
 
     VkDescriptorBufferInfo binfo{}; binfo.buffer = uboBuffer_; binfo.range = 64;
+
+    constexpr VkDeviceSize kLightUboSize = sizeof(SceneLightsUbo);
+    if (!createBuffer(deviceCtx_.physicalDevice(), dev, kLightUboSize,
+                      VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                      lightUboBuffer_, lightUboMemory_))
+        return false;
+    vkMapMemory(dev, lightUboMemory_, 0, kLightUboSize, 0, &lightUboMapped_);
+    if (lightUboMapped_) std::memset(lightUboMapped_, 0, kLightUboSize);
+
+    VkDescriptorBufferInfo lightBinfo{};
+    lightBinfo.buffer = lightUboBuffer_; lightBinfo.range = kLightUboSize;
 
     // Create a 1x1 white dummy texture for binding 1 (required by descriptor layout)
     VkPhysicalDevice pd = deviceCtx_.physicalDevice();
@@ -553,7 +573,7 @@ bool EditorVkContext::createSceneDescriptors()
     }
     imgInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-    std::array<VkWriteDescriptorSet, 2> writes{};
+    std::array<VkWriteDescriptorSet, 3> writes{};
     writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
     writes[0].dstSet = sceneDescSet_; writes[0].dstBinding = 0;
     writes[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
@@ -563,6 +583,11 @@ bool EditorVkContext::createSceneDescriptors()
     writes[1].dstSet = sceneDescSet_; writes[1].dstBinding = 1;
     writes[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
     writes[1].descriptorCount = 1; writes[1].pImageInfo = &imgInfo;
+
+    writes[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    writes[2].dstSet = sceneDescSet_; writes[2].dstBinding = 2;
+    writes[2].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    writes[2].descriptorCount = 1; writes[2].pBufferInfo = &lightBinfo;
 
     vkUpdateDescriptorSets(dev, static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
 
@@ -599,6 +624,15 @@ bool EditorVkContext::createPipelines()
             basicPipelineLayout_, basicPipeline_, err)) {
         std::fprintf(stderr, "[EditorVk] Basic pipeline: %s\n", err.c_str());
         return false;
+    }
+
+    // Lit variant is optional: without it the viewport keeps the flat shading.
+    if (!PipelineBuilder::createBasicPipeline(dev, ext, vpRenderPass_, sceneDescLayout_,
+            shaderDir + "/basic.vert.spv", shaderDir + "/basic_lit.frag.spv",
+            basicLitPipelineLayout_, basicLitPipeline_, err)) {
+        std::fprintf(stderr, "[EditorVk] Lit basic pipeline: %s (scene lights disabled)\n", err.c_str());
+        basicLitPipeline_ = VK_NULL_HANDLE;
+        basicLitPipelineLayout_ = VK_NULL_HANDLE;
     }
 
     // Billboards are optional: without them the viewport still draws meshes.
@@ -831,6 +865,19 @@ void EditorVkContext::updateCamera(const float viewProj[16])
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Scene light UBO
+// ─────────────────────────────────────────────────────────────────────────────
+void EditorVkContext::updateSceneLights(const SceneLightsUbo& ubo, int count)
+{
+    if (!lightUboMapped_) return;
+
+    const int clamped = std::max(0, std::min(count, kMaxSceneLights));
+    const std::size_t bytes = offsetof(SceneLightsUbo, lights)
+                            + static_cast<std::size_t>(clamped) * sizeof(SceneLightGpu);
+    std::memcpy(lightUboMapped_, &ubo, bytes);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Terrain mesh update
 // ─────────────────────────────────────────────────────────────────────────────
 void EditorVkContext::updateTerrainMesh(TerrainMesh& terrain)
@@ -900,14 +947,21 @@ void EditorVkContext::shutdown()
     PipelineBuilder::destroy(dev, terrainPipelineLayout_, terrainPipeline_);
     PipelineBuilder::destroy(dev, waterPipelineLayout_, waterPipeline_);
     PipelineBuilder::destroy(dev, basicPipelineLayout_, basicPipeline_);
+    PipelineBuilder::destroy(dev, basicLitPipelineLayout_, basicLitPipeline_);
     terrainPipelineLayout_ = VK_NULL_HANDLE; terrainPipeline_ = VK_NULL_HANDLE;
     waterPipelineLayout_ = VK_NULL_HANDLE;   waterPipeline_ = VK_NULL_HANDLE;
     basicPipelineLayout_ = VK_NULL_HANDLE;   basicPipeline_ = VK_NULL_HANDLE;
+    basicLitPipelineLayout_ = VK_NULL_HANDLE; basicLitPipeline_ = VK_NULL_HANDLE;
 
     if (uboBuffer_) { vkDestroyBuffer(dev, uboBuffer_, nullptr); uboBuffer_ = VK_NULL_HANDLE; }
     if (uboMemory_) {
         if (uboMapped_) { vkUnmapMemory(dev, uboMemory_); uboMapped_ = nullptr; }
         vkFreeMemory(dev, uboMemory_, nullptr); uboMemory_ = VK_NULL_HANDLE;
+    }
+    if (lightUboBuffer_) { vkDestroyBuffer(dev, lightUboBuffer_, nullptr); lightUboBuffer_ = VK_NULL_HANDLE; }
+    if (lightUboMemory_) {
+        if (lightUboMapped_) { vkUnmapMemory(dev, lightUboMemory_); lightUboMapped_ = nullptr; }
+        vkFreeMemory(dev, lightUboMemory_, nullptr); lightUboMemory_ = VK_NULL_HANDLE;
     }
     if (dummyTexView_) { vkDestroyImageView(dev, dummyTexView_, nullptr); dummyTexView_ = VK_NULL_HANDLE; }
     if (dummyTexImage_) { vkDestroyImage(dev, dummyTexImage_, nullptr); dummyTexImage_ = VK_NULL_HANDLE; }
