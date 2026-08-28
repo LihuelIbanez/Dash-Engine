@@ -80,6 +80,7 @@ const ComponentMeta& getComponentMeta(ComponentType type)
             {"loop",          PropertyType::Bool,   offsetof(AnimationComponent, loop),          {}},
             {"playing",       PropertyType::Bool,   offsetof(AnimationComponent, playing),       {}},
             {"blendSeconds",  PropertyType::Float,  offsetof(AnimationComponent, blendSeconds),  {}},
+            {"stateMachine",  PropertyType::String, offsetof(AnimationComponent, stateMachine),  {}},
         }},
         ComponentMeta{"Audio", ComponentType::Audio, {
             {"clip",        PropertyType::String, offsetof(AudioComponent, clip),        {}},

@@ -76,6 +76,9 @@ struct AnimationComponent {
     bool        loop = true;
     bool        playing = true;
     float       blendSeconds = 0.2f;
+    // Optional controller asset. When set it drives `clip` instead of the
+    // field being authored directly.
+    std::string stateMachine;
 };
 
 enum class AudioBus : int {

@@ -154,6 +154,7 @@ nlohmann::json componentToJson(const ComponentVariant& comp)
             j["loop"]         = c.loop;
             j["playing"]      = c.playing;
             j["blendSeconds"] = c.blendSeconds;
+            j["stateMachine"] = c.stateMachine;
         }
         else if constexpr (std::is_same_v<T, AudioComponent>) {
             j["type"]        = "Audio";
@@ -272,6 +273,7 @@ ComponentVariant componentFromJson(const nlohmann::json& j)
             c.loop         = j.value("loop", true);
             c.playing      = j.value("playing", true);
             c.blendSeconds = j.value("blendSeconds", 0.2f);
+            c.stateMachine = j.value("stateMachine", std::string{});
             return c;
         }
         case ComponentType::Audio: {
