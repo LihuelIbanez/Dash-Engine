@@ -107,6 +107,20 @@ private:
     bool  rectSelectPending_ = false;
     float rectStartX_ = 0.f, rectStartY_ = 0.f;
 
+    // Drives the marquee and draws it; call once per frame from drawViewport().
+    void updateRectSelection(const float viewProj[16], const dash::gizmo::ViewportRect& rect,
+                             float mouseX, float mouseY, bool viewportHovered,
+                             bool gizmoOwnsPointer);
+    std::vector<uint64_t> entitiesInScreenRect(const float viewProj[16],
+                                               const dash::gizmo::ViewportRect& rect,
+                                               float x0, float y0, float x1, float y1);
+
+    // ── Inspector edits ──────────────────────────────────────────────────────
+    // Spreads one field edit over every selected entity that owns the component.
+    void applyComponentFieldEdit(uint64_t entityId, ComponentType compType,
+                                 const PropertyInfo& prop,
+                                 const PropertyValue& oldVal, const PropertyValue& newVal);
+
     // ── Project ───────────────────────────────────────────────────────────────
     ProjectManager projectManager_;
     // Open a .dashproject file and refresh all dependent editor paths.

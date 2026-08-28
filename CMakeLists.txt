@@ -252,63 +252,50 @@ if(ENABLE_VULKAN_EXPERIMENTAL AND NOT IOS)
 
         find_program(GLSLC_EXECUTABLE glslc)
         if(GLSLC_EXECUTABLE)
-            add_custom_command(
-                OUTPUT
-                    "${VULKAN_SHADER_BIN_DIR}/basic.vert.spv"
-                    "${VULKAN_SHADER_BIN_DIR}/basic.frag.spv"
-                    "${VULKAN_SHADER_BIN_DIR}/textured.vert.spv"
-                    "${VULKAN_SHADER_BIN_DIR}/textured.frag.spv"
-                    "${VULKAN_SHADER_BIN_DIR}/terrain.vert.spv"
-                    "${VULKAN_SHADER_BIN_DIR}/terrain.frag.spv"
-                    "${VULKAN_SHADER_BIN_DIR}/water.vert.spv"
-                    "${VULKAN_SHADER_BIN_DIR}/water.frag.spv"
-                    "${VULKAN_SHADER_BIN_DIR}/billboard.vert.spv"
-                    "${VULKAN_SHADER_BIN_DIR}/billboard.frag.spv"
-                    "${VULKAN_SHADER_BIN_DIR}/skinned.vert.spv"
-                    "${VULKAN_SHADER_BIN_DIR}/skinned.frag.spv"
-                COMMAND ${GLSLC_EXECUTABLE} "${VULKAN_SHADER_SRC_DIR}/basic.vert" -o "${VULKAN_SHADER_BIN_DIR}/basic.vert.spv"
-                COMMAND ${GLSLC_EXECUTABLE} "${VULKAN_SHADER_SRC_DIR}/basic.frag" -o "${VULKAN_SHADER_BIN_DIR}/basic.frag.spv"
-                COMMAND ${GLSLC_EXECUTABLE} "${VULKAN_SHADER_SRC_DIR}/textured.vert" -o "${VULKAN_SHADER_BIN_DIR}/textured.vert.spv"
-                COMMAND ${GLSLC_EXECUTABLE} "${VULKAN_SHADER_SRC_DIR}/textured.frag" -o "${VULKAN_SHADER_BIN_DIR}/textured.frag.spv"
-                COMMAND ${GLSLC_EXECUTABLE} "${VULKAN_SHADER_SRC_DIR}/terrain.vert" -o "${VULKAN_SHADER_BIN_DIR}/terrain.vert.spv"
-                COMMAND ${GLSLC_EXECUTABLE} "${VULKAN_SHADER_SRC_DIR}/terrain.frag" -o "${VULKAN_SHADER_BIN_DIR}/terrain.frag.spv"
-                COMMAND ${GLSLC_EXECUTABLE} "${VULKAN_SHADER_SRC_DIR}/water.vert" -o "${VULKAN_SHADER_BIN_DIR}/water.vert.spv"
-                COMMAND ${GLSLC_EXECUTABLE} "${VULKAN_SHADER_SRC_DIR}/water.frag" -o "${VULKAN_SHADER_BIN_DIR}/water.frag.spv"
-                COMMAND ${GLSLC_EXECUTABLE} "${VULKAN_SHADER_SRC_DIR}/billboard.vert" -o "${VULKAN_SHADER_BIN_DIR}/billboard.vert.spv"
-                COMMAND ${GLSLC_EXECUTABLE} "${VULKAN_SHADER_SRC_DIR}/billboard.frag" -o "${VULKAN_SHADER_BIN_DIR}/billboard.frag.spv"
-                COMMAND ${GLSLC_EXECUTABLE} "${VULKAN_SHADER_SRC_DIR}/skinned.vert" -o "${VULKAN_SHADER_BIN_DIR}/skinned.vert.spv"
-                COMMAND ${GLSLC_EXECUTABLE} "${VULKAN_SHADER_SRC_DIR}/skinned.frag" -o "${VULKAN_SHADER_BIN_DIR}/skinned.frag.spv"
-                DEPENDS
-                    "${VULKAN_SHADER_SRC_DIR}/basic.vert"
-                    "${VULKAN_SHADER_SRC_DIR}/basic.frag"
-                    "${VULKAN_SHADER_SRC_DIR}/textured.vert"
-                    "${VULKAN_SHADER_SRC_DIR}/textured.frag"
-                    "${VULKAN_SHADER_SRC_DIR}/terrain.vert"
-                    "${VULKAN_SHADER_SRC_DIR}/terrain.frag"
-                    "${VULKAN_SHADER_SRC_DIR}/water.vert"
-                    "${VULKAN_SHADER_SRC_DIR}/water.frag"
-                    "${VULKAN_SHADER_SRC_DIR}/billboard.vert"
-                    "${VULKAN_SHADER_SRC_DIR}/billboard.frag"
-                    "${VULKAN_SHADER_SRC_DIR}/skinned.vert"
-                    "${VULKAN_SHADER_SRC_DIR}/skinned.frag"
-                COMMENT "Compiling Vulkan shaders (GLSL -> SPIR-V)"
-                VERBATIM
-            )
-            add_custom_target(vulkan_shaders ALL
-                DEPENDS
-                    "${VULKAN_SHADER_BIN_DIR}/basic.vert.spv"
-                    "${VULKAN_SHADER_BIN_DIR}/basic.frag.spv"
-                    "${VULKAN_SHADER_BIN_DIR}/textured.vert.spv"
-                    "${VULKAN_SHADER_BIN_DIR}/textured.frag.spv"
-                    "${VULKAN_SHADER_BIN_DIR}/terrain.vert.spv"
-                    "${VULKAN_SHADER_BIN_DIR}/terrain.frag.spv"
-                    "${VULKAN_SHADER_BIN_DIR}/water.vert.spv"
-                    "${VULKAN_SHADER_BIN_DIR}/water.frag.spv"
-                    "${VULKAN_SHADER_BIN_DIR}/billboard.vert.spv"
-                    "${VULKAN_SHADER_BIN_DIR}/billboard.frag.spv"
-                    "${VULKAN_SHADER_BIN_DIR}/skinned.vert.spv"
-                    "${VULKAN_SHADER_BIN_DIR}/skinned.frag.spv"
-            )
+            set(VULKAN_SHADER_STAGES
+                basic.vert basic.frag
+                textured.vert textured.frag
+                terrain.vert terrain.frag
+                water.vert water.frag
+                billboard.vert billboard.frag
+                skinned.vert skinned.frag)
+
+            # Fragment shaders compiled twice: the plain variant targets descriptor
+            # layouts without the scene-light binding (editor viewport), the "_lit"
+            # variant adds set 0 binding 2 and consumes assets/shaders/scene_lights.glsl.
+            set(VULKAN_SHADER_LIT_VARIANTS basic.frag textured.frag skinned.frag)
+
+            set(VULKAN_SHADER_OUTPUTS "")
+            foreach(shader IN LISTS VULKAN_SHADER_STAGES)
+                add_custom_command(
+                    OUTPUT "${VULKAN_SHADER_BIN_DIR}/${shader}.spv"
+                    COMMAND ${GLSLC_EXECUTABLE}
+                            "-I${VULKAN_SHADER_SRC_DIR}"
+                            "${VULKAN_SHADER_SRC_DIR}/${shader}"
+                            -o "${VULKAN_SHADER_BIN_DIR}/${shader}.spv"
+                    DEPENDS "${VULKAN_SHADER_SRC_DIR}/${shader}"
+                    COMMENT "Compiling Vulkan shader ${shader} (GLSL -> SPIR-V)"
+                    VERBATIM)
+                list(APPEND VULKAN_SHADER_OUTPUTS "${VULKAN_SHADER_BIN_DIR}/${shader}.spv")
+            endforeach()
+
+            foreach(shader IN LISTS VULKAN_SHADER_LIT_VARIANTS)
+                string(REPLACE "." "_lit." lit_name "${shader}")
+                add_custom_command(
+                    OUTPUT "${VULKAN_SHADER_BIN_DIR}/${lit_name}.spv"
+                    COMMAND ${GLSLC_EXECUTABLE}
+                            -DDASH_SCENE_LIGHTS
+                            "-I${VULKAN_SHADER_SRC_DIR}"
+                            "${VULKAN_SHADER_SRC_DIR}/${shader}"
+                            -o "${VULKAN_SHADER_BIN_DIR}/${lit_name}.spv"
+                    DEPENDS "${VULKAN_SHADER_SRC_DIR}/${shader}"
+                            "${VULKAN_SHADER_SRC_DIR}/scene_lights.glsl"
+                    COMMENT "Compiling Vulkan shader ${lit_name} (GLSL -> SPIR-V)"
+                    VERBATIM)
+                list(APPEND VULKAN_SHADER_OUTPUTS "${VULKAN_SHADER_BIN_DIR}/${lit_name}.spv")
+            endforeach()
+
+            add_custom_target(vulkan_shaders ALL DEPENDS ${VULKAN_SHADER_OUTPUTS})
         else()
             message(WARNING "glslc not found. VulkanBootstrap will build, but pipeline creation (D74) will fail at runtime.")
         endif()

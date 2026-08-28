@@ -167,7 +167,13 @@ bool Renderer::createDescriptors()
     samplerBinding.descriptorCount = 1;
     samplerBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
-    std::array<VkDescriptorSetLayoutBinding, 2> bindings = {uboBinding, samplerBinding};
+    VkDescriptorSetLayoutBinding lightsBinding{};
+    lightsBinding.binding = 2;
+    lightsBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    lightsBinding.descriptorCount = 1;
+    lightsBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+    std::array<VkDescriptorSetLayoutBinding, 3> bindings = {uboBinding, samplerBinding, lightsBinding};
 
     VkDescriptorSetLayoutCreateInfo layoutInfo{};
     layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
@@ -179,7 +185,7 @@ bool Renderer::createDescriptors()
     }
 
     std::array<VkDescriptorPoolSize, 2> poolSizes = {{
-        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, swapchain_.imageCount()},
+        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, swapchain_.imageCount() * 2},
         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, swapchain_.imageCount()}
     }};
 
@@ -212,6 +218,8 @@ bool Renderer::createPerFrameUniformBuffers()
 {
     uniformBuffers_.resize(swapchain_.imageCount(), VK_NULL_HANDLE);
     uniformMemories_.resize(swapchain_.imageCount(), VK_NULL_HANDLE);
+    lightBuffers_.resize(swapchain_.imageCount(), VK_NULL_HANDLE);
+    lightMemories_.resize(swapchain_.imageCount(), VK_NULL_HANDLE);
 
     // Create default white texture for sampler binding
     if (!TextureLoader::createDefaultWhite(
@@ -236,17 +244,33 @@ bool Renderer::createPerFrameUniformBuffers()
             return false;
         }
 
+        if (!createHostVisibleBuffer(
+                deviceContext_.physicalDevice(),
+                deviceContext_.device(),
+                sizeof(SceneLightsUbo),
+                VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                lightBuffers_[i],
+                lightMemories_[i])) {
+            std::fprintf(stderr, "[D78] Failed to create scene light buffer %u.\n", i);
+            return false;
+        }
+
         VkDescriptorBufferInfo bufferInfo{};
         bufferInfo.buffer = uniformBuffers_[i];
         bufferInfo.offset = 0;
         bufferInfo.range = sizeof(CameraUBO);
+
+        VkDescriptorBufferInfo lightInfo{};
+        lightInfo.buffer = lightBuffers_[i];
+        lightInfo.offset = 0;
+        lightInfo.range = sizeof(SceneLightsUbo);
 
         VkDescriptorImageInfo imageInfo{};
         imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
         imageInfo.imageView = defaultTexture_.imageView;
         imageInfo.sampler = defaultTexture_.sampler;
 
-        std::array<VkWriteDescriptorSet, 2> writes{};
+        std::array<VkWriteDescriptorSet, 3> writes{};
 
         writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         writes[0].dstSet = descriptorSets_[i];
@@ -262,6 +286,13 @@ bool Renderer::createPerFrameUniformBuffers()
         writes[1].descriptorCount = 1;
         writes[1].pImageInfo = &imageInfo;
 
+        writes[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writes[2].dstSet = descriptorSets_[i];
+        writes[2].dstBinding = 2;
+        writes[2].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        writes[2].descriptorCount = 1;
+        writes[2].pBufferInfo = &lightInfo;
+
         vkUpdateDescriptorSets(deviceContext_.device(),
                                static_cast<uint32_t>(writes.size()),
                                writes.data(), 0, nullptr);
@@ -272,8 +303,10 @@ bool Renderer::createPerFrameUniformBuffers()
 
 bool Renderer::createPipeline()
 {
+    // The runtime layout carries the scene-light binding, so it uses the "_lit"
+    // fragment variants; the editor viewport keeps the plain ones.
     const std::string vert = std::string(VULKAN_SHADER_DIR) + "/basic.vert.spv";
-    const std::string frag = std::string(VULKAN_SHADER_DIR) + "/basic.frag.spv";
+    const std::string frag = std::string(VULKAN_SHADER_DIR) + "/basic_lit.frag.spv";
 
     std::string pipelineError;
     if (!PipelineBuilder::createBasicPipeline(
@@ -292,7 +325,7 @@ bool Renderer::createPipeline()
 
     // Create textured pipeline using the same layout but different shaders
     const std::string texVert = std::string(VULKAN_SHADER_DIR) + "/textured.vert.spv";
-    const std::string texFrag = std::string(VULKAN_SHADER_DIR) + "/textured.frag.spv";
+    const std::string texFrag = std::string(VULKAN_SHADER_DIR) + "/textured_lit.frag.spv";
 
     std::string texPipelineError;
     if (!PipelineBuilder::createBasicPipeline(
@@ -583,6 +616,24 @@ bool Renderer::updateCameraUbo(uint32_t imageIndex)
     return true;
 }
 
+bool Renderer::updateSceneLightsUbo(uint32_t imageIndex)
+{
+    if (imageIndex >= lightMemories_.size() || lightMemories_[imageIndex] == VK_NULL_HANDLE) {
+        return false;
+    }
+
+    SceneLightsUbo ubo{};
+    packSceneLights(&sceneLights_, {camera_.x(), camera_.y(), camera_.z()}, ubo);
+
+    void* mapped = nullptr;
+    if (vkMapMemory(deviceContext_.device(), lightMemories_[imageIndex], 0, sizeof(SceneLightsUbo), 0, &mapped) != VK_SUCCESS) {
+        return false;
+    }
+    std::memcpy(mapped, &ubo, sizeof(SceneLightsUbo));
+    vkUnmapMemory(deviceContext_.device(), lightMemories_[imageIndex]);
+    return true;
+}
+
 // Resolves a mesh id to GPU buffers, loading and caching it on first use.
 // Returns nullptr to signal "use the builtin cube".
 const MeshBuffers* Renderer::resolveMesh(const std::string& meshId)
@@ -791,7 +842,7 @@ bool Renderer::resolveSceneMaterials()
     const uint32_t setCount = static_cast<uint32_t>(materials_.size()) * images;
 
     std::array<VkDescriptorPoolSize, 2> poolSizes = {{
-        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, setCount},
+        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, setCount * 2},
         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setCount}
     }};
     VkDescriptorPoolCreateInfo poolInfo{};
@@ -826,12 +877,17 @@ bool Renderer::resolveSceneMaterials()
             bufferInfo.offset = 0;
             bufferInfo.range = sizeof(CameraUBO);
 
+            VkDescriptorBufferInfo lightInfo{};
+            lightInfo.buffer = lightBuffers_[i];
+            lightInfo.offset = 0;
+            lightInfo.range = sizeof(SceneLightsUbo);
+
             VkDescriptorImageInfo imageInfo{};
             imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
             imageInfo.imageView = tex.imageView;
             imageInfo.sampler = tex.sampler;
 
-            std::array<VkWriteDescriptorSet, 2> writes{};
+            std::array<VkWriteDescriptorSet, 3> writes{};
             writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
             writes[0].dstSet = mat.sets[i];
             writes[0].dstBinding = 0;
@@ -845,6 +901,13 @@ bool Renderer::resolveSceneMaterials()
             writes[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
             writes[1].descriptorCount = 1;
             writes[1].pImageInfo = &imageInfo;
+
+            writes[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            writes[2].dstSet = mat.sets[i];
+            writes[2].dstBinding = 2;
+            writes[2].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+            writes[2].descriptorCount = 1;
+            writes[2].pBufferInfo = &lightInfo;
 
             vkUpdateDescriptorSets(dev, static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
         }
@@ -1098,6 +1161,7 @@ bool Renderer::runSmoke(WindowContext& window, uint32_t targetFrames)
         uint32_t imageIndex = 0;
         if (!frameGraph_.beginFrame(imageIndex)) break;
         if (!updateCameraUbo(imageIndex)) break;
+        updateSceneLightsUbo(imageIndex);
 
         VkCommandBuffer cmd = frameGraph_.commandBuffer(imageIndex);
         VkCommandBufferBeginInfo beginInfo{};
@@ -1198,6 +1262,17 @@ void Renderer::shutdown()
     }
     uniformBuffers_.clear();
     uniformMemories_.clear();
+
+    for (size_t i = 0; i < lightBuffers_.size(); ++i) {
+        if (lightBuffers_[i] != VK_NULL_HANDLE) {
+            vkDestroyBuffer(deviceContext_.device(), lightBuffers_[i], nullptr);
+        }
+        if (lightMemories_[i] != VK_NULL_HANDLE) {
+            vkFreeMemory(deviceContext_.device(), lightMemories_[i], nullptr);
+        }
+    }
+    lightBuffers_.clear();
+    lightMemories_.clear();
     descriptorSets_.clear();
 
     if (descriptorPool_ != VK_NULL_HANDLE) {

@@ -1488,6 +1488,14 @@ void EditorApp::drawPropertiesPanel()
         return;
     }
 
+    if (selection_.size() > 1) {
+        ImGui::TextColored(ImVec4(1.f, 0.75f, 0.2f, 1.f),
+                           "%d entities selected - edits apply to all",
+                           static_cast<int>(selection_.size()));
+        ImGui::TextDisabled("Showing: %s (active)", ep->name.c_str());
+        ImGui::Separator();
+    }
+
     auto& e = *ep;
 
     // ── Entity header (EntityData-level fields) ───────────────────────────────
@@ -1607,11 +1615,8 @@ void EditorApp::drawPropertiesPanel()
                         float nv = *fptr;
                         if (nv != std::get<float>(fieldSnap)) {
                             *fptr = std::get<float>(fieldSnap);
-                            commandStack_.execute(
-                                std::make_unique<EditComponentFieldCommand>(
-                                    e.id, ct, prop.offset, prop.type,
-                                    fieldSnap, PropertyValue{nv}, prop.name),
-                                scene_, world_);
+                            applyComponentFieldEdit(e.id, ct, prop,
+                                                    fieldSnap, PropertyValue{nv});
                         }
                         hasFieldSnap = false;
                     }
@@ -1628,11 +1633,8 @@ void EditorApp::drawPropertiesPanel()
                         int nv = *iptr;
                         if (nv != std::get<int>(fieldSnap)) {
                             *iptr = std::get<int>(fieldSnap);
-                            commandStack_.execute(
-                                std::make_unique<EditComponentFieldCommand>(
-                                    e.id, ct, prop.offset, prop.type,
-                                    fieldSnap, PropertyValue{nv}, prop.name),
-                                scene_, world_);
+                            applyComponentFieldEdit(e.id, ct, prop,
+                                                    fieldSnap, PropertyValue{nv});
                         }
                         hasFieldSnap = false;
                     }
@@ -1655,11 +1657,8 @@ void EditorApp::drawPropertiesPanel()
                             for (const auto& item : pickerItems) {
                                 bool selected = (*sptr == item);
                                 if (ImGui::Selectable(item.c_str(), selected) && item != *sptr) {
-                                    commandStack_.execute(
-                                        std::make_unique<EditComponentFieldCommand>(
-                                            e.id, ct, prop.offset, prop.type,
-                                            PropertyValue{*sptr}, PropertyValue{item}, prop.name),
-                                        scene_, world_);
+                                    applyComponentFieldEdit(e.id, ct, prop,
+                                                            PropertyValue{*sptr}, PropertyValue{item});
                                 }
                                 if (selected) ImGui::SetItemDefaultFocus();
                             }
@@ -1675,11 +1674,8 @@ void EditorApp::drawPropertiesPanel()
                         if (ImGui::IsItemDeactivatedAfterEdit()) {
                             std::string nv(strBuf);
                             if (nv != strSnap)
-                                commandStack_.execute(
-                                    std::make_unique<EditComponentFieldCommand>(
-                                        e.id, ct, prop.offset, prop.type,
-                                        PropertyValue{strSnap}, PropertyValue{nv}, prop.name),
-                                    scene_, world_);
+                                applyComponentFieldEdit(e.id, ct, prop,
+                                                        PropertyValue{strSnap}, PropertyValue{nv});
                         }
                     }
 
@@ -1692,11 +1688,8 @@ void EditorApp::drawPropertiesPanel()
                         if (ImGui::IsItemDeactivatedAfterEdit()) {
                             std::string nv(strBuf);
                             if (nv != strSnap)
-                                commandStack_.execute(
-                                    std::make_unique<EditComponentFieldCommand>(
-                                        e.id, ct, prop.offset, prop.type,
-                                        PropertyValue{strSnap}, PropertyValue{nv}, prop.name),
-                                    scene_, world_);
+                                applyComponentFieldEdit(e.id, ct, prop,
+                                                        PropertyValue{strSnap}, PropertyValue{nv});
                         }
                     }
                     break;
@@ -1707,11 +1700,8 @@ void EditorApp::drawPropertiesPanel()
                     if (ImGui::Checkbox(prop.name.c_str(), bptr) && *bptr != prev) {
                         bool nv = *bptr;
                         *bptr   = prev;
-                        commandStack_.execute(
-                            std::make_unique<EditComponentFieldCommand>(
-                                e.id, ct, prop.offset, prop.type,
-                                PropertyValue{prev}, PropertyValue{nv}, prop.name),
-                            scene_, world_);
+                        applyComponentFieldEdit(e.id, ct, prop,
+                                                PropertyValue{prev}, PropertyValue{nv});
                     }
                     break;
                 }
@@ -1724,11 +1714,8 @@ void EditorApp::drawPropertiesPanel()
                                      items.data(), static_cast<int>(items.size()))) {
                         int nv = *iptr;
                         *iptr  = prev;
-                        commandStack_.execute(
-                            std::make_unique<EditComponentFieldCommand>(
-                                e.id, ct, prop.offset, prop.type,
-                                PropertyValue{prev}, PropertyValue{nv}, prop.name),
-                            scene_, world_);
+                        applyComponentFieldEdit(e.id, ct, prop,
+                                                PropertyValue{prev}, PropertyValue{nv});
                     }
                     break;
                 }
@@ -2108,7 +2095,7 @@ void EditorApp::drawViewport()
                     auto cmd = std::make_unique<PlacePrefabCommand>(
                         wx, wy, newId, prefab.name, guid, std::move(comps));
                     commandStack_.execute(std::move(cmd), scene_, world_);
-                    selectedEntityId_ = newId;
+                    setSelection(newId);
                     addLog("Placed prefab: " + prefab.name);
                 } else {
                     addLog("ERROR: Prefab not found for GUID: " + guid);
@@ -2126,17 +2113,17 @@ void EditorApp::drawViewport()
     // Runs before the tools below so a gizmo drag swallows the click instead of
     // painting a tile or moving the entity underneath.
     bool gizmoOwnsPointer = false;
+    float gizmoViewProj[16];
+    buildViewProjMatrix(vpDisplayW_, vpDisplayH_, gizmoViewProj);
+    const dash::gizmo::ViewportRect gizmoRect{vpScreenX_, vpScreenY_, vpDisplayW_, vpDisplayH_};
     if (editorMode_ == EditorMode::Edit) {
         handleGizmoShortcuts(vpFocused);
 
-        float gizmoViewProj[16];
-        buildViewProjMatrix(vpDisplayW_, vpDisplayH_, gizmoViewProj);
-        const dash::gizmo::ViewportRect rect{vpScreenX_, vpScreenY_, vpDisplayW_, vpDisplayH_};
         ImGuiIO& gio = ImGui::GetIO();
-        gizmoOwnsPointer = updateViewportGizmo(gizmoViewProj, rect,
+        gizmoOwnsPointer = updateViewportGizmo(gizmoViewProj, gizmoRect,
                                                gio.MousePos.x, gio.MousePos.y, vpHovered);
 
-        drawSelectionOverlays(ImGui::GetWindowDrawList(), gizmoViewProj, rect);
+        drawSelectionOverlays(ImGui::GetWindowDrawList(), gizmoViewProj, gizmoRect);
         if (gizmoOwnsPointer) vpHovered = false;
     }
 
@@ -2306,6 +2293,15 @@ void EditorApp::drawViewport()
         SDL_SetCursor(cursorArrow_);
     }
 
+    // ── Marquee selection ────────────────────────────────────────────────────
+    // After the tool handling above so an entity drag wins over the rectangle,
+    // and outside the hover branch so a drag that leaves the image still ends.
+    {
+        const ImGuiIO& rio = ImGui::GetIO();
+        updateRectSelection(gizmoViewProj, gizmoRect, rio.MousePos.x, rio.MousePos.y,
+                            vpHovered, gizmoOwnsPointer);
+    }
+
     // Play-mode overlay indicator
     if (editorMode_ == EditorMode::Play) {
         ImVec2 wp = ImGui::GetWindowPos();
@@ -2402,7 +2398,7 @@ void EditorApp::handleToolClick(float wx, float wy)
         if (eraseId != 0) {
             auto cmd = std::make_unique<EraseCommand>(eraseId);
             commandStack_.execute(std::move(cmd), scene_, world_);
-            selectedEntityId_ = 0;
+            clearSelection();
         }
         break;
     }
@@ -3259,7 +3255,7 @@ void EditorApp::newScene()
     scene_.createDefault();
     syncUIRender3DSettingsFromScene();
     world_.generate(scene_.worldSeed);
-    selectedEntityId_ = 0;
+    clearSelection();
     commandStack_.clear();
     camX_ = WORLD_W / 2.f;
     camY_ = WORLD_H / 2.f;
@@ -3453,7 +3449,7 @@ void EditorApp::openScene(const std::string& path)
 
                 world_.generate(scene_.worldSeed);
                 applySceneToWorld();
-                selectedEntityId_ = 0;
+                clearSelection();
                 commandStack_.clear();
                 focusCameraOnEntities();
                 selectedSceneFile_ = fileName;
@@ -3472,7 +3468,7 @@ void EditorApp::openScene(const std::string& path)
 
         world_.generate(scene_.worldSeed);
         applySceneToWorld();
-        selectedEntityId_ = 0;
+        clearSelection();
         commandStack_.clear();
         focusCameraOnEntities();
         selectedSceneFile_ = fileName;
@@ -3692,7 +3688,7 @@ void EditorApp::exitPlayMode()
     flushPlayAuditSessionToFile("play_stopped");
 
     playSession_.restore(scene_, world_);
-    selectedEntityId_ = 0;
+    clearSelection();
     editorMode_ = EditorMode::Edit;
     addLog("Exited Play mode (scene restored).");
 

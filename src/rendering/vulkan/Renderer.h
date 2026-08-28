@@ -51,6 +51,7 @@ private:
     bool createPipeline();
     bool createPerFrameUniformBuffers();
     bool updateCameraUbo(uint32_t imageIndex);
+    bool updateSceneLightsUbo(uint32_t imageIndex);
     void recordDrawCommands(VkCommandBuffer cmd, uint32_t imageIndex);
 
     // Resolves RenderComponent::mesh for every scene instance, uploading and
@@ -88,6 +89,10 @@ private:
     std::vector<VkDescriptorSet> descriptorSets_;
     std::vector<VkBuffer> uniformBuffers_;
     std::vector<VkDeviceMemory> uniformMemories_;
+
+    // Scene lights (set 0, binding 2), one buffer per swapchain image.
+    std::vector<VkBuffer> lightBuffers_;
+    std::vector<VkDeviceMemory> lightMemories_;
 
     VkPipelineLayout pipelineLayout_ = VK_NULL_HANDLE;
     VkPipeline pipeline_ = VK_NULL_HANDLE;

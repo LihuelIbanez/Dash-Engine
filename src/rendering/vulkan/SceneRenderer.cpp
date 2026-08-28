@@ -1,5 +1,6 @@
 #include "rendering/vulkan/SceneRenderer.h"
 
+#include <algorithm>
 #include <cstring>
 
 #include "rendering/Frustum.h"
@@ -25,7 +26,8 @@ bool isBillboard(const RenderInstance& inst)
 void buildInstancePushConstants(const Mat4& model,
                                 float r, float g, float b, float a,
                                 const LightingParams& light,
-                                float (&out)[kInstancePushConstantFloats])
+                                float (&out)[kInstancePushConstantFloats],
+                                int sceneLightCount)
 {
     std::memcpy(out, model.m, sizeof(model.m));
     out[16] = r;
@@ -36,6 +38,47 @@ void buildInstancePushConstants(const Mat4& model,
     out[21] = light.dirY;
     out[22] = light.dirZ;
     out[23] = light.intensity;
+    out[24] = static_cast<float>(sceneLightCount);
+    out[25] = light.ambient;
+    out[26] = light.specStr;
+    out[27] = light.specShin;
+}
+
+int packSceneLights(const std::vector<SceneLight>* lights,
+                    const Vec3& cameraPos,
+                    SceneLightsUbo& out)
+{
+    out = SceneLightsUbo{};
+    out.cameraPos[0] = cameraPos.x;
+    out.cameraPos[1] = cameraPos.y;
+    out.cameraPos[2] = cameraPos.z;
+
+    if (lights == nullptr) return 0;
+
+    const int count = static_cast<int>(std::min<std::size_t>(lights->size(), kMaxSceneLights));
+    for (int i = 0; i < count; ++i) {
+        const SceneLight& src = (*lights)[static_cast<std::size_t>(i)];
+        SceneLightGpu& dst = out.lights[i];
+
+        dst.posType[0] = src.posX;
+        dst.posType[1] = src.posY;
+        dst.posType[2] = src.posZ;
+        dst.posType[3] = static_cast<float>(src.type);
+
+        dst.dirRange[0] = src.dirX;
+        dst.dirRange[1] = src.dirY;
+        dst.dirRange[2] = src.dirZ;
+        dst.dirRange[3] = src.range;
+
+        dst.colorInt[0] = src.colorR;
+        dst.colorInt[1] = src.colorG;
+        dst.colorInt[2] = src.colorB;
+        dst.colorInt[3] = src.intensity;
+
+        dst.cone[0] = src.innerCos;
+        dst.cone[1] = src.outerCos;
+    }
+    return count;
 }
 
 SceneDrawStats drawSceneInstances(VkCommandBuffer cmd,
@@ -48,6 +91,11 @@ SceneDrawStats drawSceneInstances(VkCommandBuffer cmd,
     if (cmd == VK_NULL_HANDLE || params.fallbackMesh == nullptr) return stats;
 
     const dash::Frustum frustum = dash::Frustum::fromViewProj(params.viewProj.m);
+
+    // Zero keeps the fragment shaders on the single LightingParams directional.
+    const int lightCount = params.lights
+        ? static_cast<int>(std::min<std::size_t>(params.lights->size(), kMaxSceneLights))
+        : 0;
 
     const MeshBuffers* boundMesh = params.fallbackMesh;
     VkDescriptorSet boundSet = params.defaultSet;
@@ -99,7 +147,7 @@ SceneDrawStats drawSceneInstances(VkCommandBuffer cmd,
                                    inst.color.x * res.tint[0],
                                    inst.color.y * res.tint[1],
                                    inst.color.z * res.tint[2],
-                                   1.0f, lighting, pc);
+                                   1.0f, lighting, pc, lightCount);
         vkCmdPushConstants(cmd, params.opaqueLayout,
                            VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
                            0, sizeof(pc), pc);

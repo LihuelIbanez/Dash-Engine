@@ -22,13 +22,36 @@ namespace dash::vkexp {
 // feature cannot land in one path and silently miss the other.
 // ─────────────────────────────────────────────────────────────────────────────
 
-// mat4 model (16 floats) + color/alpha (4) + lightDir/intensity (4).
-inline constexpr std::size_t kInstancePushConstantFloats = 24;
+// mat4 model (16 floats) + color/alpha (4) + lightDir/intensity (4)
+// + lightParams (4: count, ambient, specular strength, shininess) = 112 bytes,
+// inside the 128 bytes Vulkan guarantees for push constants.
+inline constexpr std::size_t kInstancePushConstantFloats = 28;
 
 void buildInstancePushConstants(const Mat4& model,
                                 float r, float g, float b, float a,
                                 const LightingParams& light,
-                                float (&out)[kInstancePushConstantFloats]);
+                                float (&out)[kInstancePushConstantFloats],
+                                int sceneLightCount = 0);
+
+// std140 mirror of the SceneLightsUBO block in assets/shaders/scene_lights.glsl.
+// Too large for push constants (kMaxSceneLights * 64 bytes), so it travels as a
+// per-frame uniform buffer bound at set 0, binding 2.
+struct SceneLightGpu {
+    float posType[4]{};   // xyz = world position, w = type
+    float dirRange[4]{};  // xyz = emission direction, w = range
+    float colorInt[4]{};  // rgb = color, a = intensity
+    float cone[4]{};      // x = inner cosine, y = outer cosine
+};
+
+struct SceneLightsUbo {
+    float cameraPos[4]{};
+    SceneLightGpu lights[kMaxSceneLights]{};
+};
+
+// Fills `out` with at most kMaxSceneLights entries; returns how many were written.
+int packSceneLights(const std::vector<SceneLight>* lights,
+                    const Vec3& cameraPos,
+                    SceneLightsUbo& out);
 
 // Per-instance resources resolved by the caller, aligned by index with the
 // instance vector. Each side fills it from its own mesh/material cache.

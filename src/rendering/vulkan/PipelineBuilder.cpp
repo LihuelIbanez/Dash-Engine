@@ -7,6 +7,7 @@
 
 #include "rendering/mesh/Vertex.h"
 #include "rendering/mesh/TerrainVertex.h"
+#include "rendering/vulkan/SceneRenderer.h"
 
 namespace dash::vkexp {
 
@@ -189,7 +190,7 @@ bool PipelineBuilder::createBasicPipeline(
     VkPushConstantRange pushRange{};
     pushRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
     pushRange.offset = 0;
-    pushRange.size = sizeof(float) * 24;  // mat4 model(16) + color(4) + lightDir(4) = 96 bytes
+    pushRange.size = static_cast<uint32_t>(sizeof(float) * kInstancePushConstantFloats);
     pipelineLayoutInfo.pushConstantRangeCount = 1;
     pipelineLayoutInfo.pPushConstantRanges = &pushRange;
 

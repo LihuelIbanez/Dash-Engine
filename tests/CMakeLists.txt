@@ -139,6 +139,39 @@ target_link_libraries(test_component_commands PRIVATE
 target_compile_options(test_component_commands PRIVATE ${DASH_COMPILE_FLAGS})
 add_test(NAME test_component_commands COMMAND test_component_commands)
 
+# ── Gizmo math: picking, arrastre sobre eje y snapping (sin ImGui ni Vulkan) ──
+add_executable(test_gizmo_math
+    test_gizmo_math.cpp
+    ${CMAKE_SOURCE_DIR}/src/editor/gizmos/GizmoMath.cpp
+)
+target_include_directories(test_gizmo_math PRIVATE
+    ${CMAKE_SOURCE_DIR}/src/editor/gizmos
+)
+target_compile_options(test_gizmo_math PRIVATE ${DASH_COMPILE_FLAGS})
+add_test(NAME test_gizmo_math COMMAND test_gizmo_math)
+
+# ── Jerarquia de escena + comandos de reparenteo y multiedicion ──────────────
+add_executable(test_scene_hierarchy
+    test_scene_hierarchy.cpp
+    ${TEST_CMD_SOURCES}
+)
+target_include_directories(test_scene_hierarchy PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/src/core
+    ${CMAKE_SOURCE_DIR}/src/core/components
+    ${CMAKE_SOURCE_DIR}/src/entities
+    ${CMAKE_SOURCE_DIR}/src/world
+    ${CMAKE_SOURCE_DIR}/src/rendering
+    ${CMAKE_SOURCE_DIR}/src/editor
+    ${CMAKE_SOURCE_DIR}/src/editor/commands
+    ${SDL2_INCLUDE_DIRS}
+)
+target_link_libraries(test_scene_hierarchy PRIVATE
+    game_core nlohmann_json::nlohmann_json ${SDL2_LIBRARIES}
+)
+target_compile_options(test_scene_hierarchy PRIVATE ${DASH_COMPILE_FLAGS})
+add_test(NAME test_scene_hierarchy COMMAND test_scene_hierarchy)
+
 # ── ProcessRunner: subprocesos sin shell (backlog C3) ────────────────────────
 add_executable(test_process_runner
     test_process_runner.cpp

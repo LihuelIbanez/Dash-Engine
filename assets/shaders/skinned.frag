@@ -13,12 +13,28 @@ layout(location = 0) out vec4 outColor;
 layout(push_constant) uniform InstancePC {
     mat4 model;
     vec4 color;
-    vec4 lightDir; // xyz = direction, w = intensity
+    vec4 lightDir;    // xyz = direction, w = intensity
+    vec4 lightParams; // x = active scene lights, y = ambient, z = spec strength, w = shininess
 } pc;
+
+#ifdef DASH_SCENE_LIGHTS
+#include "scene_lights.glsl"
+#endif
 
 void main()
 {
     vec3 N = normalize(vNormal);
+
+#ifdef DASH_SCENE_LIGHTS
+    int lightCount = int(pc.lightParams.x);
+    if (lightCount > 0) {
+        vec3 lit = accumulateSceneLights(N, vWorldPos, lightCount,
+                                         pc.lightParams.y, pc.lightParams.z, pc.lightParams.w);
+        outColor = vec4(vColor * lit, 1.0);
+        return;
+    }
+#endif
+
     vec3 L = normalize(pc.lightDir.xyz);
     float NdotL = max(dot(N, L), 0.0);
 

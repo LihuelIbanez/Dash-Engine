@@ -7,6 +7,7 @@ layout(location = 2) in vec2 inTexCoord;
 layout(location = 0) out vec3 vNormal;
 layout(location = 1) out vec2 vTexCoord;
 layout(location = 2) out vec3 vColor;
+layout(location = 3) out vec3 vWorldPos;
 
 layout(set = 0, binding = 0) uniform CameraUBO {
     mat4 viewProj;
@@ -25,4 +26,5 @@ void main()
     vNormal = transpose(inverse(mat3(pc.model))) * inNormal;
     vTexCoord = inTexCoord;
     vColor = clamp(pc.color.xyz, 0.0, 1.0);
+    vWorldPos = worldPos.xyz;
 }

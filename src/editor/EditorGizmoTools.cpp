@@ -8,6 +8,8 @@
 #include "EditorApp.h"
 #include "EntityHierarchy.h"
 #include "IsoRenderer.h"
+#include "commands/EditComponentFieldCommand.h"
+#include "commands/MultiEditComponentFieldCommand.h"
 #include "commands/ReparentEntityCommand.h"
 #include "commands/TransformEntitiesCommand.h"
 
@@ -19,6 +21,9 @@
 using dash::editor::Transform3D;
 
 namespace {
+
+// Pointer travel (in pixels, squared) before a click turns into a marquee.
+constexpr float kRectDragThresholdSq = 16.f;
 
 // projectToNdc stops at NDC; the overlay needs pixels inside the viewport image.
 bool projectToScreen(const float viewProj[16], const dash::gizmo::Vec3& p,
@@ -81,6 +86,121 @@ void EditorApp::pruneSelection()
                        [this](uint64_t id) { return findEntityById(id) == nullptr; }),
         selection_.end());
     selectedEntityId_ = selection_.empty() ? 0 : selection_.back();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Rectangle selection
+// ─────────────────────────────────────────────────────────────────────────────
+std::vector<uint64_t> EditorApp::entitiesInScreenRect(const float viewProj[16],
+                                                      const dash::gizmo::ViewportRect& rect,
+                                                      float x0, float y0, float x1, float y1)
+{
+    const float minX = std::min(x0, x1), maxX = std::max(x0, x1);
+    const float minY = std::min(y0, y1), maxY = std::max(y0, y1);
+
+    std::vector<uint64_t> hits;
+    for (const auto& e : scene_.entities) {
+        float sx = 0.f, sy = 0.f;
+        if (!projectToScreen(viewProj, entityGizmoPivot(e.id), rect, sx, sy)) continue;
+        if (sx < minX || sx > maxX || sy < minY || sy > maxY) continue;
+        hits.push_back(e.id);
+    }
+    return hits;
+}
+
+void EditorApp::updateRectSelection(const float viewProj[16],
+                                    const dash::gizmo::ViewportRect& rect,
+                                    float mouseX, float mouseY,
+                                    bool viewportHovered, bool gizmoOwnsPointer)
+{
+    // Every other tool paints or places on drag, so the marquee is Select-only.
+    if (editorMode_ != EditorMode::Edit || currentTool_ != Tool::Select ||
+        gizmoOwnsPointer || gizmo_.dragging() || draggingEntity_)
+    {
+        rectSelecting_     = false;
+        rectSelectPending_ = false;
+        return;
+    }
+
+    const ImGuiIO& io = ImGui::GetIO();
+
+    if (!rectSelecting_ && !rectSelectPending_) {
+        if (viewportHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+            rectSelectPending_ = true;
+            rectStartX_ = mouseX;
+            rectStartY_ = mouseY;
+        }
+        return;
+    }
+
+    if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+        if (rectSelecting_) {
+            const std::vector<uint64_t> hits =
+                entitiesInScreenRect(viewProj, rect, rectStartX_, rectStartY_, mouseX, mouseY);
+            if (io.KeyCtrl || io.KeySuper) {
+                for (uint64_t id : hits)
+                    if (!isEntitySelected(id)) selection_.push_back(id);
+                selectedEntityId_ = selection_.empty() ? 0 : selection_.back();
+            } else {
+                setSelection(hits);
+            }
+            addLog("[SELECT] Marquee selected " + std::to_string(hits.size()) + " entities.");
+        }
+        rectSelecting_     = false;
+        rectSelectPending_ = false;
+        return;
+    }
+
+    if (rectSelectPending_) {
+        const float dx = mouseX - rectStartX_;
+        const float dy = mouseY - rectStartY_;
+        if (dx * dx + dy * dy > kRectDragThresholdSq) {
+            rectSelectPending_ = false;
+            rectSelecting_     = true;
+        }
+    }
+
+    if (!rectSelecting_) return;
+
+    if (ImDrawList* dl = ImGui::GetWindowDrawList()) {
+        const ImVec2 a{std::min(rectStartX_, mouseX), std::min(rectStartY_, mouseY)};
+        const ImVec2 b{std::max(rectStartX_, mouseX), std::max(rectStartY_, mouseY)};
+        dl->AddRectFilled(a, b, IM_COL32(80, 150, 255, 40));
+        dl->AddRect(a, b, IM_COL32(120, 190, 255, 220));
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Inspector edits
+// ─────────────────────────────────────────────────────────────────────────────
+void EditorApp::applyComponentFieldEdit(uint64_t entityId, ComponentType compType,
+                                        const PropertyInfo& prop,
+                                        const PropertyValue& oldVal,
+                                        const PropertyValue& newVal)
+{
+    std::vector<MultiEditComponentFieldCommand::Target> targets;
+    for (uint64_t id : selection_) {
+        if (id == entityId) continue;
+        EntityData* e = findEntityById(id);
+        if (!e) continue;
+        for (auto& comp : e->components) {
+            if (getVariantType(comp) != compType) continue;
+            targets.push_back({id, readFieldValue(fieldPtr(comp, prop), prop.type)});
+            break;
+        }
+    }
+
+    if (targets.empty()) {
+        commandStack_.execute(std::make_unique<EditComponentFieldCommand>(
+            entityId, compType, prop.offset, prop.type, oldVal, newVal, prop.name),
+            scene_, world_);
+        return;
+    }
+
+    targets.insert(targets.begin(), {entityId, oldVal});
+    commandStack_.execute(std::make_unique<MultiEditComponentFieldCommand>(
+        std::move(targets), compType, prop.offset, prop.type, newVal, prop.name),
+        scene_, world_);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
