@@ -213,6 +213,7 @@ if(ENABLE_VULKAN_EXPERIMENTAL AND NOT IOS)
             ${CMAKE_SOURCE_DIR}/src/rendering/platform/WindowContext.cpp
             ${CMAKE_SOURCE_DIR}/src/rendering/mesh/MeshBuffers.cpp
             ${CMAKE_SOURCE_DIR}/src/rendering/mesh/MeshUploader.cpp
+            ${CMAKE_SOURCE_DIR}/src/rendering/animation/AnimationPlayer.cpp
             ${CMAKE_SOURCE_DIR}/src/rendering/textures/TextureLoader.cpp
             ${CMAKE_SOURCE_DIR}/src/rendering/textures/stb_image_vk_impl.cpp
             ${CMAKE_SOURCE_DIR}/src/assets/cache/AssetCache3D.cpp
@@ -263,6 +264,8 @@ if(ENABLE_VULKAN_EXPERIMENTAL AND NOT IOS)
                     "${VULKAN_SHADER_BIN_DIR}/water.frag.spv"
                     "${VULKAN_SHADER_BIN_DIR}/billboard.vert.spv"
                     "${VULKAN_SHADER_BIN_DIR}/billboard.frag.spv"
+                    "${VULKAN_SHADER_BIN_DIR}/skinned.vert.spv"
+                    "${VULKAN_SHADER_BIN_DIR}/skinned.frag.spv"
                 COMMAND ${GLSLC_EXECUTABLE} "${VULKAN_SHADER_SRC_DIR}/basic.vert" -o "${VULKAN_SHADER_BIN_DIR}/basic.vert.spv"
                 COMMAND ${GLSLC_EXECUTABLE} "${VULKAN_SHADER_SRC_DIR}/basic.frag" -o "${VULKAN_SHADER_BIN_DIR}/basic.frag.spv"
                 COMMAND ${GLSLC_EXECUTABLE} "${VULKAN_SHADER_SRC_DIR}/textured.vert" -o "${VULKAN_SHADER_BIN_DIR}/textured.vert.spv"
@@ -273,6 +276,8 @@ if(ENABLE_VULKAN_EXPERIMENTAL AND NOT IOS)
                 COMMAND ${GLSLC_EXECUTABLE} "${VULKAN_SHADER_SRC_DIR}/water.frag" -o "${VULKAN_SHADER_BIN_DIR}/water.frag.spv"
                 COMMAND ${GLSLC_EXECUTABLE} "${VULKAN_SHADER_SRC_DIR}/billboard.vert" -o "${VULKAN_SHADER_BIN_DIR}/billboard.vert.spv"
                 COMMAND ${GLSLC_EXECUTABLE} "${VULKAN_SHADER_SRC_DIR}/billboard.frag" -o "${VULKAN_SHADER_BIN_DIR}/billboard.frag.spv"
+                COMMAND ${GLSLC_EXECUTABLE} "${VULKAN_SHADER_SRC_DIR}/skinned.vert" -o "${VULKAN_SHADER_BIN_DIR}/skinned.vert.spv"
+                COMMAND ${GLSLC_EXECUTABLE} "${VULKAN_SHADER_SRC_DIR}/skinned.frag" -o "${VULKAN_SHADER_BIN_DIR}/skinned.frag.spv"
                 DEPENDS
                     "${VULKAN_SHADER_SRC_DIR}/basic.vert"
                     "${VULKAN_SHADER_SRC_DIR}/basic.frag"
@@ -284,6 +289,8 @@ if(ENABLE_VULKAN_EXPERIMENTAL AND NOT IOS)
                     "${VULKAN_SHADER_SRC_DIR}/water.frag"
                     "${VULKAN_SHADER_SRC_DIR}/billboard.vert"
                     "${VULKAN_SHADER_SRC_DIR}/billboard.frag"
+                    "${VULKAN_SHADER_SRC_DIR}/skinned.vert"
+                    "${VULKAN_SHADER_SRC_DIR}/skinned.frag"
                 COMMENT "Compiling Vulkan shaders (GLSL -> SPIR-V)"
                 VERBATIM
             )
@@ -299,6 +306,8 @@ if(ENABLE_VULKAN_EXPERIMENTAL AND NOT IOS)
                     "${VULKAN_SHADER_BIN_DIR}/water.frag.spv"
                     "${VULKAN_SHADER_BIN_DIR}/billboard.vert.spv"
                     "${VULKAN_SHADER_BIN_DIR}/billboard.frag.spv"
+                    "${VULKAN_SHADER_BIN_DIR}/skinned.vert.spv"
+                    "${VULKAN_SHADER_BIN_DIR}/skinned.frag.spv"
             )
         else()
             message(WARNING "glslc not found. VulkanBootstrap will build, but pipeline creation (D74) will fail at runtime.")

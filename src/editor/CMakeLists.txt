@@ -6,6 +6,7 @@ file(GLOB EDITOR_PLAYMODE_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/playmode/*.cpp")
 file(GLOB EDITOR_VALIDATION_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/validation/*.cpp")
 file(GLOB EDITOR_PROJECT_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/project/*.cpp")
 file(GLOB EDITOR_SCENE_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/scene/*.cpp")
+file(GLOB EDITOR_GIZMO_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/gizmos/*.cpp")
 file(GLOB ASSET_SOURCES "${CMAKE_SOURCE_DIR}/src/assets/*.cpp")
 file(GLOB IMPORTER_SOURCES "${CMAKE_SOURCE_DIR}/src/assets/importers/*.cpp")
 file(GLOB PANEL_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/panels/*.cpp")
@@ -32,6 +33,7 @@ add_executable(DashEngine
     ${EDITOR_VALIDATION_SOURCES}
     ${EDITOR_PROJECT_SOURCES}
     ${EDITOR_SCENE_SOURCES}
+    ${EDITOR_GIZMO_SOURCES}
     ${ASSET_SOURCES}
     ${IMPORTER_SOURCES}
     ${PANEL_SOURCES}
@@ -52,6 +54,7 @@ target_include_directories(DashEngine PRIVATE
     ${CMAKE_SOURCE_DIR}/src/editor/validation
     ${CMAKE_SOURCE_DIR}/src/editor/project
     ${CMAKE_SOURCE_DIR}/src/editor/scene
+    ${CMAKE_SOURCE_DIR}/src/editor/gizmos
     ${CMAKE_SOURCE_DIR}/src/assets
     ${CMAKE_SOURCE_DIR}/src/assets/importers
     ${CMAKE_SOURCE_DIR}/src/game

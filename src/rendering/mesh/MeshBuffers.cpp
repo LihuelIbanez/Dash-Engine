@@ -10,22 +10,30 @@
 #include <assimp/postprocess.h>
 
 #include "rendering/mesh/Vertex.h"
+#include "rendering/mesh/SkinnedVertex.h"
+#include "rendering/animation/DashMeshFile.h"
 
 namespace dash::vkexp {
 
 MeshBuffers::MeshBuffers(MeshBuffers&& other) noexcept
     : vertexBuffer_(other.vertexBuffer_)
     , vertexMemory_(other.vertexMemory_)
+    , skinBuffer_(other.skinBuffer_)
+    , skinMemory_(other.skinMemory_)
     , indexBuffer_(other.indexBuffer_)
     , indexMemory_(other.indexMemory_)
     , indexCount_(other.indexCount_)
+    , boneCount_(other.boneCount_)
     , indexType_(other.indexType_)
 {
     other.vertexBuffer_ = VK_NULL_HANDLE;
     other.vertexMemory_ = VK_NULL_HANDLE;
+    other.skinBuffer_ = VK_NULL_HANDLE;
+    other.skinMemory_ = VK_NULL_HANDLE;
     other.indexBuffer_ = VK_NULL_HANDLE;
     other.indexMemory_ = VK_NULL_HANDLE;
     other.indexCount_ = 0;
+    other.boneCount_ = 0;
 }
 
 MeshBuffers& MeshBuffers::operator=(MeshBuffers&& other) noexcept
@@ -33,15 +41,21 @@ MeshBuffers& MeshBuffers::operator=(MeshBuffers&& other) noexcept
     if (this != &other) {
         vertexBuffer_ = other.vertexBuffer_;
         vertexMemory_ = other.vertexMemory_;
+        skinBuffer_ = other.skinBuffer_;
+        skinMemory_ = other.skinMemory_;
         indexBuffer_ = other.indexBuffer_;
         indexMemory_ = other.indexMemory_;
         indexCount_ = other.indexCount_;
+        boneCount_ = other.boneCount_;
         indexType_ = other.indexType_;
         other.vertexBuffer_ = VK_NULL_HANDLE;
         other.vertexMemory_ = VK_NULL_HANDLE;
+        other.skinBuffer_ = VK_NULL_HANDLE;
+        other.skinMemory_ = VK_NULL_HANDLE;
         other.indexBuffer_ = VK_NULL_HANDLE;
         other.indexMemory_ = VK_NULL_HANDLE;
         other.indexCount_ = 0;
+        other.boneCount_ = 0;
     }
     return *this;
 }
@@ -294,6 +308,56 @@ bool MeshBuffers::initFromGLTF(VkPhysicalDevice physicalDevice, VkDevice device,
                         static_cast<uint32_t>(indices.size()));
 }
 
+bool MeshBuffers::initFromDashMesh(VkPhysicalDevice physicalDevice, VkDevice device,
+                                   const std::string& dashMeshPath)
+{
+    dash::anim::DashMeshData data;
+    std::string error;
+    if (!dash::anim::readDashMesh(dashMeshPath, data, error)) {
+        std::fprintf(stderr, "[MeshBuffers] %s\n", error.c_str());
+        return false;
+    }
+
+    if (data.vertices.empty() || data.indices.empty()) {
+        std::fprintf(stderr, "[MeshBuffers] Empty mesh in %s\n", dashMeshPath.c_str());
+        return false;
+    }
+
+    if (!initFromData(physicalDevice, device,
+                      data.vertices.data(),
+                      static_cast<uint32_t>(data.vertices.size() * sizeof(Vertex)),
+                      data.indices.data(),
+                      static_cast<uint32_t>(data.indices.size() * sizeof(uint32_t)),
+                      static_cast<uint32_t>(data.indices.size()))) {
+        return false;
+    }
+
+    boneCount_ = data.boneCount;
+
+    if (data.isSkinned()) {
+        const VkDeviceSize skinSize = sizeof(SkinnedVertex) * data.skin.size();
+        if (!createBuffer(physicalDevice, device, skinSize,
+                          VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+                          VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                          skinBuffer_, skinMemory_)) {
+            shutdown(device);
+            return false;
+        }
+
+        void* mapped = nullptr;
+        vkMapMemory(device, skinMemory_, 0, skinSize, 0, &mapped);
+        std::memcpy(mapped, data.skin.data(), static_cast<size_t>(skinSize));
+        vkUnmapMemory(device, skinMemory_);
+    }
+
+    std::fprintf(stdout, "[MeshBuffers] Loaded .dashmesh v%u: %u vertices, %u indices, %u bones\n",
+                 data.version,
+                 static_cast<uint32_t>(data.vertices.size()),
+                 static_cast<uint32_t>(data.indices.size()),
+                 boneCount_);
+    return true;
+}
+
 void MeshBuffers::shutdown(VkDevice device)
 {
     if (indexBuffer_ != VK_NULL_HANDLE) {
@@ -304,6 +368,14 @@ void MeshBuffers::shutdown(VkDevice device)
         vkFreeMemory(device, indexMemory_, nullptr);
         indexMemory_ = VK_NULL_HANDLE;
     }
+    if (skinBuffer_ != VK_NULL_HANDLE) {
+        vkDestroyBuffer(device, skinBuffer_, nullptr);
+        skinBuffer_ = VK_NULL_HANDLE;
+    }
+    if (skinMemory_ != VK_NULL_HANDLE) {
+        vkFreeMemory(device, skinMemory_, nullptr);
+        skinMemory_ = VK_NULL_HANDLE;
+    }
     if (vertexBuffer_ != VK_NULL_HANDLE) {
         vkDestroyBuffer(device, vertexBuffer_, nullptr);
         vertexBuffer_ = VK_NULL_HANDLE;
@@ -313,6 +385,7 @@ void MeshBuffers::shutdown(VkDevice device)
         vertexMemory_ = VK_NULL_HANDLE;
     }
     indexCount_ = 0;
+    boneCount_ = 0;
 }
 
 } // namespace dash::vkexp

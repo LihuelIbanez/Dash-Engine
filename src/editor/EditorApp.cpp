@@ -26,6 +26,8 @@
 #include "project/GameBuildPipeline.h"
 #include "project/ProcessRunner.h"
 #include "project/ProjectDataMigrator.h"
+#include "EntityHierarchy.h"
+#include "commands/CreateEntityCommand.h"
 #include "rendering/vulkan/SceneLoader.h"
 #include "rendering/vulkan/SceneRenderer.h"
 #include "scene/SceneRepositorySqlite.h"
@@ -1288,14 +1290,18 @@ void EditorApp::drawSceneHierarchy()
                 scene_.modified ? " *" : "");
     ImGui::Separator();
 
-    for (int i = 0; i < (int)scene_.entities.size(); ++i) {
-        auto& e = scene_.entities[i];
-        const char* icon = (e.type == EntityData::Type::Player) ? "[P]" : "[E]";
-        char label[128];
-        std::snprintf(label, sizeof(label), "%s %s##%d", icon, e.name.c_str(), i);
+    for (uint64_t rootId : dash::editor::rootEntities(scene_))
+        drawHierarchyNode(rootId, 0);
 
-        if (ImGui::Selectable(label, selectedEntityId_ == e.id))
-            selectedEntityId_ = e.id;
+    // Dropping on the empty area below the tree unparents the entity.
+    ImGui::Dummy({-1, 18});
+    if (ImGui::BeginDragDropTarget()) {
+        if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("DASH_ENTITY")) {
+            uint64_t dragged = 0;
+            std::memcpy(&dragged, p->Data, sizeof(dragged));
+            reparentEntity(dragged, 0);
+        }
+        ImGui::EndDragDropTarget();
     }
 
     ImGui::Separator();
@@ -1304,8 +1310,26 @@ void EditorApp::drawSceneHierarchy()
         uint64_t newId = scene_.allocateEntityId();
         auto cmd = std::make_unique<PlaceEnemyCommand>(camX_, camY_, newId, "NewEnemy");
         commandStack_.execute(std::move(cmd), scene_, world_);
-        selectedEntityId_ = newId;
+        setSelection(newId);
         addLog("Entity added.");
+    }
+    if (ImGui::Button("+ Add Light", {-1, 0})) {
+        EntityData light;
+        light.id = scene_.allocateEntityId();
+        light.type = EntityData::Type::Enemy;  // scene entity types are Player/Enemy only
+        light.name = "Light";
+        light.x = camX_;
+        light.y = camY_;
+        TransformComponent tf;
+        tf.x = camX_; tf.y = camY_; tf.z = 2.0f;
+        light.components.push_back(tf);
+        light.components.push_back(LightComponent{});
+        const uint64_t newId = light.id;
+        commandStack_.execute(
+            std::make_unique<CreateEntityCommand>(std::move(light), "Create Light"),
+            scene_, world_);
+        setSelection(newId);
+        addLog("Light added.");
     }
 
     EntityData* sel = findEntityById(selectedEntityId_);
@@ -1313,7 +1337,7 @@ void EditorApp::drawSceneHierarchy()
         if (ImGui::Button("- Remove Selected", {-1, 0})) {
             auto cmd = std::make_unique<EraseCommand>(selectedEntityId_);
             commandStack_.execute(std::move(cmd), scene_, world_);
-            selectedEntityId_ = 0;
+            clearSelection();
         }
     }
     if (editorMode_ == EditorMode::Play) ImGui::EndDisabled();
@@ -2098,6 +2122,24 @@ void EditorApp::drawViewport()
     bool vpFocused = ImGui::IsWindowFocused();
     bool vpHovered = ImGui::IsItemHovered();
 
+    // ── Transform gizmo ──────────────────────────────────────────────────────
+    // Runs before the tools below so a gizmo drag swallows the click instead of
+    // painting a tile or moving the entity underneath.
+    bool gizmoOwnsPointer = false;
+    if (editorMode_ == EditorMode::Edit) {
+        handleGizmoShortcuts(vpFocused);
+
+        float gizmoViewProj[16];
+        buildViewProjMatrix(vpDisplayW_, vpDisplayH_, gizmoViewProj);
+        const dash::gizmo::ViewportRect rect{vpScreenX_, vpScreenY_, vpDisplayW_, vpDisplayH_};
+        ImGuiIO& gio = ImGui::GetIO();
+        gizmoOwnsPointer = updateViewportGizmo(gizmoViewProj, rect,
+                                               gio.MousePos.x, gio.MousePos.y, vpHovered);
+
+        drawSelectionOverlays(ImGui::GetWindowDrawList(), gizmoViewProj, rect);
+        if (gizmoOwnsPointer) vpHovered = false;
+    }
+
     // ── Play-mode input: Vulkan handles its own input ────────────────────────
     // (clicking in viewport sends input to Vulkan process, not editor)
 
@@ -2323,19 +2365,26 @@ void EditorApp::handleToolClick(float wx, float wy)
         uint64_t newId = scene_.allocateEntityId();
         auto cmd = std::make_unique<PlaceEnemyCommand>(wx, wy, newId, "Enemy");
         commandStack_.execute(std::move(cmd), scene_, world_);
-        selectedEntityId_ = newId;
+        setSelection(newId);
         addLog("Placed enemy.");
         break;
     }
 
     case Tool::Select: {
-        selectedEntityId_ = 0;
+        uint64_t hit = 0;
         float best = 2.f;
         for (auto& e : scene_.entities) {
-            float dx = e.x - wx;
-            float dy = e.y - wy;
+            const dash::editor::Transform3D w = dash::editor::worldTransform(scene_, e.id);
+            float dx = w.x - wx;
+            float dy = w.y - wy;
             float d  = std::sqrt(dx * dx + dy * dy);
-            if (d < best) { best = d; selectedEntityId_ = e.id; }
+            if (d < best) { best = d; hit = e.id; }
+        }
+        const ImGuiIO& io = ImGui::GetIO();
+        if (io.KeySuper || io.KeyCtrl) {
+            if (hit != 0) toggleSelection(hit);
+        } else {
+            setSelection(hit);
         }
         break;
     }
@@ -2733,10 +2782,9 @@ void EditorApp::renderWorldToTexture()
         vkCmdBindVertexBuffers(cmd, 0, 1, vb, vbOffsets);
         vkCmdBindIndexBuffer(cmd, vkCtx_.cubeMesh().indexBuffer(), 0, vkCtx_.cubeMesh().indexType());
 
-        // Same conversion the runtime uses, so the viewport honours yaw/scale,
-        // RenderComponent::mesh, visible and renderMode instead of guessing.
+        // Resolve parenting first: the renderer knows nothing about parentId.
         std::vector<dash::vkexp::RenderInstance> instances =
-            dash::vkexp::SceneLoader::buildInstances(scene_);
+            dash::vkexp::SceneLoader::buildInstances(dash::editor::flattenHierarchy(scene_));
 
         std::vector<dash::vkexp::InstanceResources> resources(instances.size());
         for (size_t i = 0; i < instances.size(); ++i) {

@@ -22,6 +22,8 @@
 #include "CliffBrushCommand.h"
 #include "TexturePaintCommand.h"
 #include "WaterLevelCommand.h"
+#include "EntityHierarchy.h"
+#include "gizmos/TransformGizmo.h"
 #include "project/ProjectManager.h"
 #include "EditorVkContext.h"
 #include <string>
@@ -57,12 +59,53 @@ private:
     // ── Scene ────────────────────────────────────────────────────────────────
     SceneData    scene_;
     World        world_;
-    uint64_t     selectedEntityId_ = 0;   // 0 = no selection
+    uint64_t     selectedEntityId_ = 0;   // active entity (0 = no selection)
+    std::vector<uint64_t> selection_;     // multi-selection; back() is active
     CommandStack commandStack_;
 
     EntityData* findEntityById(uint64_t id);
     void performUndo();
     void performRedo();
+
+    // ── Selection ────────────────────────────────────────────────────────────
+    bool isEntitySelected(uint64_t id) const;
+    void setSelection(uint64_t id);            // replaces the whole selection
+    void toggleSelection(uint64_t id);         // Ctrl/Cmd+click behaviour
+    void setSelection(const std::vector<uint64_t>& ids);
+    void clearSelection();
+    void pruneSelection();                     // drop ids no longer in the scene
+
+    // ── Hierarchy ────────────────────────────────────────────────────────────
+    void drawHierarchyNode(uint64_t entityId, int depth);
+    void reparentEntity(uint64_t childId, uint64_t newParentId);
+
+    // ── Transform gizmos ─────────────────────────────────────────────────────
+    struct GizmoDragEntry {
+        uint64_t                  entityId = 0;
+        dash::editor::Transform3D startLocal{};
+        dash::editor::Transform3D startWorld{};
+    };
+    dash::gizmo::TransformGizmo gizmo_;
+    std::vector<GizmoDragEntry> gizmoDrag_;
+    dash::editor::Transform3D   gizmoDragPivot_{};
+    float gizmoTranslateSnapTiles_ = 0.5f;
+    float gizmoRotateSnapDeg_      = 15.0f;
+    float gizmoScaleSnap_          = 0.1f;
+    bool  gizmoAlwaysSnap_         = false;
+
+    dash::gizmo::Vec3 entityGizmoPivot(uint64_t entityId);
+    bool selectionGizmoPivot(dash::gizmo::Vec3& outPivot, dash::editor::Transform3D& outScenePivot);
+    // Returns true when the gizmo owns the pointer this frame.
+    bool updateViewportGizmo(const float viewProj[16], const dash::gizmo::ViewportRect& rect,
+                             float mouseX, float mouseY, bool viewportHovered);
+    void drawSelectionOverlays(ImDrawList* dl, const float viewProj[16],
+                               const dash::gizmo::ViewportRect& rect);
+    void handleGizmoShortcuts(bool viewportFocused);
+
+    // ── Rectangle selection ──────────────────────────────────────────────────
+    bool  rectSelecting_ = false;
+    bool  rectSelectPending_ = false;
+    float rectStartX_ = 0.f, rectStartY_ = 0.f;
 
     // ── Project ───────────────────────────────────────────────────────────────
     ProjectManager projectManager_;
@@ -200,6 +243,7 @@ private:
     bool showAssetBrowser_ = true;
     bool showAssetInspector_ = true;
     bool showLightingPanel_ = true;
+    bool showLightsPanel_ = true;
     bool showEntityViewport_ = false;
     WelcomePanel welcomePanel_;
     EntityViewportPanel entityViewportPanel_;
@@ -237,6 +281,7 @@ private:
     void drawCreateSceneDialog();
     void drawMigrationLogModal();
     void drawLightingPanel();
+    void drawLightsPanel();
 
     // ── Actions ──────────────────────────────────────────────────────────────
     void newScene();
@@ -262,6 +307,10 @@ private:
                              float* outEyeX = nullptr, float* outEyeY = nullptr,
                              float* outEyeZ = nullptr);
     void handleToolClick(float wx, float wy);
+    void createLightEntity(LightType type);
+    void commitFieldEdit(uint64_t primaryId, ComponentType compType,
+                         const PropertyInfo& prop,
+                         const PropertyValue& oldVal, const PropertyValue& newVal);
     void paintTileAt(float wx, float wy);
     void floodFillAt(float wx, float wy);
     void heightBrushAt(float wx, float wy);

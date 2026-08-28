@@ -720,3 +720,24 @@ target_include_directories(test_frustum_culling PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_compile_options(test_frustum_culling PRIVATE ${DASH_COMPILE_FLAGS})
 add_test(NAME test_frustum_culling COMMAND test_frustum_culling)
 
+
+# ── .dashmesh v2 binary format (animacion) ───────────────────────────────────
+add_executable(test_dashmesh_format test_dashmesh_format.cpp)
+target_include_directories(test_dashmesh_format PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_compile_options(test_dashmesh_format PRIVATE ${DASH_COMPILE_FLAGS})
+add_test(NAME test_dashmesh_format COMMAND test_dashmesh_format)
+
+# ── Skeleton / AnimationClip / AnimationPlayer (animacion) ───────────────────
+add_executable(test_skeletal_animation
+    test_skeletal_animation.cpp
+    ${CMAKE_SOURCE_DIR}/src/rendering/animation/AnimationPlayer.cpp
+)
+target_include_directories(test_skeletal_animation PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/src/core
+    ${CMAKE_SOURCE_DIR}/src/core/components
+    ${SDL2_INCLUDE_DIRS}
+)
+target_link_libraries(test_skeletal_animation PRIVATE nlohmann_json::nlohmann_json)
+target_compile_options(test_skeletal_animation PRIVATE ${DASH_COMPILE_FLAGS})
+add_test(NAME test_skeletal_animation COMMAND test_skeletal_animation)
