@@ -9,7 +9,7 @@
 
 const ComponentMeta& getComponentMeta(ComponentType type)
 {
-    static const std::array<ComponentMeta, 10> kReg = {
+    static const std::array<ComponentMeta, 11> kReg = {
         ComponentMeta{"Transform", ComponentType::Transform, {
             {"x", PropertyType::Float, offsetof(TransformComponent, x), {}},
             {"y", PropertyType::Float, offsetof(TransformComponent, y), {}},
@@ -81,6 +81,17 @@ const ComponentMeta& getComponentMeta(ComponentType type)
             {"playing",       PropertyType::Bool,   offsetof(AnimationComponent, playing),       {}},
             {"blendSeconds",  PropertyType::Float,  offsetof(AnimationComponent, blendSeconds),  {}},
         }},
+        ComponentMeta{"Audio", ComponentType::Audio, {
+            {"clip",        PropertyType::String, offsetof(AudioComponent, clip),        {}},
+            {"volume",      PropertyType::Float,  offsetof(AudioComponent, volume),      {}},
+            {"pitch",       PropertyType::Float,  offsetof(AudioComponent, pitch),       {}},
+            {"loop",        PropertyType::Bool,   offsetof(AudioComponent, loop),        {}},
+            {"playOnStart", PropertyType::Bool,   offsetof(AudioComponent, playOnStart), {}},
+            {"spatial",     PropertyType::Bool,   offsetof(AudioComponent, spatial),     {}},
+            {"minDistance", PropertyType::Float,  offsetof(AudioComponent, minDistance), {}},
+            {"maxDistance", PropertyType::Float,  offsetof(AudioComponent, maxDistance), {}},
+            {"bus",         PropertyType::Enum,   offsetof(AudioComponent, bus),         {"Master", "Sfx", "Music"}},
+        }},
     };
     int idx = static_cast<int>(type);
     if (idx < 0 || idx >= static_cast<int>(kReg.size()))
@@ -103,7 +114,8 @@ ComponentType getVariantType(const ComponentVariant& comp)
         else if constexpr (std::is_same_v<T, AIComponent>)      return ComponentType::AI;
         else if constexpr (std::is_same_v<T, PhysicsComponent>) return ComponentType::Physics;
         else if constexpr (std::is_same_v<T, LightComponent>)   return ComponentType::Light;
-        else                                                     return ComponentType::Animation;
+        else if constexpr (std::is_same_v<T, AnimationComponent>) return ComponentType::Animation;
+        else                                                     return ComponentType::Audio;
     }, comp);
 }
 

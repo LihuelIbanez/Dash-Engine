@@ -16,6 +16,7 @@ enum class ComponentType : int {
     Physics   = 7,
     Light     = 8,
     Animation = 9,
+    Audio     = 10,
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -75,6 +76,26 @@ struct AnimationComponent {
     bool        loop = true;
     bool        playing = true;
     float       blendSeconds = 0.2f;
+};
+
+enum class AudioBus : int {
+    Master = 0,
+    Sfx    = 1,
+    Music  = 2,
+};
+
+// A sound emitter attached to an entity. `clip` is an asset GUID or a path,
+// resolved the same way RenderComponent::material is.
+struct AudioComponent {
+    std::string clip;
+    float volume = 1.f;
+    float pitch  = 1.f;
+    bool  loop = false;
+    bool  playOnStart = true;
+    bool  spatial = true;         // false = plays flat, ignoring listener distance
+    float minDistance = 1.f;      // full volume inside this radius
+    float maxDistance = 20.f;     // silent beyond this radius
+    int   bus = static_cast<int>(AudioBus::Sfx);
 };
 
 struct HealthComponent {
@@ -138,5 +159,6 @@ using ComponentVariant = std::variant<
     AIComponent,
     PhysicsComponent,
     LightComponent,
-    AnimationComponent
+    AnimationComponent,
+    AudioComponent
 >;

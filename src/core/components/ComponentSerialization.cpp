@@ -35,6 +35,7 @@ ComponentType componentTypeFromName(const std::string& name)
     if (name == "Physics")   return ComponentType::Physics;
     if (name == "Light")     return ComponentType::Light;
     if (name == "Animation") return ComponentType::Animation;
+    if (name == "Audio")     return ComponentType::Audio;
     throw std::runtime_error("Unknown component type: " + name);
 }
 
@@ -154,6 +155,18 @@ nlohmann::json componentToJson(const ComponentVariant& comp)
             j["playing"]      = c.playing;
             j["blendSeconds"] = c.blendSeconds;
         }
+        else if constexpr (std::is_same_v<T, AudioComponent>) {
+            j["type"]        = "Audio";
+            j["clip"]        = c.clip;
+            j["volume"]      = c.volume;
+            j["pitch"]       = c.pitch;
+            j["loop"]        = c.loop;
+            j["playOnStart"] = c.playOnStart;
+            j["spatial"]     = c.spatial;
+            j["minDistance"] = c.minDistance;
+            j["maxDistance"] = c.maxDistance;
+            j["bus"]         = c.bus;
+        }
     }, comp);
     return j;
 }
@@ -259,6 +272,19 @@ ComponentVariant componentFromJson(const nlohmann::json& j)
             c.loop         = j.value("loop", true);
             c.playing      = j.value("playing", true);
             c.blendSeconds = j.value("blendSeconds", 0.2f);
+            return c;
+        }
+        case ComponentType::Audio: {
+            AudioComponent c;
+            c.clip        = j.value("clip", std::string{});
+            c.volume      = j.value("volume", 1.f);
+            c.pitch       = j.value("pitch", 1.f);
+            c.loop        = j.value("loop", false);
+            c.playOnStart = j.value("playOnStart", true);
+            c.spatial     = j.value("spatial", true);
+            c.minDistance = j.value("minDistance", 1.f);
+            c.maxDistance = j.value("maxDistance", 20.f);
+            c.bus         = j.value("bus", static_cast<int>(AudioBus::Sfx));
             return c;
         }
         default:

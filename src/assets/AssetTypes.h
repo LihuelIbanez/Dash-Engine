@@ -11,6 +11,7 @@ enum class AssetType {
     Sprite,
     Model,
     Material,
+    Audio,
     Unknown
 };
 
@@ -27,6 +28,7 @@ inline const char* assetTypeToStr(AssetType t) {
         case AssetType::Sprite:         return "Sprite";
         case AssetType::Model:          return "Model";
         case AssetType::Material:       return "Material";
+        case AssetType::Audio:          return "Audio";
         default:                        return "Unknown";
     }
 }
@@ -40,5 +42,6 @@ inline AssetType assetTypeFromStr(const std::string& s) {
     if (s == "Sprite")         return AssetType::Sprite;
     if (s == "Model")          return AssetType::Model;
     if (s == "Material")       return AssetType::Material;
+    if (s == "Audio")          return AssetType::Audio;
     return AssetType::Unknown;
 }
