@@ -10,6 +10,18 @@
 
 namespace dash::vkexp {
 
+// A single step advances one nominal 60 Hz frame regardless of how long the
+// paused editor took to send it, so stepping is deterministic.
+float EditorBridge::applyPlaybackScale(float dt)
+{
+    if (!playback_.paused) return dt * playback_.timeScale;
+    if (stepPending_) {
+        stepPending_ = false;
+        return (1.0f / 60.0f) * playback_.timeScale;
+    }
+    return 0.0f;
+}
+
 using json = nlohmann::json;
 
 void EditorBridge::poll(GLFWwindow* window, CameraController& camera,
@@ -85,6 +97,19 @@ void EditorBridge::poll(GLFWwindow* window, CameraController& camera,
             cubeTransform.position.z = sy;
             hasExternalSelection_ = true;
         }
+    }
+
+    // ── Playback transport ───────────────────────────────────────────────
+    if (j.contains("playback") && j["playback"].is_object()) {
+        const auto& p = j["playback"];
+        playback_.paused = p.value("paused", false);
+        playback_.timeScale = std::max(0.0f, p.value("timeScale", 1.0f));
+        const uint32_t serial = p.value("stepSerial", static_cast<uint32_t>(0));
+        if (serial != lastStepSerial_) {
+            lastStepSerial_ = serial;
+            stepPending_ = true;
+        }
+        playback_.stepSerial = serial;
     }
 
     // ── Viewport / lighting / fog / window docking ───────────────────────

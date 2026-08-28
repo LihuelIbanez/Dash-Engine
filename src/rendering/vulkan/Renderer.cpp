@@ -1278,8 +1278,10 @@ bool Renderer::runSmoke(WindowContext& window, uint32_t targetFrames)
         }
 
         const auto now = std::chrono::steady_clock::now();
-        const float dt = std::chrono::duration<float>(now - lastTime).count();
+        const float rawDt = std::chrono::duration<float>(now - lastTime).count();
         lastTime = now;
+        // Play-mode transport: 0 while paused, one fixed frame per step request.
+        const float dt = infiniteRun ? editorBridge_.applyPlaybackScale(rawDt) : rawDt;
         elapsedSeconds_ += dt;
 
         if (!(infiniteRun && editorBridge_.hasExternalSelection())) {

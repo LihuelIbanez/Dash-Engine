@@ -25,6 +25,15 @@ struct FogParams {
     float end = 400.0f;
 };
 
+// Play-mode transport shared through the editor state file. `stepSerial` is a
+// monotonic counter: the runtime advances exactly one frame whenever it sees a
+// value it has not consumed yet, so a step is never lost or replayed.
+struct PlaybackControl {
+    bool     paused = false;
+    float    timeScale = 1.0f;
+    uint32_t stepSerial = 0;
+};
+
 class EditorBridge {
 public:
     void setStatePath(const std::string& path) { statePath_ = path; }
@@ -40,6 +49,11 @@ public:
     const std::string& statePath() const { return statePath_; }
     const LightingParams& lighting() const { return lighting_; }
     const FogParams& fog() const { return fog_; }
+    const PlaybackControl& playback() const { return playback_; }
+
+    // Scales dt for this frame and consumes a pending single-step request.
+    // Returns 0 while paused, so systems advance exactly when asked to.
+    float applyPlaybackScale(float dt);
 
 private:
     std::string statePath_;
@@ -49,6 +63,9 @@ private:
     std::chrono::steady_clock::time_point lastRead_{};
     LightingParams lighting_;
     FogParams fog_;
+    PlaybackControl playback_;
+    uint32_t lastStepSerial_ = 0;
+    bool stepPending_ = false;
 };
 
 } // namespace dash::vkexp
