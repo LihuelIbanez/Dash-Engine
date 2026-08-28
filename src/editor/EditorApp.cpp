@@ -917,6 +917,9 @@ void EditorApp::run()
                 });
         if (spriteEditor_.isOpen)
             spriteEditor_.draw();
+        if (showAudioPanel_)
+            audioPanel_.draw(assetDb_, scene_, world_, commandStack_, selectedEntityId_,
+                             [this](const std::string& m){ addLog(m); });
         if (showLightingPanel_) drawLightingPanel();
         if (showEntityViewport_) {
             entityViewportPanel_.isOpen = true;
@@ -1059,6 +1062,7 @@ void EditorApp::drawMenuBar()
         ImGui::MenuItem("Asset Browser", nullptr, &showAssetBrowser_);
         ImGui::MenuItem("Asset Inspector", nullptr, &showAssetInspector_);
         ImGui::MenuItem("Lighting", nullptr, &showLightingPanel_);
+        ImGui::MenuItem("Audio", nullptr, &showAudioPanel_);
         ImGui::MenuItem("Entity Viewport", nullptr, &showEntityViewport_);
         ImGui::MenuItem("Scene Selector", nullptr, &showSceneSelector_);
         ImGui::MenuItem("Validation Panel", nullptr, &showValidationPanel_);

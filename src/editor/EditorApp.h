@@ -16,6 +16,7 @@
 #include "ContentValidator.h"
 #include "ValidationPanel.h"
 #include "SpriteEditorPanel.h"
+#include "AudioPanel.h"
 #include "WelcomePanel.h"
 #include "EntityViewportPanel.h"
 #include "FileEditorPanel.h"
@@ -156,6 +157,10 @@ private:
 
     // ── Sprite Editor ─────────────────────────────────────────────────────
     SpriteEditorPanel spriteEditor_;
+
+    // ── Audio ─────────────────────────────────────────────────────────────
+    AudioPanel audioPanel_;
+    bool       showAudioPanel_ = false;
 
     struct SpritePivotMeta {
         float pivotX = 0.5f;

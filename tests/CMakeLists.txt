@@ -256,6 +256,7 @@ add_executable(test_hot_reload
     ${CMAKE_SOURCE_DIR}/src/assets/importers/SpriteImporter.cpp
     ${CMAKE_SOURCE_DIR}/src/assets/importers/ModelImporter.cpp
     ${CMAKE_SOURCE_DIR}/src/assets/importers/MaterialImporter.cpp
+    ${CMAKE_SOURCE_DIR}/src/assets/importers/AudioImporter.cpp
     ${CMAKE_SOURCE_DIR}/src/assets/MaterialAsset.cpp
 )
 target_include_directories(test_hot_reload PRIVATE
@@ -293,6 +294,7 @@ add_executable(test_material_importer
     ${CMAKE_SOURCE_DIR}/src/assets/importers/SpriteImporter.cpp
     ${CMAKE_SOURCE_DIR}/src/assets/importers/ModelImporter.cpp
     ${CMAKE_SOURCE_DIR}/src/assets/importers/MaterialImporter.cpp
+    ${CMAKE_SOURCE_DIR}/src/assets/importers/AudioImporter.cpp
 )
 target_include_directories(test_material_importer PRIVATE
     ${CMAKE_SOURCE_DIR}/src
@@ -774,3 +776,62 @@ target_include_directories(test_skeletal_animation PRIVATE
 target_link_libraries(test_skeletal_animation PRIVATE nlohmann_json::nlohmann_json)
 target_compile_options(test_skeletal_animation PRIVATE ${DASH_COMPILE_FLAGS})
 add_test(NAME test_skeletal_animation COMMAND test_skeletal_animation)
+
+# ── Spatial audio: atenuacion, paneo y mezcla de buses ──────────────────────
+# La matematica vive en AudioMath.h y no toca miniaudio, asi que corre headless.
+add_executable(test_audio_spatial
+    test_audio_spatial.cpp
+    ${CMAKE_SOURCE_DIR}/src/game/audio/AudioEngine.cpp
+)
+target_include_directories(test_audio_spatial PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/src/core
+    ${CMAKE_SOURCE_DIR}/src/core/components
+    ${CMAKE_SOURCE_DIR}/src/game/audio
+)
+if(APPLE)
+    target_link_libraries(test_audio_spatial PRIVATE
+        "-framework AudioToolbox"
+        "-framework CoreFoundation"
+        "-framework CoreAudio"
+    )
+endif()
+target_compile_options(test_audio_spatial PRIVATE ${DASH_COMPILE_FLAGS})
+add_test(NAME test_audio_spatial COMMAND test_audio_spatial)
+
+# ── AudioImporter: extensiones, alta con GUID y rechazo de archivos corruptos ─
+add_executable(test_audio_importer
+    test_audio_importer.cpp
+    ${CMAKE_SOURCE_DIR}/src/assets/ImportManager.cpp
+    ${CMAKE_SOURCE_DIR}/src/assets/AssetDatabase.cpp
+    ${CMAKE_SOURCE_DIR}/src/assets/AssetRepositorySqlite.cpp
+    ${CMAKE_SOURCE_DIR}/src/assets/MaterialAsset.cpp
+    ${CMAKE_SOURCE_DIR}/src/assets/importers/SceneImporter.cpp
+    ${CMAKE_SOURCE_DIR}/src/assets/importers/TileSetImporter.cpp
+    ${CMAKE_SOURCE_DIR}/src/assets/importers/GameplayConfigImporter.cpp
+    ${CMAKE_SOURCE_DIR}/src/assets/importers/PrefabImporter.cpp
+    ${CMAKE_SOURCE_DIR}/src/assets/importers/SpriteImporter.cpp
+    ${CMAKE_SOURCE_DIR}/src/assets/importers/ModelImporter.cpp
+    ${CMAKE_SOURCE_DIR}/src/assets/importers/MaterialImporter.cpp
+    ${CMAKE_SOURCE_DIR}/src/assets/importers/AudioImporter.cpp
+)
+target_include_directories(test_audio_importer PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/src/core
+    ${CMAKE_SOURCE_DIR}/src/core/components
+    ${CMAKE_SOURCE_DIR}/src/entities
+    ${CMAKE_SOURCE_DIR}/src/world
+    ${CMAKE_SOURCE_DIR}/src/rendering
+    ${CMAKE_SOURCE_DIR}/src/editor
+    ${CMAKE_SOURCE_DIR}/src/assets
+    ${CMAKE_SOURCE_DIR}/src/assets/importers
+    ${SDL2_INCLUDE_DIRS}
+)
+target_link_libraries(test_audio_importer PRIVATE
+    game_core nlohmann_json::nlohmann_json SQLite3::SQLite3 ${SDL2_LIBRARIES}
+)
+if(TARGET assimp::assimp)
+    target_link_libraries(test_audio_importer PRIVATE assimp::assimp)
+endif()
+target_compile_options(test_audio_importer PRIVATE ${DASH_COMPILE_FLAGS})
+add_test(NAME test_audio_importer COMMAND test_audio_importer)

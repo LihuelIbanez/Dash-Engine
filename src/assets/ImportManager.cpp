@@ -6,6 +6,7 @@
 #include "importers/SpriteImporter.h"
 #include "importers/ModelImporter.h"
 #include "importers/MaterialImporter.h"
+#include "importers/AudioImporter.h"
 
 #include <filesystem>
 #include <fstream>
@@ -56,6 +57,10 @@ AssetType ImportManager::inferAssetType(const std::string& relativePath)
         return AssetType::Model;
     }
 
+    if (AudioImporter::isAudioExtension(ext)) {
+        return AssetType::Audio;
+    }
+
     if (ext == ".json") {
         // Try to differentiate by parent folder or filename convention
         std::string stem = p.stem().string();
@@ -92,6 +97,7 @@ ImportManager::ImportManager()
     importers_[AssetType::Sprite]         = std::make_unique<SpriteImporter>();
     importers_[AssetType::Model]          = std::make_unique<ModelImporter>();
     importers_[AssetType::Material]       = std::make_unique<MaterialImporter>();
+    importers_[AssetType::Audio]          = std::make_unique<AudioImporter>();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
