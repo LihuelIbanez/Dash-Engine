@@ -52,6 +52,9 @@ struct SceneLight {
     float range = 10.f;
     float innerCos = 0.94f;
     float outerCos = 0.82f;
+    // Mirrors LightComponent::castsShadows. Only the first directional light
+    // with this set actually gets a shadow map.
+    bool  castsShadows = false;
 };
 
 // A physics body requested by an entity's PhysicsComponent.

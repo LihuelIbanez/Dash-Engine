@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "rendering/animation/AnimationClip.h"
+#include "rendering/animation/AnimationStateMachine.h"
 #include "rendering/animation/Skeleton.h"
 
 struct AnimationComponent;
@@ -36,6 +37,13 @@ public:
     void setPaused(bool paused) { paused_ = paused; }
     bool paused() const { return paused_; }
 
+    // Installing a machine hands clip/speed/loop over to it; passing nullptr
+    // gives them back to AnimationComponent.
+    void setStateMachine(std::shared_ptr<const AnimationStateMachine> machine);
+    StateMachineRuntime& stateMachine() { return stateMachine_; }
+    const StateMachineRuntime& stateMachine() const { return stateMachine_; }
+    bool stateMachineActive() const { return stateMachine_.active(); }
+
     // Mirrors clip/speed/loop/playing/blendSeconds from the ECS component.
     void syncWithComponent(const AnimationComponent& component);
 
@@ -44,6 +52,10 @@ public:
     const std::vector<Mat4>& boneMatrices() const { return boneMatrices_; }
     const std::string& currentClipName() const { return current_.name; }
     float currentTimeSeconds() const;
+    // Playthroughs of the current clip since it started; 1.0 = one full pass.
+    // Unlike currentTimeSeconds() it does not wrap, so looping states can gate
+    // on exit time too.
+    float normalizedClipTime() const;
     bool isBlending() const { return blendDuration_ > 0.0f && blendElapsed_ < blendDuration_; }
     float blendWeight() const;
 
@@ -52,15 +64,18 @@ private:
         const AnimationClip* clip = nullptr;
         std::string name;
         float timeTicks = 0.0f;
+        float elapsedTicks = 0.0f;   // monotonic, ignores looping
 
         void advance(float deltaSeconds, float speed, bool loop);
-        void reset() { clip = nullptr; name.clear(); timeTicks = 0.0f; }
+        void reset() { clip = nullptr; name.clear(); timeTicks = 0.0f; elapsedTicks = 0.0f; }
     };
 
     void evaluate();
+    void tickStateMachine();
 
     std::shared_ptr<const Skeleton> skeleton_;
     std::unordered_map<std::string, std::shared_ptr<const AnimationClip>> clips_;
+    StateMachineRuntime stateMachine_;
 
     Track current_;
     Track previous_;

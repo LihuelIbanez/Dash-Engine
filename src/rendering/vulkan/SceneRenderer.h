@@ -28,6 +28,11 @@ namespace dash::vkexp {
 // inside the 128 bytes Vulkan guarantees for push constants.
 inline constexpr std::size_t kInstancePushConstantFloats = 28;
 
+// mat4 model + mat4 lightViewProj = 128 bytes, exactly the push constant size
+// Vulkan guarantees. Used by the depth-only shadow pass, which needs no
+// descriptor set for static casters as a result.
+inline constexpr std::size_t kShadowPushConstantFloats = 32;
+
 void buildInstancePushConstants(const Mat4& model,
                                 float r, float g, float b, float a,
                                 const LightingParams& light,
@@ -46,6 +51,10 @@ struct SceneLightGpu {
 
 struct SceneLightsUbo {
     float cameraPos[4]{};
+    // World -> light clip space for the shadow caster, plus its tuning values;
+    // see assets/shaders/shadow_sample.glsl. All zero disables the lookup.
+    float shadowMatrix[16]{};
+    float shadowParams[4]{};
     SceneLightGpu lights[kMaxSceneLights]{};
 };
 
@@ -89,6 +98,12 @@ struct SceneDrawParams {
     Mat4 viewProj{};
     Vec3 cameraRight{1.0f, 0.0f, 0.0f};
     Vec3 cameraUp{0.0f, 1.0f, 0.0f};
+
+    // Depth-only shadow pass: skips billboards and every material/descriptor
+    // bind, and pushes `model + viewProj` instead of the lit instance block.
+    // `viewProj` is then the light matrix, so culling happens against the light
+    // frustum for free.
+    bool depthOnly = false;
 };
 
 struct SceneDrawStats {

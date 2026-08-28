@@ -942,3 +942,20 @@ if(APPLE)
 endif()
 target_compile_options(test_audio_system PRIVATE ${DASH_COMPILE_FLAGS})
 add_test(NAME test_audio_system COMMAND test_audio_system)
+
+# ── Animation state machine: grafo, condiciones, triggers y .animsm.json ────
+# El controlador es header-only y no toca Vulkan; el player solo necesita un
+# esqueleto de dos huesos, asi que corre headless.
+add_executable(test_animation_state_machine
+    test_animation_state_machine.cpp
+    ${CMAKE_SOURCE_DIR}/src/rendering/animation/AnimationPlayer.cpp
+)
+target_include_directories(test_animation_state_machine PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/src/core
+    ${CMAKE_SOURCE_DIR}/src/core/components
+    ${SDL2_INCLUDE_DIRS}
+)
+target_link_libraries(test_animation_state_machine PRIVATE nlohmann_json::nlohmann_json)
+target_compile_options(test_animation_state_machine PRIVATE ${DASH_COMPILE_FLAGS})
+add_test(NAME test_animation_state_machine COMMAND test_animation_state_machine)

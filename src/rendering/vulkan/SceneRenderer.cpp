@@ -38,6 +38,20 @@ bool wantsSkinning(const InstanceResources& res, const MeshBuffers* mesh,
 
 } // namespace
 
+namespace {
+
+// Depth pass push constants: the model matrix followed by the light matrix.
+void pushShadowConstants(VkCommandBuffer cmd, VkPipelineLayout layout,
+                         const Mat4& model, const Mat4& lightViewProj)
+{
+    float pc[kShadowPushConstantFloats];
+    std::memcpy(pc, model.m, sizeof(model.m));
+    std::memcpy(pc + 16, lightViewProj.m, sizeof(lightViewProj.m));
+    vkCmdPushConstants(cmd, layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pc), pc);
+}
+
+} // namespace
+
 void buildInstancePushConstants(const Mat4& model,
                                 float r, float g, float b, float a,
                                 const LightingParams& light,
@@ -152,7 +166,7 @@ SceneDrawStats drawSceneInstances(VkCommandBuffer cmd,
 
         VkDescriptorSet set = res.materialSet != VK_NULL_HANDLE ? res.materialSet
                                                                 : params.defaultSet;
-        if (set != boundSet) {
+        if (!params.depthOnly && set != boundSet) {
             vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
                                     params.opaqueLayout, 0, 1, &set, 0, nullptr);
             boundSet = set;
@@ -162,6 +176,12 @@ SceneDrawStats drawSceneInstances(VkCommandBuffer cmd,
             {inst.position.x * TILE_SCALE, inst.position.y, inst.position.z * TILE_SCALE},
             inst.yawDeg, inst.pitchDeg, inst.rollDeg,
             {inst.scale.x, inst.scale.y, inst.scale.z});
+
+        if (params.depthOnly) {
+            pushShadowConstants(cmd, params.opaqueLayout, model, params.viewProj);
+            vkCmdDrawIndexed(cmd, mesh->indexCount(), 1, 0, 0, 0);
+            continue;
+        }
 
         float pc[kInstancePushConstantFloats];
         buildInstancePushConstants(model,
@@ -176,7 +196,7 @@ SceneDrawStats drawSceneInstances(VkCommandBuffer cmd,
     }
 
     // Leave the default set bound for whatever the caller draws next frame.
-    if (boundSet != params.defaultSet && params.defaultSet != VK_NULL_HANDLE) {
+    if (!params.depthOnly && boundSet != params.defaultSet && params.defaultSet != VK_NULL_HANDLE) {
         vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
                                 params.opaqueLayout, 0, 1, &params.defaultSet, 0, nullptr);
     }
@@ -208,9 +228,11 @@ SceneDrawStats drawSceneInstances(VkCommandBuffer cmd,
             ++stats.drawn;
 
             if (mesh != boundSkinnedMesh) {
-                VkBuffer vb[] = { mesh->vertexBuffer() };
-                VkDeviceSize offsets[] = { 0 };
-                vkCmdBindVertexBuffers(cmd, 0, 1, vb, offsets);
+                // Binding 1 carries the skinning stream the pipeline declares;
+                // leaving it unbound would make the draw undefined.
+                VkBuffer vb[] = { mesh->vertexBuffer(), mesh->skinBuffer() };
+                VkDeviceSize offsets[] = { 0, 0 };
+                vkCmdBindVertexBuffers(cmd, 0, 2, vb, offsets);
                 vkCmdBindIndexBuffer(cmd, mesh->indexBuffer(), 0, mesh->indexType());
                 boundSkinnedMesh = mesh;
             }
@@ -224,6 +246,12 @@ SceneDrawStats drawSceneInstances(VkCommandBuffer cmd,
                 {inst.position.x * TILE_SCALE, inst.position.y, inst.position.z * TILE_SCALE},
                 inst.yawDeg, inst.pitchDeg, inst.rollDeg,
                 {inst.scale.x, inst.scale.y, inst.scale.z});
+
+            if (params.depthOnly) {
+                pushShadowConstants(cmd, params.skinnedLayout, model, params.viewProj);
+                vkCmdDrawIndexed(cmd, mesh->indexCount(), 1, 0, 0, 0);
+                continue;
+            }
 
             float pc[kInstancePushConstantFloats];
             buildInstancePushConstants(model,
@@ -239,6 +267,8 @@ SceneDrawStats drawSceneInstances(VkCommandBuffer cmd,
     }
 
     // ── Billboards (transparent, after the opaque pass) ──────────────────────
+    // Skipped in the depth pass: an alpha-cut quad would cast a solid rectangle.
+    if (params.depthOnly) return stats;
     if (!hasBillboards || params.billboardPipeline == VK_NULL_HANDLE) return stats;
 
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, params.billboardPipeline);

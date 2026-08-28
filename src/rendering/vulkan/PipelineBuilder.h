@@ -71,6 +71,22 @@ public:
         VkPipeline& outPipeline,
         std::string& outError);
 
+    // Depth-only pass for the shadow map: vertex stage alone, no colour
+    // attachment, and `mat4 model + mat4 lightViewProj` in push constants so no
+    // descriptor set is needed for static casters. Passing a non-null
+    // `boneSetLayout` builds the skinned variant, which adds the .dashmesh v2
+    // stream at binding 1 and expects the bone palette at set 1.
+    static bool createShadowDepthPipeline(
+        VkDevice device,
+        VkExtent2D extent,
+        VkRenderPass renderPass,
+        VkDescriptorSetLayout descriptorSetLayout,
+        VkDescriptorSetLayout boneSetLayout,
+        const std::string& vertSpvPath,
+        VkPipelineLayout& outPipelineLayout,
+        VkPipeline& outPipeline,
+        std::string& outError);
+
     static void destroy(VkDevice device, VkPipelineLayout pipelineLayout, VkPipeline pipeline);
 };
 

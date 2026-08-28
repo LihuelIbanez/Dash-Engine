@@ -229,6 +229,7 @@ if(ENABLE_VULKAN_EXPERIMENTAL AND NOT IOS)
             ${CMAKE_SOURCE_DIR}/src/rendering/vulkan/FrameGraphLite.cpp
             ${CMAKE_SOURCE_DIR}/src/rendering/vulkan/Renderer.cpp
             ${CMAKE_SOURCE_DIR}/src/rendering/vulkan/SceneRenderer.cpp
+            ${CMAKE_SOURCE_DIR}/src/rendering/vulkan/ShadowMap.cpp
             ${CMAKE_SOURCE_DIR}/src/rendering/vulkan/PipelineBuilder.cpp
             ${CMAKE_SOURCE_DIR}/src/rendering/vulkan/SceneLoader.cpp
         )
@@ -258,12 +259,18 @@ if(ENABLE_VULKAN_EXPERIMENTAL AND NOT IOS)
                 terrain.vert terrain.frag
                 water.vert water.frag
                 billboard.vert billboard.frag
-                skinned.vert skinned.frag)
+                skinned.vert skinned.frag
+                shadow_depth.vert shadow_depth_skinned.vert)
 
             # Fragment shaders compiled twice: the plain variant targets descriptor
             # layouts without the scene-light binding (editor viewport), the "_lit"
             # variant adds set 0 binding 2 and consumes assets/shaders/scene_lights.glsl.
             set(VULKAN_SHADER_LIT_VARIANTS basic.frag textured.frag skinned.frag)
+
+            # Third variant: "_lit" plus the shadow map at set 0 binding 3
+            # (assets/shaders/shadow_sample.glsl). Only the runtime descriptor
+            # layout declares that binding, so the editor keeps using "_lit".
+            set(VULKAN_SHADER_SHADOW_VARIANTS basic.frag textured.frag skinned.frag terrain.frag)
 
             set(VULKAN_SHADER_OUTPUTS "")
             foreach(shader IN LISTS VULKAN_SHADER_STAGES)
@@ -293,6 +300,24 @@ if(ENABLE_VULKAN_EXPERIMENTAL AND NOT IOS)
                     COMMENT "Compiling Vulkan shader ${lit_name} (GLSL -> SPIR-V)"
                     VERBATIM)
                 list(APPEND VULKAN_SHADER_OUTPUTS "${VULKAN_SHADER_BIN_DIR}/${lit_name}.spv")
+            endforeach()
+
+            foreach(shader IN LISTS VULKAN_SHADER_SHADOW_VARIANTS)
+                string(REPLACE "." "_shadow." shadow_name "${shader}")
+                add_custom_command(
+                    OUTPUT "${VULKAN_SHADER_BIN_DIR}/${shadow_name}.spv"
+                    COMMAND ${GLSLC_EXECUTABLE}
+                            -DDASH_SCENE_LIGHTS
+                            -DDASH_SHADOWS
+                            "-I${VULKAN_SHADER_SRC_DIR}"
+                            "${VULKAN_SHADER_SRC_DIR}/${shader}"
+                            -o "${VULKAN_SHADER_BIN_DIR}/${shadow_name}.spv"
+                    DEPENDS "${VULKAN_SHADER_SRC_DIR}/${shader}"
+                            "${VULKAN_SHADER_SRC_DIR}/scene_lights.glsl"
+                            "${VULKAN_SHADER_SRC_DIR}/shadow_sample.glsl"
+                    COMMENT "Compiling Vulkan shader ${shadow_name} (GLSL -> SPIR-V)"
+                    VERBATIM)
+                list(APPEND VULKAN_SHADER_OUTPUTS "${VULKAN_SHADER_BIN_DIR}/${shadow_name}.spv")
             endforeach()
 
             add_custom_target(vulkan_shaders ALL DEPENDS ${VULKAN_SHADER_OUTPUTS})

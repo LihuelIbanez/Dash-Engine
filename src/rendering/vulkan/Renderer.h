@@ -24,6 +24,8 @@
 #include "rendering/vulkan/PlayerController.h"
 #include "rendering/vulkan/RenderTypes.h"
 #include "rendering/vulkan/SceneRenderer.h"
+#include "rendering/vulkan/ShadowMap.h"
+#include "rendering/vulkan/ShadowMath.h"
 #include "game/physics/PhysicsWorld.h"
 #include "game/physics/TransformProxy.h"
 #include "events/EventDispatcher.h"
@@ -56,6 +58,14 @@ private:
     bool updateCameraUbo(uint32_t imageIndex);
     bool updateSceneLightsUbo(uint32_t imageIndex);
     void recordDrawCommands(VkCommandBuffer cmd, uint32_t imageIndex);
+
+    // Picks the first directional light with castsShadows and derives the
+    // light-space matrix from the scene bounds. Runs once, after the scene is
+    // loaded: both inputs are static, so the matrix never shimmers.
+    void setupShadowLight();
+    // Depth-only pass, recorded before the main render pass of the same frame.
+    void recordShadowPass(VkCommandBuffer cmd, uint32_t imageIndex,
+                          const std::vector<InstanceResources>& res);
 
     // Resolves RenderComponent::mesh for every scene instance, uploading and
     // caching referenced models. Falls back to the builtin cube when missing.
@@ -140,6 +150,13 @@ private:
     std::unordered_map<size_t, dash::anim::AnimationPlayer> animators_;
     // Skeleton + clips shared by every instance of the same model.
     dash::anim::AnimationSetCache animationSets_;
+
+    // Directional shadow map. `shadowLightIndex_` < 0 means no light asked for
+    // shadows, and every shader then takes the pre-shadow code path.
+    ShadowMap shadowMap_;
+    int  shadowLightIndex_ = -1;
+    Mat4 shadowMatrix_{};
+    float shadowParams_[4]{};
 
     bool initialized_ = false;
 

@@ -10,6 +10,12 @@ layout(location = 0) out vec4 outColor;
 
 layout(set = 0, binding = 1) uniform sampler2DArray texArray;
 
+#ifdef DASH_SHADOWS
+// Pulled in for the SceneLightsUBO block that carries the shadow matrix; the
+// per-light accumulation it also declares is unused here.
+#include "scene_lights.glsl"
+#endif
+
 // Push constants packed as vec4 to avoid alignment issues
 layout(push_constant) uniform TerrainPC {
     vec4 data0;  // eyePos.xyz, time
@@ -80,8 +86,15 @@ void main() {
     // Blinn-Phong specular
     float spec = pow(max(dot(N, H), 0.0), specShin) * specStr;
 
+    float shadow = 1.0;
+#ifdef DASH_SHADOWS
+    shadow = dashShadowFactor(scene.shadowMatrix, scene.shadowParams,
+                              vWorldPos, N, max(NdotL, 0.0));
+#endif
+
     // Combine
-    vec3 lit = baseColor * (ambient + diffuse * intensity * lightColor) + spec * lightColor;
+    vec3 lit = baseColor * (ambient + diffuse * intensity * lightColor * shadow)
+             + spec * lightColor * shadow;
 
     // Distance fog (sky color)
     float dist = length(eyePos - vWorldPos);

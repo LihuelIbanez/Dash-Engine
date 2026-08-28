@@ -17,8 +17,14 @@ struct SceneLight {
 
 layout(set = 0, binding = 2) uniform SceneLightsUBO {
     vec4 cameraPos;                     // xyz = eye position
+    mat4 shadowMatrix;                  // world -> shadow-casting light clip space
+    vec4 shadowParams;                  // see shadow_sample.glsl
     SceneLight lights[kMaxSceneLights];
 } scene;
+
+#ifdef DASH_SHADOWS
+#include "shadow_sample.glsl"
+#endif
 
 vec3 hemisphericAmbient(vec3 N, float strength)
 {
@@ -57,8 +63,17 @@ vec3 accumulateSceneLights(vec3 N, vec3 worldPos, int count,
         }
         if (attenuation <= 0.0) continue;
 
-        const vec3 radiance = l.colorInt.rgb * l.colorInt.a * attenuation;
+        vec3 radiance = l.colorInt.rgb * l.colorInt.a * attenuation;
         const float NdotL = max(dot(N, L), 0.0);
+
+#ifdef DASH_SHADOWS
+        // Only one light owns the shadow map; the rest stay unshadowed.
+        if (i == int(scene.shadowParams.x) - 1) {
+            radiance *= dashShadowFactor(scene.shadowMatrix, scene.shadowParams,
+                                         worldPos, N, NdotL);
+        }
+#endif
+
         acc += radiance * NdotL;
 
         const vec3 H = normalize(L + V);

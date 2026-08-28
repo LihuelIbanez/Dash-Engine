@@ -162,6 +162,7 @@ std::vector<SceneLight> SceneLoader::buildLights(const SceneData& data)
         sl.range = std::max(0.01f, lc->range * TILE_SCALE);
         sl.innerCos = std::cos(lc->innerConeDeg * 3.14159265f / 180.0f);
         sl.outerCos = std::cos(lc->outerConeDeg * 3.14159265f / 180.0f);
+        sl.castsShadows = lc->castsShadows;
         out.push_back(sl);
     }
     return out;

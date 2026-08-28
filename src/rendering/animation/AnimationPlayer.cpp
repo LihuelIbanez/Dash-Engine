@@ -11,7 +11,9 @@ void AnimationPlayer::Track::advance(float deltaSeconds, float speed, bool loop)
 {
     if (!clip) return;
     const float tps = clip->ticksPerSecond > 0.0f ? clip->ticksPerSecond : 25.0f;
-    timeTicks = clip->normalizeTime(timeTicks + deltaSeconds * speed * tps, loop);
+    const float step = deltaSeconds * speed * tps;
+    elapsedTicks += step;
+    timeTicks = clip->normalizeTime(timeTicks + step, loop);
 }
 
 void AnimationPlayer::setSkeleton(std::shared_ptr<const Skeleton> skeleton)
@@ -56,6 +58,7 @@ bool AnimationPlayer::play(const std::string& clipName, float blendSeconds)
     current_.clip = clip;
     current_.name = clipName;
     current_.timeTicks = 0.0f;
+    current_.elapsedTicks = 0.0f;
     evaluate();
     return true;
 }
@@ -69,11 +72,25 @@ void AnimationPlayer::stop()
     if (skeleton_) skeleton_->bindPoseMatrices(boneMatrices_);
 }
 
+void AnimationPlayer::setStateMachine(std::shared_ptr<const AnimationStateMachine> machine)
+{
+    if (machine) {
+        stateMachine_.setMachine(std::move(machine));
+    } else {
+        stateMachine_.clearMachine();
+    }
+}
+
 void AnimationPlayer::syncWithComponent(const AnimationComponent& component)
 {
+    paused_ = !component.playing;
+
+    // While a controller is installed it owns clip/speed/loop, so re-reading the
+    // component every frame cannot undo the transition it just took.
+    if (stateMachine_.active()) return;
+
     speed_ = component.speed;
     loop_ = component.loop;
-    paused_ = !component.playing;
 
     if (component.clip.empty()) {
         if (current_.clip) stop();
@@ -89,14 +106,36 @@ float AnimationPlayer::currentTimeSeconds() const
     return current_.timeTicks / tps;
 }
 
+float AnimationPlayer::normalizedClipTime() const
+{
+    if (!current_.clip || current_.clip->duration <= 0.0f) return 0.0f;
+    return current_.elapsedTicks / current_.clip->duration;
+}
+
 float AnimationPlayer::blendWeight() const
 {
     if (blendDuration_ <= 0.0f) return 1.0f;
     return std::clamp(blendElapsed_ / blendDuration_, 0.0f, 1.0f);
 }
 
+void AnimationPlayer::tickStateMachine()
+{
+    if (!stateMachine_.active()) return;
+
+    const StateMachineRuntime::StepResult result = stateMachine_.step(normalizedClipTime());
+    if (!result.changed()) return;
+
+    speed_ = result.state->speed;
+    loop_ = result.state->loop;
+    play(result.state->clip, result.blendSeconds);
+}
+
 void AnimationPlayer::update(float deltaSeconds)
 {
+    // Runs before the skeleton guard so the graph can be driven (and tested)
+    // without a rig, and before advancing so a fresh state starts at t = 0.
+    if (!paused_) tickStateMachine();
+
     if (!skeleton_ || skeleton_->empty()) return;
 
     if (!paused_ && current_.clip) {
