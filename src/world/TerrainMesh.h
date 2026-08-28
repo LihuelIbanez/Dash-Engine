@@ -110,6 +110,7 @@ public:
 
     // ── Computed vertex data ──────────────────────────────────────────────
     void computeSmoothNormals();
+    void assignTextureLayers();
     void computeAmbientOcclusion();
 
     // ── Dirty tracking ───────────────────────────────────────────────────────

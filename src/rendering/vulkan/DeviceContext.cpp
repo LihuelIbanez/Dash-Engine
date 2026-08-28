@@ -103,7 +103,11 @@ bool DeviceContext::init(VkInstance instance, VkSurfaceKHR surface)
         requiredExtensions.push_back(kPortabilitySubsetExt);
     }
 
+    VkPhysicalDeviceFeatures supported{};
+    vkGetPhysicalDeviceFeatures(physicalDevice_, &supported);
+
     VkPhysicalDeviceFeatures features{};
+    features.samplerAnisotropy = supported.samplerAnisotropy;
 
     VkDeviceCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;

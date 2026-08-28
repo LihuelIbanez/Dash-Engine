@@ -284,12 +284,13 @@ bool PipelineBuilder::createTerrainPipeline(
         VK_VERTEX_INPUT_RATE_VERTEX
     };
 
-    const std::array<VkVertexInputAttributeDescription, 5> attrDescs = {{
+    const std::array<VkVertexInputAttributeDescription, 6> attrDescs = {{
         { 0, 0, VK_FORMAT_R32G32B32_SFLOAT, static_cast<uint32_t>(offsetof(TerrainVkVertex, position)) },
         { 1, 0, VK_FORMAT_R32G32B32_SFLOAT, static_cast<uint32_t>(offsetof(TerrainVkVertex, normal)) },
         { 2, 0, VK_FORMAT_R32G32B32_SFLOAT, static_cast<uint32_t>(offsetof(TerrainVkVertex, color)) },
         { 3, 0, VK_FORMAT_R32_UINT,         static_cast<uint32_t>(offsetof(TerrainVkVertex, texIndicesPacked)) },
         { 4, 0, VK_FORMAT_R32_UINT,         static_cast<uint32_t>(offsetof(TerrainVkVertex, texWeightsPacked)) },
+        { 5, 0, VK_FORMAT_R16_UINT,         static_cast<uint32_t>(offsetof(TerrainVkVertex, flags)) },
     }};
 
     VkPipelineVertexInputStateCreateInfo vertexInput{};

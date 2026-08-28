@@ -928,6 +928,9 @@ void EditorApp::run()
             runtimeInspectorPanel_.draw(scene_, editorMode_ == EditorMode::Play,
                                         selectedEntityId_, nullptr,
                                         [this](const std::string& m){ addLog(m); });
+        if (showBoneStructurePanel_)
+            boneStructurePanel_.draw(assetsRoot_, libraryRoot_,
+                                     [this](const std::string& m){ addLog(m); });
         if (spriteEditor_.isOpen)
             spriteEditor_.draw();
         if (showAudioPanel_)
@@ -1090,6 +1093,7 @@ void EditorApp::drawMenuBar()
         ImGui::MenuItem("Scene Selector", nullptr, &showSceneSelector_);
         ImGui::MenuItem("Validation Panel", nullptr, &showValidationPanel_);
         ImGui::MenuItem("Runtime Inspector", nullptr, &showRuntimeInspector_);
+        ImGui::MenuItem("Bone Structure", nullptr, &showBoneStructurePanel_);
         ImGui::Separator();
         ImGui::MenuItem("Auto-Reload Assets", nullptr, &autoReload_);
         ImGui::EndMenu();

@@ -3,11 +3,57 @@
   "worldSeed": 12345,
   "tileOverrides": [],
   "entities": [
-    {"type": "Player", "name": "Hero", "x": 32.0, "y": 32.0, "class": "Warrior"},
-    {"type": "Enemy",  "name": "Skeleton", "x": 36.0, "y": 35.0},
-    {"type": "Enemy",  "name": "Zombie",   "x": 27.0, "y": 34.0},
-    {"type": "Enemy",  "name": "Fallen",   "x": 29.0, "y": 28.0},
-    {"type": "Enemy",  "name": "Zombie",   "x": 34.0, "y": 30.0},
-    {"type": "Enemy",  "name": "Skeleton", "x": 38.0, "y": 30.0}
+    {
+      "type": "Enemy",
+      "name": "Sun",
+      "x": 32.0,
+      "y": 32.0,
+      "components": [
+        {
+          "type": "Transform",
+          "x": 32.0,
+          "y": 32.0,
+          "z": 40.0,
+          "yawDeg": 35.0,
+          "pitchDeg": -52.0,
+          "rollDeg": 0.0,
+          "scale": 1.0
+        },
+        {
+          "type": "Render",
+          "renderMode": 0,
+          "mesh": "cube",
+          "material": "",
+          "sprite": "",
+          "layer": 0,
+          "visible": false
+        },
+        {
+          "type": "Light",
+          "lightType": 0,
+          "colorR": 1.0,
+          "colorG": 0.94,
+          "colorB": 0.82,
+          "intensity": 1.45,
+          "range": 10.0,
+          "innerConeDeg": 20.0,
+          "outerConeDeg": 35.0,
+          "castsShadows": true,
+          "enabled": true
+        }
+      ]
+    },
+    {
+      "type": "Player",
+      "name": "Hero",
+      "x": 32.0,
+      "y": 32.0,
+      "class": "Warrior"
+    },
+    { "type": "Enemy", "name": "Skeleton", "x": 36.0, "y": 35.0 },
+    { "type": "Enemy", "name": "Zombie", "x": 27.0, "y": 34.0 },
+    { "type": "Enemy", "name": "Fallen", "x": 29.0, "y": 28.0 },
+    { "type": "Enemy", "name": "Zombie", "x": 34.0, "y": 30.0 },
+    { "type": "Enemy", "name": "Skeleton", "x": 38.0, "y": 30.0 }
   ]
 }

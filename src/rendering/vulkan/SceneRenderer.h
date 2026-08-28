@@ -10,6 +10,7 @@
 #include "rendering/mesh/MeshBuffers.h"
 #include "rendering/vulkan/EditorBridge.h"
 #include "rendering/vulkan/RenderTypes.h"
+#include "rendering/vulkan/ShadowMath.h"
 #include "rendering/vulkan/VkMath.h"
 
 namespace dash::vkexp {
@@ -51,9 +52,12 @@ struct SceneLightGpu {
 
 struct SceneLightsUbo {
     float cameraPos[4]{};
-    // World -> light clip space for the shadow caster, plus its tuning values;
-    // see assets/shaders/shadow_sample.glsl. All zero disables the lookup.
-    float shadowMatrix[16]{};
+    // World -> light clip space, one per cascade, plus the tuning values; see
+    // assets/shaders/shadow_sample.glsl. shadowParams all zero disables the lookup.
+    float shadowMatrices[kShadowCascades][16]{};
+    float shadowSplits[4]{};     // xyz = far camera distance covered by each cascade
+    float shadowTexels[4]{};     // xyz = world size of one texel, per cascade
+    float shadowDepthBias[4]{};  // xyz = depth bias in light clip units, per cascade
     float shadowParams[4]{};
     SceneLightGpu lights[kMaxSceneLights]{};
 };

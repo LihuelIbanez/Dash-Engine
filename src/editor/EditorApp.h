@@ -17,6 +17,7 @@
 #include "ContentValidator.h"
 #include "ValidationPanel.h"
 #include "RuntimeInspectorPanel.h"
+#include "BoneStructurePanel.h"
 #include "SpriteEditorPanel.h"
 #include "AudioPanel.h"
 #include "WelcomePanel.h"
@@ -162,6 +163,9 @@ private:
     // ── Runtime inspection ────────────────────────────
     RuntimeInspectorPanel        runtimeInspectorPanel_;
     bool                         showRuntimeInspector_ = false;    bool                         showAboutModal_      = false;
+    // ── Skeleton authoring ────────────────────────────
+    BoneStructurePanel           boneStructurePanel_;
+    bool                         showBoneStructurePanel_ = false;
     bool                         showMigrationLogModal_ = false;
     bool                         migrationLastSuccess_ = false;
     std::string                  migrationSummaryText_;

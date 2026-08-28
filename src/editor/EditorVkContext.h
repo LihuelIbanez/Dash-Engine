@@ -9,6 +9,7 @@
 #include "rendering/vulkan/FrameGraphLite.h"
 #include "rendering/vulkan/SceneRenderer.h"
 #include "rendering/mesh/MeshBuffers.h"
+#include "rendering/textures/TerrainTextureArray.h"
 #include "world/TerrainMesh.h"
 #include <cstdint>
 #include <string>
@@ -125,11 +126,8 @@ private:
 
     dash::vkexp::AssetCache3D meshCache_;
 
-    // Terrain texture array
-    VkImage        terrainTexArrayImage_  = VK_NULL_HANDLE;
-    VkDeviceMemory terrainTexArrayMemory_ = VK_NULL_HANDLE;
-    VkImageView    terrainTexArrayView_   = VK_NULL_HANDLE;
-    VkSampler      terrainTexSampler_     = VK_NULL_HANDLE;
+    // Terrain texture arrays (shared with the runtime renderer)
+    dash::vkexp::TerrainTextureSet terrainTextures_;
 
     // Mesh buffers
     dash::vkexp::MeshBuffers terrainMeshBuf_;

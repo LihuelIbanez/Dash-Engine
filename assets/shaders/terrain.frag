@@ -8,7 +8,8 @@ layout(location = 4) in vec4 vTexWeights;
 
 layout(location = 0) out vec4 outColor;
 
-layout(set = 0, binding = 1) uniform sampler2DArray texArray;
+// Binding 1 stays a plain sampler2D for the other pipelines sharing this set.
+layout(set = 0, binding = 4) uniform sampler2DArray texArray;
 
 #ifdef DASH_SHADOWS
 // Pulled in for the SceneLightsUBO block that carries the shadow matrix; the
@@ -88,8 +89,7 @@ void main() {
 
     float shadow = 1.0;
 #ifdef DASH_SHADOWS
-    shadow = dashShadowFactor(scene.shadowMatrix, scene.shadowParams,
-                              vWorldPos, N, max(NdotL, 0.0));
+    shadow = dashShadowFactor(vWorldPos, N, max(NdotL, 0.0));
 #endif
 
     // Combine

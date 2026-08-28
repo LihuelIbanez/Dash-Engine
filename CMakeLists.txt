@@ -215,6 +215,7 @@ if(ENABLE_VULKAN_EXPERIMENTAL AND NOT IOS)
             ${CMAKE_SOURCE_DIR}/src/rendering/mesh/MeshUploader.cpp
             ${CMAKE_SOURCE_DIR}/src/rendering/animation/AnimationPlayer.cpp
             ${CMAKE_SOURCE_DIR}/src/rendering/textures/TextureLoader.cpp
+            ${CMAKE_SOURCE_DIR}/src/rendering/textures/TerrainTextureArray.cpp
             ${CMAKE_SOURCE_DIR}/src/rendering/textures/stb_image_vk_impl.cpp
             ${CMAKE_SOURCE_DIR}/src/assets/cache/AssetCache3D.cpp
             ${CMAKE_SOURCE_DIR}/src/assets/MaterialAsset.cpp

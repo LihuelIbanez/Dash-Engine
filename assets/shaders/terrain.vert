@@ -5,12 +5,14 @@ layout(location = 1) in vec3 inNormal;
 layout(location = 2) in vec3 inColor;
 layout(location = 3) in uint inTexIndicesPacked;
 layout(location = 4) in uint inTexWeightsPacked;
+layout(location = 5) in uint inFlags;
 
 layout(location = 0) out vec3 vColor;
 layout(location = 1) out vec3 vNormal;
 layout(location = 2) out vec3 vWorldPos;
 layout(location = 3) flat out uvec4 vTexIndices;
 layout(location = 4) out vec4 vTexWeights;
+layout(location = 5) flat out uint vFlags;
 
 layout(set = 0, binding = 0) uniform CameraUBO {
     mat4 viewProj;
@@ -42,6 +44,7 @@ void main() {
     vColor    = inColor;
     vNormal   = inNormal;
     vWorldPos = pos;
+    vFlags    = inFlags;
 
     // Unpack texture blend data
     vTexIndices = uvec4(

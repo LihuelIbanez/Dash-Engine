@@ -173,7 +173,24 @@ bool Renderer::createDescriptors()
     lightsBinding.descriptorCount = 1;
     lightsBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
-    std::array<VkDescriptorSetLayoutBinding, 3> bindings = {uboBinding, samplerBinding, lightsBinding};
+    VkDescriptorSetLayoutBinding shadowBinding{};
+    shadowBinding.binding = 3;
+    shadowBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    shadowBinding.descriptorCount = 1;
+    shadowBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+    VkDescriptorSetLayoutBinding terrainAlbedoBinding{};
+    terrainAlbedoBinding.binding = 4;
+    terrainAlbedoBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    terrainAlbedoBinding.descriptorCount = 1;
+    terrainAlbedoBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+    // Binding 3 only exists when the depth target came up; the "_lit" shader
+    // variants used in that case never declare it. Binding 4 is always present
+    // because both terrain fragment variants sample the layer array.
+    std::vector<VkDescriptorSetLayoutBinding> bindings = {uboBinding, samplerBinding, lightsBinding};
+    if (shadowMap_.valid()) bindings.push_back(shadowBinding);
+    bindings.push_back(terrainAlbedoBinding);
 
     VkDescriptorSetLayoutCreateInfo layoutInfo{};
     layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
@@ -186,7 +203,7 @@ bool Renderer::createDescriptors()
 
     std::array<VkDescriptorPoolSize, 2> poolSizes = {{
         {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, swapchain_.imageCount() * 2},
-        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, swapchain_.imageCount()}
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, swapchain_.imageCount() * 4}
     }};
 
     VkDescriptorPoolCreateInfo poolInfo{};
@@ -232,6 +249,17 @@ bool Renderer::createPerFrameUniformBuffers()
         return false;
     }
 
+    // Non-fatal: without it the terrain shader falls back to the white texture.
+    if (!createTerrainTextureSet(
+            deviceContext_.physicalDevice(),
+            deviceContext_.device(),
+            deviceContext_.graphicsQueue(),
+            frameGraph_.commandPool(),
+            defaultTerrainTextureRoot(),
+            terrainTextures_)) {
+        std::fprintf(stderr, "[D78] Terrain texture arrays unavailable.\n");
+    }
+
     for (uint32_t i = 0; i < swapchain_.imageCount(); ++i) {
         if (!createHostVisibleBuffer(
                 deviceContext_.physicalDevice(),
@@ -270,7 +298,21 @@ bool Renderer::createPerFrameUniformBuffers()
         imageInfo.imageView = defaultTexture_.imageView;
         imageInfo.sampler = defaultTexture_.sampler;
 
-        std::array<VkWriteDescriptorSet, 3> writes{};
+        // The depth pass runs before the main pass of every frame, so by the
+        // time a fragment samples this the image is already read-only.
+        VkDescriptorImageInfo shadowInfo{};
+        shadowInfo.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+        shadowInfo.imageView = shadowMap_.imageView();
+        shadowInfo.sampler = shadowMap_.sampler();
+
+        VkDescriptorImageInfo terrainAlbedoInfo{};
+        terrainAlbedoInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        terrainAlbedoInfo.imageView = terrainTextures_.albedo.valid()
+                                    ? terrainTextures_.albedo.view : defaultTexture_.imageView;
+        terrainAlbedoInfo.sampler = terrainTextures_.albedo.valid()
+                                  ? terrainTextures_.albedo.sampler : defaultTexture_.sampler;
+
+        std::array<VkWriteDescriptorSet, 5> writes{};
 
         writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         writes[0].dstSet = descriptorSets_[i];
@@ -293,8 +335,26 @@ bool Renderer::createPerFrameUniformBuffers()
         writes[2].descriptorCount = 1;
         writes[2].pBufferInfo = &lightInfo;
 
+        writes[3].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writes[3].dstSet = descriptorSets_[i];
+        writes[3].dstBinding = 3;
+        writes[3].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        writes[3].descriptorCount = 1;
+        writes[3].pImageInfo = &shadowInfo;
+
+        writes[4].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writes[4].dstSet = descriptorSets_[i];
+        writes[4].dstBinding = 4;
+        writes[4].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        writes[4].descriptorCount = 1;
+        writes[4].pImageInfo = &terrainAlbedoInfo;
+
+        // Without a shadow map binding 3 is absent, so its write is skipped by
+        // moving the terrain write into its slot.
+        if (!shadowMap_.valid()) writes[3] = writes[4];
+
         vkUpdateDescriptorSets(deviceContext_.device(),
-                               static_cast<uint32_t>(writes.size()),
+                               shadowMap_.valid() ? 5u : 4u,
                                writes.data(), 0, nullptr);
     }
 
@@ -304,9 +364,13 @@ bool Renderer::createPerFrameUniformBuffers()
 bool Renderer::createPipeline()
 {
     // The runtime layout carries the scene-light binding, so it uses the "_lit"
-    // fragment variants; the editor viewport keeps the plain ones.
+    // fragment variants; the editor viewport keeps the plain ones. With a live
+    // depth target the layout also carries binding 3, which only the "_shadow"
+    // variants declare.
+    const std::string litSuffix = shadowMap_.valid() ? "_shadow.frag.spv" : "_lit.frag.spv";
+
     const std::string vert = std::string(VULKAN_SHADER_DIR) + "/basic.vert.spv";
-    const std::string frag = std::string(VULKAN_SHADER_DIR) + "/basic_lit.frag.spv";
+    const std::string frag = std::string(VULKAN_SHADER_DIR) + "/basic" + litSuffix;
 
     std::string pipelineError;
     if (!PipelineBuilder::createBasicPipeline(
@@ -325,7 +389,7 @@ bool Renderer::createPipeline()
 
     // Create textured pipeline using the same layout but different shaders
     const std::string texVert = std::string(VULKAN_SHADER_DIR) + "/textured.vert.spv";
-    const std::string texFrag = std::string(VULKAN_SHADER_DIR) + "/textured_lit.frag.spv";
+    const std::string texFrag = std::string(VULKAN_SHADER_DIR) + "/textured" + litSuffix;
 
     std::string texPipelineError;
     if (!PipelineBuilder::createBasicPipeline(
@@ -345,7 +409,9 @@ bool Renderer::createPipeline()
 
     // Create terrain pipeline for heightmap mesh rendering
     const std::string terrainVert = std::string(VULKAN_SHADER_DIR) + "/terrain.vert.spv";
-    const std::string terrainFrag = std::string(VULKAN_SHADER_DIR) + "/terrain.frag.spv";
+    const std::string terrainFrag = std::string(VULKAN_SHADER_DIR)
+                                  + (shadowMap_.valid() ? "/terrain_shadow.frag.spv"
+                                                        : "/terrain.frag.spv");
 
     std::string terrainPipelineError;
     if (!PipelineBuilder::createTerrainPipeline(
@@ -411,6 +477,10 @@ bool Renderer::init(WindowContext& window)
     if (!deviceContext_.init(instance_, surface_)) return false;
     if (!swapchain_.init(deviceContext_, surface_, window.handle())) return false;
 
+    // Before the descriptors: whether the depth target came up decides if the
+    // scene layout declares binding 3 and which fragment variants are loaded.
+    shadowMap_.initTarget(deviceContext_.physicalDevice(), deviceContext_.device());
+
     if (!createDescriptors()) return false;
     if (!createPipeline()) return false;
 
@@ -438,15 +508,24 @@ bool Renderer::init(WindowContext& window)
     if (createBoneResources()) {
         std::string skinErr;
         const std::string shaderDir = VULKAN_SHADER_DIR;
+        const std::string skinFrag = shadowMap_.valid() ? "/skinned_shadow.frag.spv"
+                                                        : "/skinned_lit.frag.spv";
         if (!PipelineBuilder::createSkinnedPipeline(
                 deviceContext_.device(), swapchain_.extent(), swapchain_.renderPass(),
                 descriptorSetLayout_, boneSetLayout_,
-                shaderDir + "/skinned.vert.spv", shaderDir + "/skinned.frag.spv",
+                shaderDir + "/skinned.vert.spv", shaderDir + skinFrag,
                 skinnedPipelineLayout_, skinnedPipeline_, skinErr)) {
             std::fprintf(stderr, "[Skin] Skinned pipeline unavailable: %s\n", skinErr.c_str());
             skinnedPipeline_ = VK_NULL_HANDLE;
             skinnedPipelineLayout_ = VK_NULL_HANDLE;
         }
+    }
+
+    // Depth-only casters. Needs boneSetLayout_, so it runs after the skinning
+    // resources; without them skinned casters fall back to their bind pose.
+    if (shadowMap_.valid()) {
+        shadowMap_.createPipelines(deviceContext_.device(), VULKAN_SHADER_DIR,
+                                   descriptorSetLayout_, boneSetLayout_);
     }
 
     if (!physicsWorld_.init()) {
@@ -569,6 +648,7 @@ bool Renderer::init(WindowContext& window)
             player_.loadFromScene(loadedScene, &terrainMesh_, terrainMeshReady_,
                                   terrainHeightMap_, terrainMapWidth_, terrainMapHeight_);
 
+        snapInstancesToTerrain();
         spawnSceneryPhysicsBodies(loadedScene);
     }
 
@@ -579,6 +659,27 @@ bool Renderer::init(WindowContext& window)
     resolveSceneMeshes();
     resolveSceneMaterials();
     buildSceneAnimators();
+
+    // No scene ships a LightComponent yet, so without this the entity pass would
+    // fall back to its hardcoded headlight and nothing would ever cast. The sun
+    // mirrors the editor lighting the terrain shader already uses; LightingParams
+    // stores the surface-to-light vector, SceneLight the emission direction.
+    if (sceneLights_.empty()) {
+        const LightingParams& lt = editorBridge_.lighting();
+        SceneLight sun;
+        sun.type = 0;
+        sun.dirX = -lt.dirX;
+        sun.dirY = -lt.dirY;
+        sun.dirZ = -lt.dirZ;
+        sun.colorR = lt.colorR;
+        sun.colorG = lt.colorG;
+        sun.colorB = lt.colorB;
+        sun.intensity = lt.intensity;
+        sun.castsShadows = true;
+        sceneLights_.push_back(sun);
+    }
+
+    setupShadowLight();
     // Generate a small checkerboard floor when no terrain was loaded
     if (terrainInstances_.empty()) {
         for (int z = -3; z <= 3; ++z) {
@@ -640,6 +741,13 @@ bool Renderer::updateSceneLightsUbo(uint32_t imageIndex)
 
     SceneLightsUbo ubo{};
     packSceneLights(&sceneLights_, {camera_.x(), camera_.y(), camera_.z()}, ubo);
+    for (int i = 0; i < kShadowCascades; ++i) {
+        std::memcpy(ubo.shadowMatrices[i], shadowMatrices_[i].m, sizeof(shadowMatrices_[i].m));
+    }
+    std::memcpy(ubo.shadowSplits, shadowSplits_, sizeof(ubo.shadowSplits));
+    std::memcpy(ubo.shadowTexels, shadowTexels_, sizeof(ubo.shadowTexels));
+    std::memcpy(ubo.shadowDepthBias, shadowDepthBias_, sizeof(ubo.shadowDepthBias));
+    std::memcpy(ubo.shadowParams, shadowParams_, sizeof(ubo.shadowParams));
 
     void* mapped = nullptr;
     if (vkMapMemory(deviceContext_.device(), lightMemories_[imageIndex], 0, sizeof(SceneLightsUbo), 0, &mapped) != VK_SUCCESS) {
@@ -648,6 +756,125 @@ bool Renderer::updateSceneLightsUbo(uint32_t imageIndex)
     std::memcpy(mapped, &ubo, sizeof(SceneLightsUbo));
     vkUnmapMemory(deviceContext_.device(), lightMemories_[imageIndex]);
     return true;
+}
+
+void Renderer::setupShadowLight()
+{
+    shadowLightIndex_ = -1;
+    for (Mat4& m : shadowMatrices_) m = Mat4{};
+    for (float& p : shadowParams_) p = 0.0f;
+
+    if (!shadowMap_.valid()) return;
+
+    for (size_t i = 0; i < sceneLights_.size(); ++i) {
+        if (sceneLights_[i].type == 0 && sceneLights_[i].castsShadows) {
+            shadowLightIndex_ = static_cast<int>(i);
+            break;
+        }
+    }
+    if (shadowLightIndex_ < 0) {
+        std::puts("[Shadow] No directional light declares castsShadows; shadows disabled.");
+        return;
+    }
+
+    shadowParams_[0] = static_cast<float>(shadowLightIndex_ + 1);
+    shadowParams_[1] = 1.0f / static_cast<float>(ShadowMap::kResolution);
+    // Cross-fade over the last tenth of each cascade: wide enough to hide the
+    // change of resolution, narrow enough that the double lookup is rare.
+    shadowParams_[2] = 0.10f;
+
+    updateShadowMatrix();
+
+    std::printf("[Shadow] Light %d casts over %d cascades to %.0f units"
+                " (%.0f / %.0f / %.0f mm per texel).\n",
+                shadowLightIndex_, kShadowCascades, kShadowMaxDistance,
+                shadowTexels_[0] * 1000.0f,
+                shadowTexels_[1] * 1000.0f,
+                shadowTexels_[2] * 1000.0f);
+}
+
+void Renderer::updateShadowMatrix()
+{
+    if (shadowLightIndex_ < 0) return;
+
+    const float aspect = static_cast<float>(swapchain_.extent().width)
+                       / static_cast<float>(swapchain_.extent().height);
+
+    const float yaw = camera_.yawDegrees() * 0.0174532925f;
+    const float pitch = camera_.pitchDegrees() * 0.0174532925f;
+    const Vec3 forward{std::cos(yaw) * std::cos(pitch),
+                       std::sin(pitch),
+                       std::sin(yaw) * std::cos(pitch)};
+    const Vec3 camPos{camera_.x(), camera_.y(), camera_.z()};
+    const Vec3 right = camera_.rightVector();
+    const Vec3 up = camera_.upVector();
+
+    float splits[kShadowCascades];
+    computeCascadeSplits(0.5f, kShadowMaxDistance, 0.7f, splits);
+
+    const SceneLight& light = sceneLights_[static_cast<size_t>(shadowLightIndex_)];
+    const Vec3 dir{light.dirX, light.dirY, light.dirZ};
+
+    float sliceNear = 0.1f;
+    for (int i = 0; i < kShadowCascades; ++i) {
+        const ShadowVolume slice = frustumSliceVolume(
+            camPos, forward, right, up, 60.0f * 0.0174532925f, aspect,
+            sliceNear, splits[i]);
+
+        const ShadowVolume snapped =
+            snapVolumeToTexelGrid(dir, slice, ShadowMap::kResolution);
+        shadowMatrices_[i] = directionalLightMatrix(dir, snapped);
+
+        const float texel = shadowTexelWorldSize(snapped, ShadowMap::kResolution);
+        shadowSplits_[i] = splits[i];
+        shadowTexels_[i] = texel;
+        // The ortho depth range spans 2r world units, so a 1.5-texel world
+        // offset is that same fraction of a light clip unit.
+        shadowDepthBias_[i] = (texel * 1.5f) / (2.0f * snapped.radius);
+
+        sliceNear = splits[i];
+    }
+}
+
+void Renderer::recordShadowPass(VkCommandBuffer cmd, uint32_t imageIndex,
+                                const std::vector<InstanceResources>& res)
+{
+    if (!shadowMap_.valid()) return;
+
+    const bool draws = shadowLightIndex_ >= 0 && shadowMap_.hasPipelines();
+
+    for (int cascade = 0; cascade < kShadowCascades; ++cascade) {
+        // Entered even with no caster: the clear is what leaves the layer in
+        // the layout the descriptor written at init already promises.
+        shadowMap_.beginPass(cmd, cascade);
+
+        if (draws) {
+            vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, shadowMap_.pipeline());
+
+            VkBuffer vertexBuffers[] = { meshBuffers_.vertexBuffer() };
+            VkDeviceSize offsets[] = { 0 };
+            vkCmdBindVertexBuffers(cmd, 0, 1, vertexBuffers, offsets);
+            vkCmdBindIndexBuffer(cmd, meshBuffers_.indexBuffer(), 0, meshBuffers_.indexType());
+
+            SceneDrawParams shadowParams;
+            shadowParams.depthOnly       = true;
+            shadowParams.opaquePipeline  = shadowMap_.pipeline();
+            shadowParams.opaqueLayout    = shadowMap_.pipelineLayout();
+            shadowParams.skinnedPipeline = shadowMap_.skinnedPipeline();
+            shadowParams.skinnedLayout   = shadowMap_.skinnedPipelineLayout();
+            shadowParams.boneSet         = boneSet_;
+            shadowParams.bonePalette     = &bonePalette_;
+            shadowParams.defaultSet      = descriptorSets_[imageIndex];
+            shadowParams.fallbackMesh    = &meshBuffers_;
+            // Culling then happens against this cascade's frustum, so a caster
+            // is only recorded into the maps that can actually see it.
+            shadowParams.viewProj        = shadowMatrices_[cascade];
+
+            drawSceneInstances(cmd, sceneInstances_, res, editorBridge_.lighting(), shadowParams);
+        }
+
+        shadowMap_.endPass(cmd);
+    }
 }
 
 // Locates a mesh id on disk using the model dir, the scene dir and the raw path
@@ -1120,6 +1347,19 @@ void Renderer::spawnSceneryPhysicsBodies(const LoadedScene& scene)
     }
 }
 
+void Renderer::snapInstancesToTerrain()
+{
+    if (!terrainMeshReady_) return;
+
+    for (RenderInstance& inst : sceneInstances_) {
+        // The player owns its own grounding, through PlayerController.
+        if (inst.isPlayer) continue;
+        // Same sampler the player walks on, so nothing ends up on a different surface.
+        const float ground = terrainMesh_.sampleHeight(inst.position.x, inst.position.z);
+        inst.position.y += ground + inst.scale.y;
+    }
+}
+
 void Renderer::syncPhysicsToInstances()
 {
     if (bodyToEntity_.empty()) return;
@@ -1136,6 +1376,24 @@ void Renderer::syncPhysicsToInstances()
 
 void Renderer::recordDrawCommands(VkCommandBuffer cmd, uint32_t imageIndex)
 {
+    // Resolved up front because the depth pass, recorded before the main render
+    // pass, draws the very same casters with the very same bone palettes.
+    std::vector<InstanceResources> instanceRes(sceneInstances_.size());
+    for (size_t i = 0; i < sceneInstances_.size(); ++i) {
+        if (i < sceneInstanceMeshes_.size()) instanceRes[i].mesh = sceneInstanceMeshes_[i];
+
+        const int matIdx = (i < sceneInstanceMaterials_.size()) ? sceneInstanceMaterials_[i] : -1;
+        if (matIdx < 0) continue;
+
+        const MaterialGpu& mat = materials_[static_cast<size_t>(matIdx)];
+        if (!mat.sets.empty()) instanceRes[i].materialSet = mat.sets[imageIndex];
+        for (int c = 0; c < 3; ++c) instanceRes[i].tint[c] = mat.asset.baseColor[c];
+    }
+
+    updateSkinnedInstances(frameDeltaSeconds_, instanceRes);
+
+    recordShadowPass(cmd, imageIndex, instanceRes);
+
     VkClearValue clearValues[2]{};
     clearValues[0].color = { {0.72f, 0.82f, 0.95f, 1.0f} };
     clearValues[1].depthStencil = {1.0f, 0};
@@ -1264,20 +1522,6 @@ void Renderer::recordDrawCommands(VkCommandBuffer cmd, uint32_t imageIndex)
     drawParams.cameraRight       = camera_.rightVector();
     drawParams.cameraUp          = camera_.upVector();
 
-    std::vector<InstanceResources> instanceRes(sceneInstances_.size());
-    for (size_t i = 0; i < sceneInstances_.size(); ++i) {
-        if (i < sceneInstanceMeshes_.size()) instanceRes[i].mesh = sceneInstanceMeshes_[i];
-
-        const int matIdx = (i < sceneInstanceMaterials_.size()) ? sceneInstanceMaterials_[i] : -1;
-        if (matIdx < 0) continue;
-
-        const MaterialGpu& mat = materials_[static_cast<size_t>(matIdx)];
-        if (!mat.sets.empty()) instanceRes[i].materialSet = mat.sets[imageIndex];
-        for (int c = 0; c < 3; ++c) instanceRes[i].tint[c] = mat.asset.baseColor[c];
-    }
-
-    updateSkinnedInstances(frameDeltaSeconds_, instanceRes);
-
     const SceneDrawStats stats = drawSceneInstances(
         cmd, sceneInstances_, instanceRes, editorBridge_.lighting(), drawParams);
 
@@ -1354,6 +1598,7 @@ bool Renderer::runSmoke(WindowContext& window, uint32_t targetFrames)
         uint32_t imageIndex = 0;
         if (!frameGraph_.beginFrame(imageIndex)) break;
         if (!updateCameraUbo(imageIndex)) break;
+        updateShadowMatrix();
         updateSceneLightsUbo(imageIndex);
 
         VkCommandBuffer cmd = frameGraph_.commandBuffer(imageIndex);
@@ -1443,6 +1688,7 @@ void Renderer::shutdown()
 
     frameGraph_.shutdown();
 
+    shadowMap_.shutdown(deviceContext_.device());
     destroyBoneResources();
     destroySceneMaterials();
 
@@ -1503,6 +1749,7 @@ void Renderer::shutdown()
     billboardPipeline_ = VK_NULL_HANDLE;
 
     TextureLoader::destroy(deviceContext_.device(), defaultTexture_);
+    destroyTerrainTextureSet(deviceContext_.device(), terrainTextures_);
 
     assetCache_.clear(deviceContext_.device());
 

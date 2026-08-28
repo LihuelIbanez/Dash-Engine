@@ -9,6 +9,7 @@
 
 #include "rendering/mesh/MeshBuffers.h"
 #include "rendering/textures/TextureLoader.h"
+#include "rendering/textures/TerrainTextureArray.h"
 #include "rendering/animation/AnimationPlayer.h"
 #include "rendering/animation/AnimationWiring.h"
 #include "rendering/animation/BonePalette.h"
@@ -59,11 +60,14 @@ private:
     bool updateSceneLightsUbo(uint32_t imageIndex);
     void recordDrawCommands(VkCommandBuffer cmd, uint32_t imageIndex);
 
-    // Picks the first directional light with castsShadows and derives the
-    // light-space matrix from the scene bounds. Runs once, after the scene is
-    // loaded: both inputs are static, so the matrix never shimmers.
+    // Picks the first directional light with castsShadows and fixes the tuning
+    // that does not depend on the camera. Runs once, after the scene is loaded.
     void setupShadowLight();
-    // Depth-only pass, recorded before the main render pass of the same frame.
+    // Refits every cascade to its slice of the camera frustum and snaps each to
+    // its own texel grid, so shadows follow the camera without the edges crawling.
+    void updateShadowMatrix();
+    // Depth-only pass, one per cascade, recorded before the main render pass of
+    // the same frame.
     void recordShadowPass(VkCommandBuffer cmd, uint32_t imageIndex,
                           const std::vector<InstanceResources>& res);
 
@@ -82,6 +86,9 @@ private:
     // material per swapchain image so textures can be bound per draw.
     // Registers a physics body per entity carrying a PhysicsComponent.
     void spawnSceneryPhysicsBodies(const LoadedScene& scene);
+    // Drops every instance onto the terrain surface, treating its authored Y as
+    // a height above the ground rather than an absolute one.
+    void snapInstancesToTerrain();
     // Copies simulated body positions back into their render instances.
     void syncPhysicsToInstances();
 
@@ -129,6 +136,7 @@ private:
 
     VkPipelineLayout terrainPipelineLayout_ = VK_NULL_HANDLE;
     VkPipeline terrainPipeline_ = VK_NULL_HANDLE;
+    TerrainTextureSet terrainTextures_{};
     MeshBuffers terrainMeshBuffers_;
 
     VkPipelineLayout waterPipelineLayout_ = VK_NULL_HANDLE;
@@ -155,7 +163,10 @@ private:
     // shadows, and every shader then takes the pre-shadow code path.
     ShadowMap shadowMap_;
     int  shadowLightIndex_ = -1;
-    Mat4 shadowMatrix_{};
+    Mat4 shadowMatrices_[kShadowCascades]{};
+    float shadowSplits_[4]{};
+    float shadowTexels_[4]{};
+    float shadowDepthBias_[4]{};
     float shadowParams_[4]{};
 
     bool initialized_ = false;

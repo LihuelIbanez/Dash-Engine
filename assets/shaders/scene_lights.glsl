@@ -7,6 +7,7 @@
 // and dash::vkexp::kMaxSceneLights (src/rendering/vulkan/RenderTypes.h).
 
 const int kMaxSceneLights = 8;
+const int kShadowCascades = 3;
 
 struct SceneLight {
     vec4 posType;   // xyz = world position, w = type (0 directional, 1 point, 2 spot)
@@ -16,9 +17,12 @@ struct SceneLight {
 };
 
 layout(set = 0, binding = 2) uniform SceneLightsUBO {
-    vec4 cameraPos;                     // xyz = eye position
-    mat4 shadowMatrix;                  // world -> shadow-casting light clip space
-    vec4 shadowParams;                  // see shadow_sample.glsl
+    vec4 cameraPos;                          // xyz = eye position
+    mat4 shadowMatrices[kShadowCascades];    // world -> light clip space, per cascade
+    vec4 shadowSplits;                       // xyz = far camera distance of each cascade
+    vec4 shadowTexels;                       // xyz = world texel size, per cascade
+    vec4 shadowDepthBias;                    // xyz = depth bias in clip units, per cascade
+    vec4 shadowParams;                       // see shadow_sample.glsl
     SceneLight lights[kMaxSceneLights];
 } scene;
 
@@ -69,8 +73,7 @@ vec3 accumulateSceneLights(vec3 N, vec3 worldPos, int count,
 #ifdef DASH_SHADOWS
         // Only one light owns the shadow map; the rest stay unshadowed.
         if (i == int(scene.shadowParams.x) - 1) {
-            radiance *= dashShadowFactor(scene.shadowMatrix, scene.shadowParams,
-                                         worldPos, N, NdotL);
+            radiance *= dashShadowFactor(worldPos, N, NdotL);
         }
 #endif
 

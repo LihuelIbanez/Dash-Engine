@@ -1,26 +1,30 @@
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <string>
 
 #include <vulkan/vulkan.h>
 
+#include "rendering/vulkan/ShadowMath.h"
+
 namespace dash::vkexp {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ShadowMap — depth-only render target for the single directional light that
-// declares castsShadows. Owns its image, render pass, framebuffer, comparison
-// sampler and the two depth-only pipelines (static + skinned).
+// declares castsShadows. Owns a kShadowCascades-layer depth array, its render
+// pass, one framebuffer per layer, a comparison sampler and the two depth-only
+// pipelines (static + skinned).
 //
 // Everything is optional: when init() fails the renderer keeps the shader
 // variants without the shadow binding and the frame looks exactly as before.
 // ─────────────────────────────────────────────────────────────────────────────
 class ShadowMap {
 public:
-    // 2048x2048 D32 = 16 MiB. Over the ~120-world-unit volume of the densest
-    // shipped scene that is ~6 cm per texel, fine enough that the 3x3 PCF
-    // kernel reads as a soft edge instead of a staircase, and small enough to
-    // stay far from the 128 MiB budget of the low-end targets.
+    // 2048x2048 D32 per cascade = 16 MiB each. The near cascade covers a few
+    // metres, so that is around 1.5 cm per texel where the character stands —
+    // fine enough that the 3x3 PCF kernel reads as a soft edge rather than a
+    // staircase, and three of them still fit far from the low-end budget.
     static constexpr uint32_t kResolution = 2048;
 
     ShadowMap() = default;
@@ -29,7 +33,7 @@ public:
     ShadowMap(const ShadowMap&) = delete;
     ShadowMap& operator=(const ShadowMap&) = delete;
 
-    // Image + render pass + framebuffer + sampler. Independent of the scene, so
+    // Image + render pass + framebuffers + sampler. Independent of the scene, so
     // it can run before the descriptor layouts are built.
     bool initTarget(VkPhysicalDevice physicalDevice, VkDevice device);
 
@@ -42,16 +46,17 @@ public:
 
     void shutdown(VkDevice device);
 
-    // Clears to 1.0 and leaves the image in DEPTH_STENCIL_READ_ONLY_OPTIMAL.
-    // Called every frame even without casters, so the descriptor always points
-    // at an image in a layout the fragment stage can sample.
-    void beginPass(VkCommandBuffer cmd) const;
+    // Clears the given cascade to 1.0 and leaves that layer in
+    // DEPTH_STENCIL_READ_ONLY_OPTIMAL. Every cascade is entered each frame even
+    // without casters, so the descriptor always points at layers in a layout the
+    // fragment stage can sample.
+    void beginPass(VkCommandBuffer cmd, int cascade) const;
     void endPass(VkCommandBuffer cmd) const;
 
     bool valid() const { return image_ != VK_NULL_HANDLE; }
     bool hasPipelines() const { return pipeline_ != VK_NULL_HANDLE; }
 
-    VkImageView imageView() const { return imageView_; }
+    VkImageView imageView() const { return arrayView_; }
     VkSampler   sampler() const { return sampler_; }
 
     VkPipeline       pipeline() const { return pipeline_; }
@@ -62,9 +67,11 @@ public:
 private:
     VkImage        image_ = VK_NULL_HANDLE;
     VkDeviceMemory memory_ = VK_NULL_HANDLE;
-    VkImageView    imageView_ = VK_NULL_HANDLE;
+    // Whole array, for sampling; the per-layer views exist only to be rendered into.
+    VkImageView    arrayView_ = VK_NULL_HANDLE;
+    std::array<VkImageView, kShadowCascades>   layerViews_{};
+    std::array<VkFramebuffer, kShadowCascades> framebuffers_{};
     VkRenderPass   renderPass_ = VK_NULL_HANDLE;
-    VkFramebuffer  framebuffer_ = VK_NULL_HANDLE;
     VkSampler      sampler_ = VK_NULL_HANDLE;
 
     VkPipelineLayout pipelineLayout_ = VK_NULL_HANDLE;

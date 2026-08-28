@@ -241,6 +241,7 @@ void TerrainMesh::generate(unsigned int seed)
     }
 
     computeSmoothNormals();
+    assignTextureLayers();
     computeAmbientOcclusion();
 
     dirty_ = true;
@@ -298,6 +299,70 @@ void TerrainMesh::computeSmoothNormals()
             v.nx /= len; v.ny /= len; v.nz /= len;
         } else {
             v.nx = 0.0f; v.ny = 1.0f; v.nz = 0.0f;
+        }
+    }
+}
+
+void TerrainMesh::assignTextureLayers()
+{
+    constexpr int kTexCount = static_cast<int>(TerrainTextureId::Count);
+
+    auto texForType = [](TileType t) {
+        switch (t) {
+            case TileType::DeepWater: return TerrainTextureId::Gravel;
+            case TileType::Water:     return TerrainTextureId::Sand;
+            case TileType::Sand:      return TerrainTextureId::Sand;
+            case TileType::Grass:     return TerrainTextureId::Grass;
+            case TileType::Forest:    return TerrainTextureId::DarkGrass;
+            case TileType::Dirt:      return TerrainTextureId::Dirt;
+            case TileType::Stone:     return TerrainTextureId::Rock;
+            case TileType::Mountain:  return TerrainTextureId::Rock;
+            case TileType::Snow:      return TerrainTextureId::Snow;
+        }
+        return TerrainTextureId::Grass;
+    };
+
+    for (int vy = 0; vy < VH; ++vy) {
+        for (int vx = 0; vx < VW; ++vx) {
+            std::array<float, kTexCount> w{};
+            for (int dy = -1; dy <= 0; ++dy) {
+                for (int dx = -1; dx <= 0; ++dx) {
+                    const int fx = vx + dx, fy = vy + dy;
+                    if (fx < 0 || fx >= FW || fy < 0 || fy >= FH) continue;
+                    w[static_cast<int>(texForType(face(fx, fy).type))] += 1.0f;
+                }
+            }
+
+            TerrainVertex& v = vert(vx, vy);
+            // Steep ground exposes rock, the highest ground catches snow.
+            w[static_cast<int>(TerrainTextureId::Rock)] +=
+                std::max(0.0f, std::min(1.0f, (1.0f - v.ny) * 6.0f - 0.5f)) * 4.0f;
+            w[static_cast<int>(TerrainTextureId::Snow)] +=
+                std::max(0.0f, std::min(1.0f, (v.height - 0.86f) * 12.0f)) * 4.0f;
+
+            // The vertex format carries only four slots, so keep the heaviest.
+            std::array<int, kTexCount> order{};
+            for (int i = 0; i < kTexCount; ++i) order[i] = i;
+            std::partial_sort(order.begin(), order.begin() + 4, order.end(),
+                              [&w](int a, int b) { return w[a] > w[b]; });
+
+            float total = 0.0f;
+            for (int i = 0; i < 4; ++i) total += w[order[i]];
+            if (total <= 0.0f) {
+                for (int i = 0; i < 4; ++i) { v.texIndices[i] = 0; v.texWeights[i] = 0; }
+                v.texWeights[0] = 255;
+                continue;
+            }
+
+            int sum = 0;
+            for (int i = 0; i < 4; ++i) {
+                v.texIndices[i] = static_cast<uint8_t>(order[i]);
+                const int weight = static_cast<int>(w[order[i]] / total * 255.0f + 0.5f);
+                v.texWeights[i] = static_cast<uint8_t>(std::max(0, std::min(255, weight)));
+                sum += v.texWeights[i];
+            }
+            v.texWeights[0] = static_cast<uint8_t>(
+                std::max(0, std::min(255, v.texWeights[0] + (255 - sum))));
         }
     }
 }

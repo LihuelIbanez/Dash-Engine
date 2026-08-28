@@ -868,6 +868,17 @@ target_link_libraries(test_runtime_inspector PRIVATE
 target_compile_options(test_runtime_inspector PRIVATE ${DASH_COMPILE_FLAGS})
 add_test(NAME test_runtime_inspector COMMAND test_runtime_inspector)
 
+# ── BoneStructure: arbol de huesos, validacion, reparentado y remapeo ────────
+# Solo la logica pura del panel (header-only): sin ImGui, sin SDL y sin linkeo,
+# porque Skeleton/AnimationFile/DashMeshFile son todos header-only.
+add_executable(test_bone_structure test_bone_structure.cpp)
+target_include_directories(test_bone_structure PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/src/editor
+)
+target_compile_options(test_bone_structure PRIVATE ${DASH_COMPILE_FLAGS})
+add_test(NAME test_bone_structure COMMAND test_bone_structure)
+
 # ── AnimationComponent -> AnimationPlayer wiring ────────────────────────────
 # buildAnimators() and AnimationSetCache are header-only and Vulkan-free, so
 # this runs headless: no device, no swapchain, just RenderInstance + files.

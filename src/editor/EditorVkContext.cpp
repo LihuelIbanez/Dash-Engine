@@ -262,208 +262,21 @@ bool EditorVkContext::init(SDL_Window* window)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Terrain texture array (9 layers matching TerrainTextureId)
+// Terrain texture arrays (shared with the runtime renderer)
 // ─────────────────────────────────────────────────────────────────────────────
 bool EditorVkContext::createTerrainTextureArray()
 {
-    VkDevice dev = deviceCtx_.device();
-    VkPhysicalDevice pd = deviceCtx_.physicalDevice();
-    VkQueue gq = deviceCtx_.graphicsQueue();
-    VkCommandPool cmdPool = frameGraph_.commandPool();
-
-    constexpr uint32_t TEX_W = 256;
-    constexpr uint32_t TEX_H = 256;
-    constexpr uint32_t LAYER_COUNT = 9;  // TerrainTextureId::Count
-    constexpr VkDeviceSize layerSize = TEX_W * TEX_H * 4;
-    constexpr VkDeviceSize totalSize = layerSize * LAYER_COUNT;
-
-#ifdef VULKAN_MODEL_DIR
-    std::string modelDir = VULKAN_MODEL_DIR;
-    std::string terrainDir = modelDir + "/../terrain/";
-#else
-    std::string terrainDir = "assets/models/terrain/";
-#endif
-
-    struct TexEntry { int layer; std::string path; uint8_t r, g, b; };
-    std::vector<TexEntry> entries = {
-        {0, "",  80, 160, 60},     // Grass
-        {1, terrainDir + "rocky_terrain_02_4k.blend/textures/rocky_terrain_02_diff_4k.jpg", 0,0,0},
-        {2, terrainDir + "gray_rocks_4k.blend/textures/gray_rocks_diff_4k.jpg", 0,0,0},
-        {3, terrainDir + "sandy_gravel_02_4k.blend/textures/sandy_gravel_02_diff_4k.jpg", 0,0,0},
-        {4, terrainDir + "snow_02_4k.blend/textures/snow_02_diff_4k.jpg", 0,0,0},
-        {5, "", 100, 70, 40},      // Mud
-        {6, "",  40, 100, 30},     // DarkGrass
-        {7, "", 130, 130, 120},    // Gravel
-        {8, "", 200, 220, 240},    // Ice
-    };
-
-    // Create VkImage array
-    VkImageCreateInfo ici{VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};
-    ici.imageType = VK_IMAGE_TYPE_2D;
-    ici.format = VK_FORMAT_R8G8B8A8_UNORM;
-    ici.extent = {TEX_W, TEX_H, 1};
-    ici.mipLevels = 1;
-    ici.arrayLayers = LAYER_COUNT;
-    ici.samples = VK_SAMPLE_COUNT_1_BIT;
-    ici.tiling = VK_IMAGE_TILING_OPTIMAL;
-    ici.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
-    ici.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-    ici.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-
-    if (vkCreateImage(dev, &ici, nullptr, &terrainTexArrayImage_) != VK_SUCCESS) {
-        std::fprintf(stderr, "[EditorVk] Failed to create terrain texture array image\n");
-        return false;
-    }
-
-    VkMemoryRequirements memReqs;
-    vkGetImageMemoryRequirements(dev, terrainTexArrayImage_, &memReqs);
-    VkMemoryAllocateInfo mai{VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO};
-    mai.allocationSize = memReqs.size;
-    mai.memoryTypeIndex = findMemType(pd, memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-    if (mai.memoryTypeIndex == UINT32_MAX) return false;
-    if (vkAllocateMemory(dev, &mai, nullptr, &terrainTexArrayMemory_) != VK_SUCCESS) return false;
-    vkBindImageMemory(dev, terrainTexArrayImage_, terrainTexArrayMemory_, 0);
-
-    // Single staging buffer for ALL layers — one upload, one submit
-    VkBuffer stagingBuf = VK_NULL_HANDLE;
-    VkDeviceMemory stagingMem = VK_NULL_HANDLE;
-    if (!createBuffer(pd, dev, totalSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                      stagingBuf, stagingMem)) {
-        std::fprintf(stderr, "[EditorVk] Failed to create staging buffer for terrain textures\n");
-        return false;
-    }
-
-    // Map staging buffer and fill all layers
-    void* mapped = nullptr;
-    vkMapMemory(dev, stagingMem, 0, totalSize, 0, &mapped);
-    auto* dst = static_cast<uint8_t*>(mapped);
-
-    for (auto& e : entries) {
-        uint8_t* layerDst = dst + static_cast<VkDeviceSize>(e.layer) * layerSize;
-
-        if (!e.path.empty()) {
-            int w = 0, h = 0, ch = 0;
-            stbi_set_flip_vertically_on_load(0);
-            unsigned char* raw = stbi_load(e.path.c_str(), &w, &h, &ch, STBI_rgb_alpha);
-            if (raw) {
-                for (uint32_t y = 0; y < TEX_H; ++y) {
-                    for (uint32_t x = 0; x < TEX_W; ++x) {
-                        uint32_t srcX = x * static_cast<uint32_t>(w) / TEX_W;
-                        uint32_t srcY = y * static_cast<uint32_t>(h) / TEX_H;
-                        uint32_t srcIdx = (srcY * static_cast<uint32_t>(w) + srcX) * 4;
-                        uint32_t dstIdx = (y * TEX_W + x) * 4;
-                        layerDst[dstIdx + 0] = raw[srcIdx + 0];
-                        layerDst[dstIdx + 1] = raw[srcIdx + 1];
-                        layerDst[dstIdx + 2] = raw[srcIdx + 2];
-                        layerDst[dstIdx + 3] = raw[srcIdx + 3];
-                    }
-                }
-                stbi_image_free(raw);
-                std::fprintf(stdout, "[EditorVk] Loaded terrain texture layer %d (%dx%d -> %ux%u)\n",
-                             e.layer, w, h, TEX_W, TEX_H);
-            } else {
-                std::fprintf(stderr, "[EditorVk] Failed to load %s, using fallback\n", e.path.c_str());
-                for (uint32_t i = 0; i < TEX_W * TEX_H; ++i) {
-                    layerDst[i*4+0] = e.r; layerDst[i*4+1] = e.g;
-                    layerDst[i*4+2] = e.b; layerDst[i*4+3] = 255;
-                }
-            }
-        } else {
-            for (uint32_t i = 0; i < TEX_W * TEX_H; ++i) {
-                layerDst[i*4+0] = e.r; layerDst[i*4+1] = e.g;
-                layerDst[i*4+2] = e.b; layerDst[i*4+3] = 255;
-            }
-        }
-    }
-    vkUnmapMemory(dev, stagingMem);
-
-    // Single command buffer: transition + copy all layers + transition
-    VkCommandBufferAllocateInfo cbai{VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO};
-    cbai.commandPool = cmdPool; cbai.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY; cbai.commandBufferCount = 1;
-    VkCommandBuffer cmd;
-    vkAllocateCommandBuffers(dev, &cbai, &cmd);
-    VkCommandBufferBeginInfo bi{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
-    bi.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-    vkBeginCommandBuffer(cmd, &bi);
-
-    // Transition UNDEFINED -> TRANSFER_DST
-    VkImageMemoryBarrier barrier{VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
-    barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    barrier.image = terrainTexArrayImage_;
-    barrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, LAYER_COUNT};
-    barrier.srcAccessMask = 0;
-    barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-    vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
-                         0, 0, nullptr, 0, nullptr, 1, &barrier);
-
-    // Copy all 9 layers in one batch
-    std::array<VkBufferImageCopy, LAYER_COUNT> regions{};
-    for (uint32_t i = 0; i < LAYER_COUNT; ++i) {
-        regions[i].bufferOffset = static_cast<VkDeviceSize>(i) * layerSize;
-        regions[i].imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        regions[i].imageSubresource.mipLevel = 0;
-        regions[i].imageSubresource.baseArrayLayer = i;
-        regions[i].imageSubresource.layerCount = 1;
-        regions[i].imageExtent = {TEX_W, TEX_H, 1};
-    }
-    vkCmdCopyBufferToImage(cmd, stagingBuf, terrainTexArrayImage_,
-                           VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                           LAYER_COUNT, regions.data());
-
-    // Transition TRANSFER_DST -> SHADER_READ_ONLY
-    barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-    barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-    barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-    vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-                         0, 0, nullptr, 0, nullptr, 1, &barrier);
-
-    vkEndCommandBuffer(cmd);
-    VkSubmitInfo si{VK_STRUCTURE_TYPE_SUBMIT_INFO}; si.commandBufferCount = 1; si.pCommandBuffers = &cmd;
-    vkQueueSubmit(gq, 1, &si, VK_NULL_HANDLE);
-    vkQueueWaitIdle(gq);  // single wait for entire upload
-    vkFreeCommandBuffers(dev, cmdPool, 1, &cmd);
-
-    // Cleanup staging
-    vkDestroyBuffer(dev, stagingBuf, nullptr);
-    vkFreeMemory(dev, stagingMem, nullptr);
-
-    // Create image view as 2D_ARRAY
-    VkImageViewCreateInfo vci{VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
-    vci.image = terrainTexArrayImage_;
-    vci.viewType = VK_IMAGE_VIEW_TYPE_2D_ARRAY;
-    vci.format = VK_FORMAT_R8G8B8A8_UNORM;
-    vci.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, LAYER_COUNT};
-    if (vkCreateImageView(dev, &vci, nullptr, &terrainTexArrayView_) != VK_SUCCESS) {
-        std::fprintf(stderr, "[EditorVk] Failed to create terrain texture array view\n");
-        return false;
-    }
-
-    // Create sampler with REPEAT addressing
-    VkSamplerCreateInfo sci{VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
-    sci.magFilter = VK_FILTER_LINEAR;
-    sci.minFilter = VK_FILTER_LINEAR;
-    sci.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    sci.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    sci.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    sci.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-    if (vkCreateSampler(dev, &sci, nullptr, &terrainTexSampler_) != VK_SUCCESS) {
-        std::fprintf(stderr, "[EditorVk] Failed to create terrain texture sampler\n");
-        return false;
-    }
-
-    std::fprintf(stdout, "[EditorVk] Terrain texture array created (%ux%u, %u layers)\n",
-                 TEX_W, TEX_H, LAYER_COUNT);
-    return true;
+    return createTerrainTextureSet(deviceCtx_.physicalDevice(),
+                                   deviceCtx_.device(),
+                                   deviceCtx_.graphicsQueue(),
+                                   frameGraph_.commandPool(),
+                                   defaultTerrainTextureRoot(),
+                                   terrainTextures_);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Scene descriptors (camera UBO at binding 0, dummy sampler at binding 1,
-// scene lights UBO at binding 2)
+// scene lights UBO at binding 2, terrain arrays at bindings 4/5)
 // ─────────────────────────────────────────────────────────────────────────────
 bool EditorVkContext::createSceneDescriptors()
 {
@@ -483,7 +296,12 @@ bool EditorVkContext::createSceneDescriptors()
     lightsB.binding = 2; lightsB.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
     lightsB.descriptorCount = 1; lightsB.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
-    std::array<VkDescriptorSetLayoutBinding, 3> bindings = {uboB, samplerB, lightsB};
+    // 3 is reserved for the runtime shadow cascades, which the viewport lacks.
+    VkDescriptorSetLayoutBinding terrainAlbedoB{};
+    terrainAlbedoB.binding = 4; terrainAlbedoB.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    terrainAlbedoB.descriptorCount = 1; terrainAlbedoB.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+    std::array<VkDescriptorSetLayoutBinding, 4> bindings = {uboB, samplerB, lightsB, terrainAlbedoB};
     VkDescriptorSetLayoutCreateInfo lci{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
     lci.bindingCount = static_cast<uint32_t>(bindings.size()); lci.pBindings = bindings.data();
     if (vkCreateDescriptorSetLayout(dev, &lci, nullptr, &sceneDescLayout_) != VK_SUCCESS)
@@ -491,7 +309,7 @@ bool EditorVkContext::createSceneDescriptors()
 
     std::array<VkDescriptorPoolSize, 2> poolSizes = {{
         {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 2},
-        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1}
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 2}
     }};
     VkDescriptorPoolCreateInfo pci{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
     pci.maxSets = 1; pci.poolSizeCount = 2; pci.pPoolSizes = poolSizes.data();
@@ -564,16 +382,16 @@ bool EditorVkContext::createSceneDescriptors()
     }
 
     VkDescriptorImageInfo imgInfo{};
-    if (terrainTexArrayView_ != VK_NULL_HANDLE && terrainTexSampler_ != VK_NULL_HANDLE) {
-        imgInfo.sampler = terrainTexSampler_;
-        imgInfo.imageView = terrainTexArrayView_;
-    } else {
-        imgInfo.sampler = vpSampler_;
-        imgInfo.imageView = dummyTexView_;
-    }
+    imgInfo.sampler = vpSampler_;
+    imgInfo.imageView = dummyTexView_;
     imgInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-    std::array<VkWriteDescriptorSet, 3> writes{};
+    VkDescriptorImageInfo terrainAlbedoInfo{};
+    terrainAlbedoInfo.sampler = terrainTextures_.albedo.valid() ? terrainTextures_.albedo.sampler : vpSampler_;
+    terrainAlbedoInfo.imageView = terrainTextures_.albedo.valid() ? terrainTextures_.albedo.view : dummyTexView_;
+    terrainAlbedoInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+    std::array<VkWriteDescriptorSet, 4> writes{};
     writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
     writes[0].dstSet = sceneDescSet_; writes[0].dstBinding = 0;
     writes[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
@@ -588,6 +406,11 @@ bool EditorVkContext::createSceneDescriptors()
     writes[2].dstSet = sceneDescSet_; writes[2].dstBinding = 2;
     writes[2].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
     writes[2].descriptorCount = 1; writes[2].pBufferInfo = &lightBinfo;
+
+    writes[3].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    writes[3].dstSet = sceneDescSet_; writes[3].dstBinding = 4;
+    writes[3].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    writes[3].descriptorCount = 1; writes[3].pImageInfo = &terrainAlbedoInfo;
 
     vkUpdateDescriptorSets(dev, static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
 
@@ -938,11 +761,8 @@ void EditorVkContext::shutdown()
     if (vpSampler_) { vkDestroySampler(dev, vpSampler_, nullptr); vpSampler_ = VK_NULL_HANDLE; }
     if (vpRenderPass_) { vkDestroyRenderPass(dev, vpRenderPass_, nullptr); vpRenderPass_ = VK_NULL_HANDLE; }
 
-    // Terrain texture array
-    if (terrainTexSampler_) { vkDestroySampler(dev, terrainTexSampler_, nullptr); terrainTexSampler_ = VK_NULL_HANDLE; }
-    if (terrainTexArrayView_) { vkDestroyImageView(dev, terrainTexArrayView_, nullptr); terrainTexArrayView_ = VK_NULL_HANDLE; }
-    if (terrainTexArrayImage_) { vkDestroyImage(dev, terrainTexArrayImage_, nullptr); terrainTexArrayImage_ = VK_NULL_HANDLE; }
-    if (terrainTexArrayMemory_) { vkFreeMemory(dev, terrainTexArrayMemory_, nullptr); terrainTexArrayMemory_ = VK_NULL_HANDLE; }
+    // Terrain texture arrays
+    destroyTerrainTextureSet(dev, terrainTextures_);
 
     PipelineBuilder::destroy(dev, terrainPipelineLayout_, terrainPipeline_);
     PipelineBuilder::destroy(dev, waterPipelineLayout_, waterPipeline_);

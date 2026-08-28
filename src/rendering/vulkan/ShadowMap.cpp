@@ -21,7 +21,7 @@ bool createImage(VkPhysicalDevice physicalDevice, VkDevice device,
     imageInfo.format = kDepthFormat;
     imageInfo.extent = {ShadowMap::kResolution, ShadowMap::kResolution, 1};
     imageInfo.mipLevels = 1;
-    imageInfo.arrayLayers = 1;
+    imageInfo.arrayLayers = kShadowCascades;
     imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
     imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
     imageInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
@@ -69,15 +69,29 @@ bool ShadowMap::initTarget(VkPhysicalDevice physicalDevice, VkDevice device)
     VkImageViewCreateInfo viewInfo{};
     viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
     viewInfo.image = image_;
-    viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D_ARRAY;
     viewInfo.format = kDepthFormat;
     viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
     viewInfo.subresourceRange.levelCount = 1;
-    viewInfo.subresourceRange.layerCount = 1;
-    if (vkCreateImageView(device, &viewInfo, nullptr, &imageView_) != VK_SUCCESS) {
-        std::fprintf(stderr, "[Shadow] Failed to create depth image view.\n");
+    viewInfo.subresourceRange.layerCount = kShadowCascades;
+    if (vkCreateImageView(device, &viewInfo, nullptr, &arrayView_) != VK_SUCCESS) {
+        std::fprintf(stderr, "[Shadow] Failed to create depth array view.\n");
         shutdown(device);
         return false;
+    }
+
+    // A framebuffer attachment must be a single layer, so each cascade also
+    // needs its own 2D view into the array.
+    for (int i = 0; i < kShadowCascades; ++i) {
+        VkImageViewCreateInfo layerInfo = viewInfo;
+        layerInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        layerInfo.subresourceRange.baseArrayLayer = static_cast<uint32_t>(i);
+        layerInfo.subresourceRange.layerCount = 1;
+        if (vkCreateImageView(device, &layerInfo, nullptr, &layerViews_[i]) != VK_SUCCESS) {
+            std::fprintf(stderr, "[Shadow] Failed to create cascade %d view.\n", i);
+            shutdown(device);
+            return false;
+        }
     }
 
     VkAttachmentDescription depthAttachment{};
@@ -133,14 +147,16 @@ bool ShadowMap::initTarget(VkPhysicalDevice physicalDevice, VkDevice device)
     fbInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
     fbInfo.renderPass = renderPass_;
     fbInfo.attachmentCount = 1;
-    fbInfo.pAttachments = &imageView_;
     fbInfo.width = kResolution;
     fbInfo.height = kResolution;
     fbInfo.layers = 1;
-    if (vkCreateFramebuffer(device, &fbInfo, nullptr, &framebuffer_) != VK_SUCCESS) {
-        std::fprintf(stderr, "[Shadow] Failed to create depth framebuffer.\n");
-        shutdown(device);
-        return false;
+    for (int i = 0; i < kShadowCascades; ++i) {
+        fbInfo.pAttachments = &layerViews_[i];
+        if (vkCreateFramebuffer(device, &fbInfo, nullptr, &framebuffers_[i]) != VK_SUCCESS) {
+            std::fprintf(stderr, "[Shadow] Failed to create cascade %d framebuffer.\n", i);
+            shutdown(device);
+            return false;
+        }
     }
 
     VkSamplerCreateInfo samplerInfo{};
@@ -163,7 +179,8 @@ bool ShadowMap::initTarget(VkPhysicalDevice physicalDevice, VkDevice device)
         return false;
     }
 
-    std::printf("[Shadow] Directional shadow map ready: %ux%u D32.\n", kResolution, kResolution);
+    std::printf("[Shadow] %d cascades ready: %ux%u D32 each.\n",
+                kShadowCascades, kResolution, kResolution);
     return true;
 }
 
@@ -200,9 +217,9 @@ bool ShadowMap::createPipelines(VkDevice device,
     return true;
 }
 
-void ShadowMap::beginPass(VkCommandBuffer cmd) const
+void ShadowMap::beginPass(VkCommandBuffer cmd, int cascade) const
 {
-    if (!valid()) return;
+    if (!valid() || cascade < 0 || cascade >= kShadowCascades) return;
 
     VkClearValue clear{};
     clear.depthStencil = {1.0f, 0};
@@ -210,7 +227,7 @@ void ShadowMap::beginPass(VkCommandBuffer cmd) const
     VkRenderPassBeginInfo begin{};
     begin.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
     begin.renderPass = renderPass_;
-    begin.framebuffer = framebuffer_;
+    begin.framebuffer = framebuffers_[static_cast<size_t>(cascade)];
     begin.renderArea.offset = {0, 0};
     begin.renderArea.extent = {kResolution, kResolution};
     begin.clearValueCount = 1;
@@ -241,17 +258,25 @@ void ShadowMap::shutdown(VkDevice device)
         vkDestroySampler(device, sampler_, nullptr);
         sampler_ = VK_NULL_HANDLE;
     }
-    if (framebuffer_ != VK_NULL_HANDLE) {
-        vkDestroyFramebuffer(device, framebuffer_, nullptr);
-        framebuffer_ = VK_NULL_HANDLE;
+    for (VkFramebuffer& fb : framebuffers_) {
+        if (fb != VK_NULL_HANDLE) {
+            vkDestroyFramebuffer(device, fb, nullptr);
+            fb = VK_NULL_HANDLE;
+        }
     }
     if (renderPass_ != VK_NULL_HANDLE) {
         vkDestroyRenderPass(device, renderPass_, nullptr);
         renderPass_ = VK_NULL_HANDLE;
     }
-    if (imageView_ != VK_NULL_HANDLE) {
-        vkDestroyImageView(device, imageView_, nullptr);
-        imageView_ = VK_NULL_HANDLE;
+    for (VkImageView& view : layerViews_) {
+        if (view != VK_NULL_HANDLE) {
+            vkDestroyImageView(device, view, nullptr);
+            view = VK_NULL_HANDLE;
+        }
+    }
+    if (arrayView_ != VK_NULL_HANDLE) {
+        vkDestroyImageView(device, arrayView_, nullptr);
+        arrayView_ = VK_NULL_HANDLE;
     }
     if (image_ != VK_NULL_HANDLE) {
         vkDestroyImage(device, image_, nullptr);
