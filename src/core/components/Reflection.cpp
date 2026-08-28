@@ -9,7 +9,7 @@
 
 const ComponentMeta& getComponentMeta(ComponentType type)
 {
-    static const std::array<ComponentMeta, 8> kReg = {
+    static const std::array<ComponentMeta, 10> kReg = {
         ComponentMeta{"Transform", ComponentType::Transform, {
             {"x", PropertyType::Float, offsetof(TransformComponent, x), {}},
             {"y", PropertyType::Float, offsetof(TransformComponent, y), {}},
@@ -62,9 +62,28 @@ const ComponentMeta& getComponentMeta(ComponentType type)
             {"mass",        PropertyType::Float, offsetof(PhysicsComponent, mass),        {}},
             {"isStatic",    PropertyType::Bool,  offsetof(PhysicsComponent, isStatic),    {}},
         }},
+        ComponentMeta{"Light", ComponentType::Light, {
+            {"lightType",    PropertyType::Enum,  offsetof(LightComponent, lightType), {"Directional", "Point", "Spot"}},
+            {"colorR",       PropertyType::Float, offsetof(LightComponent, colorR),       {}},
+            {"colorG",       PropertyType::Float, offsetof(LightComponent, colorG),       {}},
+            {"colorB",       PropertyType::Float, offsetof(LightComponent, colorB),       {}},
+            {"intensity",    PropertyType::Float, offsetof(LightComponent, intensity),    {}},
+            {"range",        PropertyType::Float, offsetof(LightComponent, range),        {}},
+            {"innerConeDeg", PropertyType::Float, offsetof(LightComponent, innerConeDeg), {}},
+            {"outerConeDeg", PropertyType::Float, offsetof(LightComponent, outerConeDeg), {}},
+            {"castsShadows", PropertyType::Bool,  offsetof(LightComponent, castsShadows), {}},
+            {"enabled",      PropertyType::Bool,  offsetof(LightComponent, enabled),      {}},
+        }},
+        ComponentMeta{"Animation", ComponentType::Animation, {
+            {"clip",          PropertyType::String, offsetof(AnimationComponent, clip),          {}},
+            {"speed",         PropertyType::Float,  offsetof(AnimationComponent, speed),         {}},
+            {"loop",          PropertyType::Bool,   offsetof(AnimationComponent, loop),          {}},
+            {"playing",       PropertyType::Bool,   offsetof(AnimationComponent, playing),       {}},
+            {"blendSeconds",  PropertyType::Float,  offsetof(AnimationComponent, blendSeconds),  {}},
+        }},
     };
     int idx = static_cast<int>(type);
-    if (idx < 0 || idx >= 8)
+    if (idx < 0 || idx >= static_cast<int>(kReg.size()))
         throw std::runtime_error("getComponentMeta: unknown ComponentType");
     return kReg[idx];
 }
@@ -82,7 +101,9 @@ ComponentType getVariantType(const ComponentVariant& comp)
         else if constexpr (std::is_same_v<T, StatsComponent>)   return ComponentType::Stats;
         else if constexpr (std::is_same_v<T, CombatComponent>)  return ComponentType::Combat;
         else if constexpr (std::is_same_v<T, AIComponent>)      return ComponentType::AI;
-        else                                                     return ComponentType::Physics;
+        else if constexpr (std::is_same_v<T, PhysicsComponent>) return ComponentType::Physics;
+        else if constexpr (std::is_same_v<T, LightComponent>)   return ComponentType::Light;
+        else                                                     return ComponentType::Animation;
     }, comp);
 }
 

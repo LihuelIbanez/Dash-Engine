@@ -133,6 +133,8 @@ nlohmann::json SceneData::toJson() const
         }
         ej["x"] = ex;
         ej["y"] = ey;
+        if (e.parentId != 0)
+            ej["parentId"] = e.parentId;
         if (e.type == EntityData::Type::Player)
             ej["class"] = e.charClass;
         if (!e.prefabGuid.empty()) {
@@ -350,6 +352,7 @@ bool SceneData::loadFromJson(const nlohmann::json& j, const std::string& assetsR
                 ed.x         = e.value("x", 0.f);
                 ed.y         = e.value("y", 0.f);
                 ed.charClass = e.value("class", "Warrior");
+                ed.parentId  = e.value("parentId", (uint64_t)0);
 
                 // Validate position bounds
                 if (ed.x < 0 || ed.x >= WORLD_W || ed.y < 0 || ed.y >= WORLD_H) {

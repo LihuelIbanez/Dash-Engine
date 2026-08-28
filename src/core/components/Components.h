@@ -14,6 +14,8 @@ enum class ComponentType : int {
     Combat    = 5,
     AI        = 6,
     Physics   = 7,
+    Light     = 8,
+    Animation = 9,
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -42,6 +44,37 @@ struct RenderComponent {
     std::string sprite  = "default";
     int         layer   = 0;
     bool        visible = true;
+};
+
+enum class LightType : int {
+    Directional = 0,
+    Point       = 1,
+    Spot        = 2,
+};
+
+// A light placed in the scene. Until now lighting was a single hardcoded
+// directional light living in the viewport settings.
+struct LightComponent {
+    int   lightType = static_cast<int>(LightType::Point);
+    float colorR = 1.f;
+    float colorG = 1.f;
+    float colorB = 1.f;
+    float intensity = 1.f;
+    float range = 10.f;      // Point/Spot only
+    float innerConeDeg = 20.f;  // Spot only
+    float outerConeDeg = 35.f;  // Spot only
+    bool  castsShadows = false;
+    bool  enabled = true;
+};
+
+// Playback state for a skeletal animation clip. The clip data itself lives in
+// the imported model; this only says what to play and how.
+struct AnimationComponent {
+    std::string clip;            // empty = bind pose
+    float       speed = 1.f;
+    bool        loop = true;
+    bool        playing = true;
+    float       blendSeconds = 0.2f;
 };
 
 struct HealthComponent {
@@ -103,5 +136,7 @@ using ComponentVariant = std::variant<
     StatsComponent,
     CombatComponent,
     AIComponent,
-    PhysicsComponent
+    PhysicsComponent,
+    LightComponent,
+    AnimationComponent
 >;

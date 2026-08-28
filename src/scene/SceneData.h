@@ -22,6 +22,9 @@ struct EntityData {
     float       y         = 0.f;
     std::string charClass = "Warrior";   // only used when type == Player
 
+    // v7+: parent for hierarchical transforms. 0 = root.
+    uint64_t    parentId  = 0;
+
     // v2+: component data (empty = legacy/not migrated yet)
     std::vector<ComponentVariant> components;
 
@@ -68,10 +71,10 @@ struct TextureOverride {
 // SceneData – everything needed to describe one scenario / level
 // ─────────────────────────────────────────────────────────────────────────────
 struct SceneData {
-    // v6 adds PhysicsComponent. No data migration is needed (the component is
-    // optional), but the bump makes older builds reject the scene up-front
-    // instead of failing on an unknown component type.
-    static constexpr int kCurrentVersion = 6;
+    // v7 adds entity parenting (EntityData::parentId) plus the Light and
+    // Animation components. All are optional, so older scenes load unchanged:
+    // absent parentId means root and absent components mean no light/animation.
+    static constexpr int kCurrentVersion = 7;
 
     struct Render3DSettings {
         bool  useVulkan3D = true;

@@ -33,6 +33,8 @@ ComponentType componentTypeFromName(const std::string& name)
     if (name == "Combat")    return ComponentType::Combat;
     if (name == "AI")        return ComponentType::AI;
     if (name == "Physics")   return ComponentType::Physics;
+    if (name == "Light")     return ComponentType::Light;
+    if (name == "Animation") return ComponentType::Animation;
     throw std::runtime_error("Unknown component type: " + name);
 }
 
@@ -131,6 +133,27 @@ nlohmann::json componentToJson(const ComponentVariant& comp)
             j["mass"]        = c.mass;
             j["isStatic"]    = c.isStatic;
         }
+        else if constexpr (std::is_same_v<T, LightComponent>) {
+            j["type"]         = "Light";
+            j["lightType"]    = c.lightType;
+            j["colorR"]       = c.colorR;
+            j["colorG"]       = c.colorG;
+            j["colorB"]       = c.colorB;
+            j["intensity"]    = c.intensity;
+            j["range"]        = c.range;
+            j["innerConeDeg"] = c.innerConeDeg;
+            j["outerConeDeg"] = c.outerConeDeg;
+            j["castsShadows"] = c.castsShadows;
+            j["enabled"]      = c.enabled;
+        }
+        else if constexpr (std::is_same_v<T, AnimationComponent>) {
+            j["type"]         = "Animation";
+            j["clip"]         = c.clip;
+            j["speed"]        = c.speed;
+            j["loop"]         = c.loop;
+            j["playing"]      = c.playing;
+            j["blendSeconds"] = c.blendSeconds;
+        }
     }, comp);
     return j;
 }
@@ -213,6 +236,29 @@ ComponentVariant componentFromJson(const nlohmann::json& j)
             c.halfExtentZ = j.value("halfExtentZ", 0.3f);
             c.mass        = j.value("mass", 1.f);
             c.isStatic    = j.value("isStatic", false);
+            return c;
+        }
+        case ComponentType::Light: {
+            LightComponent c;
+            c.lightType    = j.value("lightType", static_cast<int>(LightType::Point));
+            c.colorR       = j.value("colorR", 1.f);
+            c.colorG       = j.value("colorG", 1.f);
+            c.colorB       = j.value("colorB", 1.f);
+            c.intensity    = j.value("intensity", 1.f);
+            c.range        = j.value("range", 10.f);
+            c.innerConeDeg = j.value("innerConeDeg", 20.f);
+            c.outerConeDeg = j.value("outerConeDeg", 35.f);
+            c.castsShadows = j.value("castsShadows", false);
+            c.enabled      = j.value("enabled", true);
+            return c;
+        }
+        case ComponentType::Animation: {
+            AnimationComponent c;
+            c.clip         = j.value("clip", std::string{});
+            c.speed        = j.value("speed", 1.f);
+            c.loop         = j.value("loop", true);
+            c.playing      = j.value("playing", true);
+            c.blendSeconds = j.value("blendSeconds", 0.2f);
             return c;
         }
         default:
