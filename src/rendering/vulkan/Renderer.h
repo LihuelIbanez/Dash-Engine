@@ -20,6 +20,7 @@
 #include "rendering/vulkan/CameraController.h"
 #include "rendering/vulkan/PlayerController.h"
 #include "rendering/vulkan/RenderTypes.h"
+#include "rendering/vulkan/SceneRenderer.h"
 #include "game/physics/PhysicsWorld.h"
 #include "game/physics/TransformProxy.h"
 #include "events/EventDispatcher.h"
@@ -116,6 +117,7 @@ private:
     std::vector<RenderInstance> sceneInstances_;
     // Resolved mesh per scene instance, aligned by index with sceneInstances_.
     std::vector<const MeshBuffers*> sceneInstanceMeshes_;
+    std::vector<SceneLight> sceneLights_;
 
     struct MaterialGpu {
         MaterialAsset asset;

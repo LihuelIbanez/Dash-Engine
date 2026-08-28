@@ -452,6 +452,7 @@ bool Renderer::init(WindowContext& window)
         }
 
         sceneInstances_ = SceneLoader::loadInstances(loadedScene);
+        sceneLights_ = SceneLoader::buildLights(loadedScene.data);
         terrainInstances_ = SceneLoader::loadTerrainInstances(loadedScene, &terrainHeightMap_, &terrainMapWidth_, &terrainMapHeight_);
         std::fprintf(stderr, "[VSTEP] scene instances loaded: %zu\n", sceneInstances_.size());
         std::fprintf(stderr, "[VSTEP] terrain instances loaded: %zu\n", terrainInstances_.size());
@@ -1007,6 +1008,7 @@ void Renderer::recordDrawCommands(VkCommandBuffer cmd, uint32_t imageIndex)
     drawParams.billboardLayout   = billboardPipelineLayout_;
     drawParams.defaultSet        = descriptorSets_[imageIndex];
     drawParams.fallbackMesh      = &meshBuffers_;
+    drawParams.lights            = &sceneLights_;
     drawParams.viewProj          = camera_.computeViewProjection(aspect);
     drawParams.cameraRight       = camera_.rightVector();
     drawParams.cameraUp          = camera_.upVector();

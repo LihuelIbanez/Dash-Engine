@@ -32,6 +32,22 @@ struct RenderInstance {
     uint64_t entityId = 0;
 };
 
+// Upper bound baked into the shaders' light UBO.
+inline constexpr int kMaxSceneLights = 8;
+
+// One scene light already converted to render space. LightComponent lives in
+// scene space (x/y tile plane, z height); this is what the shaders consume.
+struct SceneLight {
+    int   type = 0;            // 0 = directional, 1 = point, 2 = spot
+    float posX = 0.f, posY = 0.f, posZ = 0.f;
+    float dirX = 0.f, dirY = -1.f, dirZ = 0.f;
+    float colorR = 1.f, colorG = 1.f, colorB = 1.f;
+    float intensity = 1.f;
+    float range = 10.f;
+    float innerCos = 0.94f;
+    float outerCos = 0.82f;
+};
+
 // A physics body requested by an entity's PhysicsComponent.
 struct PhysicsSpawn {
     uint64_t entityId = 0;

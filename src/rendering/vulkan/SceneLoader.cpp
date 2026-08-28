@@ -7,6 +7,9 @@
 
 #include <nlohmann/json.hpp>
 
+#include "rendering/IsoRenderer.h"
+#include "rendering/vulkan/SceneRenderer.h"
+
 namespace dash::vkexp {
 
 using json = nlohmann::json;
@@ -113,6 +116,50 @@ std::vector<RenderInstance> SceneLoader::buildInstances(const SceneData& data)
         }
 
         out.push_back(std::move(inst));
+    }
+    return out;
+}
+
+std::vector<SceneLight> SceneLoader::buildLights(const SceneData& data)
+{
+    std::vector<SceneLight> out;
+
+    for (const auto& e : data.entities) {
+        if (static_cast<int>(out.size()) >= kMaxSceneLights) break;
+
+        const LightComponent* lc = nullptr;
+        const TransformComponent* tf = nullptr;
+        for (const auto& c : e.components) {
+            if (const auto* l = std::get_if<LightComponent>(&c)) lc = l;
+            else if (const auto* t = std::get_if<TransformComponent>(&c)) tf = t;
+        }
+        if (!lc || !lc->enabled) continue;
+
+        const float sx = tf ? tf->x : e.x;
+        const float sy = tf ? tf->y : e.y;
+        const float sz = tf ? tf->z : 0.0f;
+
+        SceneLight sl;
+        sl.type = lc->lightType;
+        sl.posX = sx * TILE_SCALE;
+        sl.posY = sz;
+        sl.posZ = sy * TILE_SCALE;
+
+        // Yaw/pitch of the transform aim the light; default points straight down.
+        const float yaw = (tf ? tf->yawDeg : 0.0f) * 3.14159265f / 180.0f;
+        const float pitch = (tf ? tf->pitchDeg : -90.0f) * 3.14159265f / 180.0f;
+        sl.dirX = std::cos(pitch) * std::cos(yaw);
+        sl.dirY = std::sin(pitch);
+        sl.dirZ = std::cos(pitch) * std::sin(yaw);
+
+        sl.colorR = lc->colorR;
+        sl.colorG = lc->colorG;
+        sl.colorB = lc->colorB;
+        sl.intensity = lc->intensity;
+        sl.range = std::max(0.01f, lc->range * TILE_SCALE);
+        sl.innerCos = std::cos(lc->innerConeDeg * 3.14159265f / 180.0f);
+        sl.outerCos = std::cos(lc->outerConeDeg * 3.14159265f / 180.0f);
+        out.push_back(sl);
     }
     return out;
 }

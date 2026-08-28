@@ -2783,8 +2783,11 @@ void EditorApp::renderWorldToTexture()
         vkCmdBindIndexBuffer(cmd, vkCtx_.cubeMesh().indexBuffer(), 0, vkCtx_.cubeMesh().indexType());
 
         // Resolve parenting first: the renderer knows nothing about parentId.
+        const SceneData flatScene = dash::editor::flattenHierarchy(scene_);
         std::vector<dash::vkexp::RenderInstance> instances =
-            dash::vkexp::SceneLoader::buildInstances(dash::editor::flattenHierarchy(scene_));
+            dash::vkexp::SceneLoader::buildInstances(flatScene);
+        const std::vector<dash::vkexp::SceneLight> sceneLights =
+            dash::vkexp::SceneLoader::buildLights(flatScene);
 
         std::vector<dash::vkexp::InstanceResources> resources(instances.size());
         for (size_t i = 0; i < instances.size(); ++i) {
@@ -2815,6 +2818,7 @@ void EditorApp::renderWorldToTexture()
         params.billboardLayout   = vkCtx_.billboardPipelineLayout();
         params.defaultSet        = ds;
         params.fallbackMesh      = &vkCtx_.cubeMesh();
+        params.lights            = &sceneLights;
         std::memcpy(params.viewProj.m, viewProj, sizeof(params.viewProj.m));
 
         // Billboard basis, same derivation as CameraController.

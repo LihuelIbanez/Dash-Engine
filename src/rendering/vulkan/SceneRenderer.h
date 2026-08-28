@@ -36,6 +36,10 @@ struct InstanceResources {
     const MeshBuffers* mesh = nullptr;                // nullptr → fallbackMesh
     VkDescriptorSet    materialSet = VK_NULL_HANDLE;  // null    → defaultSet
     float              tint[3] = {1.0f, 1.0f, 1.0f};
+
+    // Skinning: non-null selects the skinned pipeline for this instance.
+    const float* boneMatrices = nullptr;   // boneCount * 16 floats, column-major
+    uint32_t     boneCount = 0;
 };
 
 struct SceneDrawParams {
@@ -43,8 +47,14 @@ struct SceneDrawParams {
     VkPipelineLayout   opaqueLayout      = VK_NULL_HANDLE;
     VkPipeline         billboardPipeline = VK_NULL_HANDLE;
     VkPipelineLayout   billboardLayout   = VK_NULL_HANDLE;
+    VkPipeline         skinnedPipeline   = VK_NULL_HANDLE;
+    VkPipelineLayout   skinnedLayout     = VK_NULL_HANDLE;
     VkDescriptorSet    defaultSet        = VK_NULL_HANDLE;
     const MeshBuffers* fallbackMesh      = nullptr;
+
+    // Scene lights, already in render space. Empty falls back to the single
+    // directional light carried in LightingParams.
+    const std::vector<SceneLight>* lights = nullptr;
 
     Mat4 viewProj{};
     Vec3 cameraRight{1.0f, 0.0f, 0.0f};

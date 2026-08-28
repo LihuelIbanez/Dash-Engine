@@ -31,6 +31,10 @@ public:
     // so its instances match the runtime's field for field.
     static std::vector<RenderInstance> buildInstances(const SceneData& data);
 
+    // LightComponent entities converted to render space, capped at
+    // kMaxSceneLights. Disabled lights are skipped.
+    static std::vector<SceneLight> buildLights(const SceneData& data);
+
     // Physics bodies declared by entities carrying a PhysicsComponent.
     static std::vector<PhysicsSpawn> loadPhysicsBodies(const LoadedScene& scene);
 
