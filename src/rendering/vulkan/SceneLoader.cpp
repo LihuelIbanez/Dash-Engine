@@ -70,11 +70,16 @@ bool SceneLoader::loadSpawnPoint(const LoadedScene& scene, dash::physics::Vec3& 
 
 std::vector<RenderInstance> SceneLoader::loadInstances(const LoadedScene& scene)
 {
-    std::vector<RenderInstance> out;
-    if (!scene.valid) return out;
+    if (!scene.valid) return {};
+    return buildInstances(scene.data);
+}
 
-    out.reserve(scene.data.entities.size());
-    for (const auto& e : scene.data.entities) {
+std::vector<RenderInstance> SceneLoader::buildInstances(const SceneData& data)
+{
+    std::vector<RenderInstance> out;
+
+    out.reserve(data.entities.size());
+    for (const auto& e : data.entities) {
         const bool isPlayer = (e.type == EntityData::Type::Player);
 
         RenderInstance inst;

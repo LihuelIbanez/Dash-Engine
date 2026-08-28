@@ -27,6 +27,10 @@ public:
 
     static std::vector<RenderInstance> loadInstances(const LoadedScene& scene);
 
+    // Same conversion, straight from SceneData. The editor viewport uses this
+    // so its instances match the runtime's field for field.
+    static std::vector<RenderInstance> buildInstances(const SceneData& data);
+
     // Physics bodies declared by entities carrying a PhysicsComponent.
     static std::vector<PhysicsSpawn> loadPhysicsBodies(const LoadedScene& scene);
 

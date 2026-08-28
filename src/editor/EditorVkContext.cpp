@@ -6,6 +6,7 @@
 #include <SDL2/SDL_vulkan.h>
 #include <cstdio>
 #include <cstring>
+#include <filesystem>
 #include <string>
 #include <vector>
 #include <array>
@@ -600,7 +601,62 @@ bool EditorVkContext::createPipelines()
         return false;
     }
 
+    // Billboards are optional: without them the viewport still draws meshes.
+    if (!PipelineBuilder::createBillboardPipeline(dev, ext, vpRenderPass_, sceneDescLayout_,
+            shaderDir + "/billboard.vert.spv", shaderDir + "/billboard.frag.spv",
+            billboardPipelineLayout_, billboardPipeline_, err)) {
+        std::fprintf(stderr, "[EditorVk] Billboard pipeline: %s (billboards disabled)\n", err.c_str());
+        billboardPipeline_ = VK_NULL_HANDLE;
+        billboardPipelineLayout_ = VK_NULL_HANDLE;
+    }
+
     return true;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Mesh resolution — mirrors Renderer::resolveMesh so the viewport and the
+// runtime pick the same model for a given RenderComponent::mesh.
+// ─────────────────────────────────────────────────────────────────────────────
+const dash::vkexp::MeshBuffers* EditorVkContext::resolveMesh(const std::string& meshId)
+{
+    if (meshId.empty() || meshId == "cube") return nullptr;
+
+    if (CachedModel* cached = meshCache_.get(meshId)) {
+        return cached->meshBuffers.indexCount() > 0 ? &cached->meshBuffers : nullptr;
+    }
+
+    namespace fs = std::filesystem;
+    std::error_code ec;
+    std::vector<fs::path> candidates;
+    const fs::path raw(meshId);
+    if (raw.is_absolute()) {
+        candidates.push_back(raw);
+    } else {
+#ifdef VULKAN_MODEL_DIR
+        candidates.push_back(fs::path(VULKAN_MODEL_DIR) / raw);
+#endif
+        candidates.push_back(raw);
+    }
+
+    fs::path resolved;
+    for (const auto& c : candidates) {
+        if (fs::exists(c, ec) && fs::is_regular_file(c, ec)) { resolved = c; break; }
+        ec.clear();
+    }
+
+    CachedModel model;
+    if (resolved.empty()) {
+        std::fprintf(stderr, "[EditorVk] Mesh not found: '%s' (using builtin cube)\n", meshId.c_str());
+    } else if (!model.meshBuffers.initFromGLTF(deviceCtx_.physicalDevice(),
+                                               deviceCtx_.device(),
+                                               resolved.string())) {
+        std::fprintf(stderr, "[EditorVk] Failed to load mesh: %s\n", resolved.string().c_str());
+        model.meshBuffers.shutdown(deviceCtx_.device());
+    }
+
+    // Failures are cached too so a missing model is not retried every frame.
+    CachedModel& stored = meshCache_.store(meshId, std::move(model));
+    return stored.meshBuffers.indexCount() > 0 ? &stored.meshBuffers : nullptr;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -830,6 +886,7 @@ void EditorVkContext::shutdown()
     wolfMeshBuf_.shutdown(dev);
     terrainMeshBuf_.shutdown(dev);
     waterMeshBuf_.shutdown(dev);
+    meshCache_.clear(dev);
 
     if (vpSampler_) { vkDestroySampler(dev, vpSampler_, nullptr); vpSampler_ = VK_NULL_HANDLE; }
     if (vpRenderPass_) { vkDestroyRenderPass(dev, vpRenderPass_, nullptr); vpRenderPass_ = VK_NULL_HANDLE; }

@@ -215,25 +215,48 @@ Esto confirma que **el modelo de datos y el undo/redo estan bien**: lo que falta
 
 ### B1-a — El viewport del editor ignora la rotacion y la escala del Transform
 
+- **Estado:** ✅ Resuelta (2026-08-28)
 - **Prioridad:** Media
 - **Sintoma:** editar `yawDeg`, `pitchDeg`, `rollDeg` o `scale` no cambia nada en el viewport.
-- **Causa:** `EditorApp::renderWorldToTexture()` arma su push constant con posicion y una escala fija (`useWolf ? 0.4f : 0.30f`); nunca lee los angulos del `TransformComponent`.
-- **Nota:** `dash::vkexp::Renderer` **si** los aplica, asi que la rotacion se ve al entrar en Play pero no al editar.
+- **Causa:** `EditorApp::renderWorldToTexture()` armaba su push constant con posicion y una escala fija (`useWolf ? 0.4f : 0.30f`); nunca leia los angulos del `TransformComponent`.
 - **Criterio de aceptacion:** mover el slider de `yawDeg` rota la entidad en el viewport en el mismo frame.
 
 ### B1-b — El viewport del editor ignora `RenderComponent::mesh`
 
+- **Estado:** ✅ Resuelta (2026-08-28)
 - **Prioridad:** Media
 - **Sintoma:** cambiar `mesh` no cambia el modelo dibujado.
-- **Causa:** la malla se decide con `bool useWolf = !isPlayer && wolfAvailable;`. Solo existen dos mallas cableadas (cube y wolf) y el campo `mesh` no participa.
+- **Causa:** la malla se decidia con `bool useWolf = !isPlayer && wolfAvailable;`. Solo existian dos mallas cableadas (cube y wolf) y el campo `mesh` no participaba.
 - **Criterio de aceptacion:** el viewport resuelve la malla por `RenderComponent::mesh` a traves del cache de assets, con fallback a cube.
 
 ### B1-c — El viewport del editor no implementa `renderMode` billboard
 
+- **Estado:** ✅ Resuelta (2026-08-28)
 - **Prioridad:** Baja
-- **Sintoma:** poner `renderMode = BillboardSprite` sigue dibujando la malla 3D.
-- **Causa:** `renderWorldToTexture()` solo tiene el pass de `basicPipeline()`; no hay pipeline de billboard en el contexto del editor.
+- **Sintoma:** poner `renderMode = BillboardSprite` seguia dibujando la malla 3D.
+- **Causa:** `renderWorldToTexture()` solo tenia el pass de `basicPipeline()`; no habia pipeline de billboard en el contexto del editor.
 - **Criterio de aceptacion:** alternar `renderMode` cambia el dibujado en el viewport, como ya ocurre en `Renderer::recordDrawCommands()`.
+
+### Resolucion comun: unificacion del dibujado (2026-08-28)
+
+Los tres tenian la misma causa raiz y se cerraron con el mismo cambio.
+
+**Diagnostico.** El editor y el runtime tenian **dos implementaciones** del dibujado de entidades. `Renderer::recordDrawCommands()` conocia culling, materiales, mallas por `RenderComponent` y billboards; `EditorApp::renderWorldToTexture()` tenia una version pobre que de los componentes solo leia `TransformComponent::z` y `RenderComponent::visible`.
+
+**Que NO se hizo.** No se fusionaron los devices Vulkan. El editor usa SDL2 y renderiza a una textura offscreen; el runtime usa GLFW y presenta a un swapchain. Son ventanas distintas y esta bien que cada uno tenga su `VkInstance`/`VkDevice`.
+
+**Que se hizo.** Se extrajo lo que si estaba duplicado — el dibujado — a `SceneRenderer::drawSceneInstances()`. Recibe las instancias mas un vector de `InstanceResources` (malla, descriptor set y tinte que resuelve cada llamador desde su propio cache), de modo que la logica de culling, binding y push constants existe **una sola vez**.
+
+- `SceneRenderer.{h,cpp}`: pase opaco con frustum culling + pase de billboards.
+- `SceneLoader::buildInstances(const SceneData&)`: el editor convierte entidades a `RenderInstance` con **el mismo codigo** que el runtime, asi que yaw/pitch/roll/scale/mesh/material/visible/renderMode llegan por construccion.
+- `EditorVkContext`: pipeline de billboard + `resolveMesh()` con `AssetCache3D`, espejo del `Renderer::resolveMesh()`.
+
+**Verificacion.**
+- Equivalencia del runtime: los contadores de culling dan **identicos** a la baseline de A2 en las 4 densidades (171/230, 455/546, 1087/1414, 2195/2806). El refactor no cambio comportamiento.
+- Arranque del editor: los 4 pipelines se crean, **incluido `[Billboard] Graphics pipeline created successfully`**, sin errores de validacion.
+- `ctest` 32/32.
+
+**Cambio de apariencia esperado.** El viewport ahora usa las alturas base y escalas de `SceneLoader` (jugador 1.0/0.26-0.52, enemigo 0.6/0.22-0.40) en vez de los valores fijos que tenia (0.52 y 0.30/0.4). Las entidades se veran algo distintas que antes: eso **es** la correccion, porque ahora coinciden con lo que se ve al entrar en Play.
 
 ---
 
@@ -407,17 +430,11 @@ Se verifico ademas que el argv real del pipeline (`cmake --build <dir> --target 
 
 ## Resumen
 
-Las 8 tareas originales quedaron cerradas. La verificacion de B1 abrio 3 defectos nuevos, que son lo unico pendiente.
+Las 8 tareas originales quedaron cerradas. La verificacion de B1 abrio 3 defectos, que tambien se cerraron al unificar el dibujado de escena.
 
 ### Pendiente
 
-| ID | Tarea | Prioridad |
-|---|---|---|
-| B1-a | El viewport del editor ignora rotacion/escala del Transform | Media |
-| B1-b | El viewport del editor ignora `RenderComponent::mesh` | Media |
-| B1-c | El viewport del editor no implementa `renderMode` billboard | Baja |
-
-Los tres comparten causa: `EditorApp::renderWorldToTexture()` es un camino de render propio que no se actualizo con el Sprint 15. Conviene encararlos juntos.
+Nada. Ver `25_EDITOR_AAA.md` para el trabajo siguiente.
 
 ### Cerradas
 
@@ -431,6 +448,7 @@ Los tres comparten causa: `EditorApp::renderWorldToTexture()` es un camino de re
 | C1 | Artefactos mutables en `.library/` | ✅ Resuelta |
 | C2 | Clarificar `library/` vs `.library/` | ✅ Resuelta |
 | C3 | `popen()` del pipeline de build | ✅ Resuelta |
+| B1-a/b/c | Defectos del viewport del editor | ✅ Resueltos (unificacion del dibujado) |
 
 ### Bugs preexistentes corregidos de paso
 

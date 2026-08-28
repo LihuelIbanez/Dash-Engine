@@ -26,6 +26,8 @@
 #include "project/GameBuildPipeline.h"
 #include "project/ProcessRunner.h"
 #include "project/ProjectDataMigrator.h"
+#include "rendering/vulkan/SceneLoader.h"
+#include "rendering/vulkan/SceneRenderer.h"
 #include "scene/SceneRepositorySqlite.h"
 
 #include <cstdio>
@@ -2726,60 +2728,54 @@ void EditorApp::renderWorldToTexture()
         vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
                                 vkCtx_.basicPipelineLayout(), 0, 1, &ds, 0, nullptr);
 
-        bool wolfAvailable = vkCtx_.wolfMesh().indexCount() > 0;
-        // Track which mesh is currently bound to minimize rebinds
-        enum class BoundMesh { None, Cube, Wolf } currentMesh = BoundMesh::None;
+        VkBuffer vb[] = { vkCtx_.cubeMesh().vertexBuffer() };
+        VkDeviceSize vbOffsets[] = { 0 };
+        vkCmdBindVertexBuffers(cmd, 0, 1, vb, vbOffsets);
+        vkCmdBindIndexBuffer(cmd, vkCtx_.cubeMesh().indexBuffer(), 0, vkCtx_.cubeMesh().indexType());
 
-        for (const auto& e : scene_.entities) {
-            bool visible = true;
-            float wz = 0.0f;
-            for (const auto& comp : e.components) {
-                if (auto* tf = std::get_if<TransformComponent>(&comp))
-                    wz = tf->z;
-                if (auto* rc = std::get_if<RenderComponent>(&comp))
-                    visible = rc->visible;
-            }
-            if (!visible) continue;
+        // Same conversion the runtime uses, so the viewport honours yaw/scale,
+        // RenderComponent::mesh, visible and renderMode instead of guessing.
+        std::vector<dash::vkexp::RenderInstance> instances =
+            dash::vkexp::SceneLoader::buildInstances(scene_);
 
-            float entityY = world_.terrain().sampleHeight(e.x, e.y) + 0.52f + wz;
-
-            bool isPlayer = (e.type == EntityData::Type::Player);
-            bool useWolf = !isPlayer && wolfAvailable;
-
-            // Bind the correct mesh if needed
-            if (useWolf && currentMesh != BoundMesh::Wolf) {
-                VkBuffer vb[] = { vkCtx_.wolfMesh().vertexBuffer() };
-                VkDeviceSize offsets[] = { 0 };
-                vkCmdBindVertexBuffers(cmd, 0, 1, vb, offsets);
-                vkCmdBindIndexBuffer(cmd, vkCtx_.wolfMesh().indexBuffer(), 0, VK_INDEX_TYPE_UINT32);
-                currentMesh = BoundMesh::Wolf;
-            } else if (!useWolf && currentMesh != BoundMesh::Cube) {
-                VkBuffer vb[] = { vkCtx_.cubeMesh().vertexBuffer() };
-                VkDeviceSize offsets[] = { 0 };
-                vkCmdBindVertexBuffers(cmd, 0, 1, vb, offsets);
-                vkCmdBindIndexBuffer(cmd, vkCtx_.cubeMesh().indexBuffer(), 0, VK_INDEX_TYPE_UINT16);
-                currentMesh = BoundMesh::Cube;
-            }
-
-            float cr = isPlayer ? 0.27f : 0.86f;
-            float cg = isPlayer ? 0.57f : 0.31f;
-            float cb = isPlayer ? 1.00f : 0.31f;
-
-            // Wolf model needs smaller scale; cube keeps its scale
-            float scl = useWolf ? 0.4f : 0.30f;
-
-            float pc[16] = {
-                e.x * TILE_SCALE, entityY, e.y * TILE_SCALE, 0.0f,
-                scl, scl, scl, 0.0f,
-                cr, cg, cb, 1.0f,
-                viewport3D_.lightDirX, viewport3D_.lightDirY, viewport3D_.lightDirZ, viewport3D_.lightIntensity
-            };
-            vkCmdPushConstants(cmd, vkCtx_.basicPipelineLayout(),
-                               VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), pc);
-
-            uint32_t idxCount = useWolf ? vkCtx_.wolfMesh().indexCount() : vkCtx_.cubeMesh().indexCount();
-            vkCmdDrawIndexed(cmd, idxCount, 1, 0, 0, 0);
+        std::vector<dash::vkexp::InstanceResources> resources(instances.size());
+        for (size_t i = 0; i < instances.size(); ++i) {
+            auto& inst = instances[i];
+            inst.position.y += world_.terrain().sampleHeight(inst.position.x, inst.position.z);
+            resources[i].mesh = vkCtx_.resolveMesh(inst.meshId);
+            // Enemies fall back to the wolf model, as before, when no mesh is set.
+            if (!resources[i].mesh && !inst.isPlayer && vkCtx_.wolfMesh().indexCount() > 0)
+                resources[i].mesh = &vkCtx_.wolfMesh();
         }
+
+        dash::vkexp::LightingParams lighting;
+        lighting.dirX = viewport3D_.lightDirX;
+        lighting.dirY = viewport3D_.lightDirY;
+        lighting.dirZ = viewport3D_.lightDirZ;
+        lighting.intensity = viewport3D_.lightIntensity;
+        lighting.colorR = viewport3D_.lightColorR;
+        lighting.colorG = viewport3D_.lightColorG;
+        lighting.colorB = viewport3D_.lightColorB;
+        lighting.ambient = viewport3D_.ambientStrength;
+        lighting.specStr = viewport3D_.specularStrength;
+        lighting.specShin = viewport3D_.specularShininess;
+
+        dash::vkexp::SceneDrawParams params;
+        params.opaquePipeline    = vkCtx_.basicPipeline();
+        params.opaqueLayout      = vkCtx_.basicPipelineLayout();
+        params.billboardPipeline = vkCtx_.billboardPipeline();
+        params.billboardLayout   = vkCtx_.billboardPipelineLayout();
+        params.defaultSet        = ds;
+        params.fallbackMesh      = &vkCtx_.cubeMesh();
+        std::memcpy(params.viewProj.m, viewProj, sizeof(params.viewProj.m));
+
+        // Billboard basis, same derivation as CameraController.
+        const dash::vkexp::Vec3 forward = dash::vkexp::normalize(
+            {camX_ * TILE_SCALE - eyeX, viewport3D_.cameraHeight - eyeY, camY_ * TILE_SCALE - eyeZ});
+        params.cameraRight = dash::vkexp::normalize(dash::vkexp::cross(forward, {0.0f, 1.0f, 0.0f}));
+        params.cameraUp    = dash::vkexp::cross(params.cameraRight, forward);
+
+        dash::vkexp::drawSceneInstances(cmd, instances, resources, lighting, params);
     }
 
     vkCtx_.endViewportRender();

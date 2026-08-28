@@ -3,12 +3,14 @@
 #include <vulkan/vulkan.h>
 #include <SDL2/SDL.h>
 #include "imgui.h"
+#include "assets/cache/AssetCache3D.h"
 #include "rendering/vulkan/DeviceContext.h"
 #include "rendering/vulkan/SwapchainContext.h"
 #include "rendering/vulkan/FrameGraphLite.h"
 #include "rendering/mesh/MeshBuffers.h"
 #include "world/TerrainMesh.h"
 #include <cstdint>
+#include <string>
 
 // ─────────────────────────────────────────────────────────────────────────────
 // EditorVkContext – Vulkan lifecycle + offscreen viewport for the editor
@@ -41,6 +43,8 @@ public:
     VkPipelineLayout    waterPipelineLayout()   const { return waterPipelineLayout_; }
     VkPipeline          basicPipeline()         const { return basicPipeline_; }
     VkPipelineLayout    basicPipelineLayout()   const { return basicPipelineLayout_; }
+    VkPipeline          billboardPipeline()       const { return billboardPipeline_; }
+    VkPipelineLayout    billboardPipelineLayout() const { return billboardPipelineLayout_; }
     VkDescriptorSet     sceneDescriptorSet()    const { return sceneDescSet_; }
 
     // ── Mesh buffer access ──────────────────────────────────────────────────
@@ -48,6 +52,10 @@ public:
     const dash::vkexp::MeshBuffers& waterMesh()    const { return waterMeshBuf_; }
     const dash::vkexp::MeshBuffers& cubeMesh()     const { return cubeMeshBuf_; }
     const dash::vkexp::MeshBuffers& wolfMesh()     const { return wolfMeshBuf_; }
+
+    // Resolves RenderComponent::mesh to a loaded mesh, caching hits and misses.
+    // Returns nullptr for the builtin cube or when the model cannot be loaded.
+    const dash::vkexp::MeshBuffers* resolveMesh(const std::string& meshId);
 
     VkRenderPass viewportRenderPass() const { return vpRenderPass_; }
 
@@ -98,6 +106,10 @@ private:
     VkPipeline       waterPipeline_         = VK_NULL_HANDLE;
     VkPipelineLayout basicPipelineLayout_   = VK_NULL_HANDLE;
     VkPipeline       basicPipeline_         = VK_NULL_HANDLE;
+    VkPipelineLayout billboardPipelineLayout_ = VK_NULL_HANDLE;
+    VkPipeline       billboardPipeline_       = VK_NULL_HANDLE;
+
+    dash::vkexp::AssetCache3D meshCache_;
 
     // Terrain texture array
     VkImage        terrainTexArrayImage_  = VK_NULL_HANDLE;
