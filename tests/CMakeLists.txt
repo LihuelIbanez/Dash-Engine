@@ -959,3 +959,10 @@ target_include_directories(test_animation_state_machine PRIVATE
 target_link_libraries(test_animation_state_machine PRIVATE nlohmann_json::nlohmann_json)
 target_compile_options(test_animation_state_machine PRIVATE ${DASH_COMPILE_FLAGS})
 add_test(NAME test_animation_state_machine COMMAND test_animation_state_machine)
+
+# ── Light-space matrix for directional shadows ───────────────────────────────
+add_executable(test_shadow_math test_shadow_math.cpp)
+target_include_directories(test_shadow_math PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_shadow_math PRIVATE Vulkan::Vulkan)
+target_compile_options(test_shadow_math PRIVATE ${DASH_COMPILE_FLAGS})
+add_test(NAME test_shadow_math COMMAND test_shadow_math)
