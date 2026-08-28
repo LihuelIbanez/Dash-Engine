@@ -112,6 +112,9 @@ std::vector<RenderInstance> SceneLoader::buildInstances(const SceneData& data)
                 inst.renderMode = rc->renderMode;
                 if (!rc->mesh.empty()) inst.meshId = rc->mesh;
                 if (!rc->material.empty()) inst.materialId = rc->material;
+            } else if (const auto* ac = std::get_if<AnimationComponent>(&c)) {
+                inst.hasAnimation = true;
+                inst.animation = *ac;
             }
         }
 

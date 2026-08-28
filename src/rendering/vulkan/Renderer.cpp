@@ -578,6 +578,7 @@ bool Renderer::init(WindowContext& window)
 
     resolveSceneMeshes();
     resolveSceneMaterials();
+    buildSceneAnimators();
     // Generate a small checkerboard floor when no terrain was loaded
     if (terrainInstances_.empty()) {
         for (int z = -3; z <= 3; ++z) {
@@ -649,15 +650,11 @@ bool Renderer::updateSceneLightsUbo(uint32_t imageIndex)
     return true;
 }
 
-// Resolves a mesh id to GPU buffers, loading and caching it on first use.
-// Returns nullptr to signal "use the builtin cube".
-const MeshBuffers* Renderer::resolveMesh(const std::string& meshId)
+// Locates a mesh id on disk using the model dir, the scene dir and the raw path
+// in that order. Returns an empty string when nothing matches.
+std::string Renderer::resolveModelPath(const std::string& meshId) const
 {
-    if (meshId.empty() || meshId == "cube") return nullptr;
-
-    if (CachedModel* cached = assetCache_.get(meshId)) {
-        return cached->meshBuffers.indexCount() > 0 ? &cached->meshBuffers : nullptr;
-    }
+    if (meshId.empty() || meshId == "cube") return {};
 
     namespace fs = std::filesystem;
     std::error_code ec;
@@ -674,22 +671,42 @@ const MeshBuffers* Renderer::resolveMesh(const std::string& meshId)
         candidates.push_back(raw);
     }
 
-    fs::path resolved;
     for (const auto& c : candidates) {
-        if (fs::exists(c, ec) && fs::is_regular_file(c, ec)) { resolved = c; break; }
+        if (fs::exists(c, ec) && fs::is_regular_file(c, ec)) return c.string();
         ec.clear();
     }
+    return {};
+}
+
+// Resolves a mesh id to GPU buffers, loading and caching it on first use.
+// Returns nullptr to signal "use the builtin cube".
+const MeshBuffers* Renderer::resolveMesh(const std::string& meshId)
+{
+    if (meshId.empty() || meshId == "cube") return nullptr;
+
+    if (CachedModel* cached = assetCache_.get(meshId)) {
+        return cached->meshBuffers.indexCount() > 0 ? &cached->meshBuffers : nullptr;
+    }
+
+    const std::string resolved = resolveModelPath(meshId);
 
     CachedModel model;
     if (resolved.empty()) {
         std::fprintf(stderr, "[AssetCache3D] Mesh not found: '%s' (using builtin cube)\n",
                      meshId.c_str());
-    } else if (!model.meshBuffers.initFromGLTF(deviceContext_.physicalDevice(),
-                                               deviceContext_.device(),
-                                               resolved.string())) {
-        std::fprintf(stderr, "[AssetCache3D] Failed to load mesh: %s (using builtin cube)\n",
-                     resolved.string().c_str());
-        model.meshBuffers.shutdown(deviceContext_.device());
+    } else {
+        // .dashmesh carries the skinning stream; anything else goes through Assimp.
+        const bool isDashMesh = std::filesystem::path(resolved).extension() == ".dashmesh";
+        const bool loaded = isDashMesh
+            ? model.meshBuffers.initFromDashMesh(deviceContext_.physicalDevice(),
+                                                 deviceContext_.device(), resolved)
+            : model.meshBuffers.initFromGLTF(deviceContext_.physicalDevice(),
+                                             deviceContext_.device(), resolved);
+        if (!loaded) {
+            std::fprintf(stderr, "[AssetCache3D] Failed to load mesh: %s (using builtin cube)\n",
+                         resolved.c_str());
+            model.meshBuffers.shutdown(deviceContext_.device());
+        }
     }
 
     // Cache failures too, so a broken reference is not retried every load.
@@ -712,6 +729,19 @@ void Renderer::resolveSceneMeshes()
     sceneInstanceMeshes_.reserve(sceneInstances_.size());
     for (const auto& inst : sceneInstances_) {
         sceneInstanceMeshes_.push_back(resolveMesh(inst.meshId));
+    }
+}
+
+void Renderer::buildSceneAnimators()
+{
+    animators_ = buildAnimators(sceneInstances_, animationSets_,
+                                [this](const std::string& meshId) {
+                                    return resolveModelPath(meshId);
+                                });
+
+    if (!animators_.empty()) {
+        std::printf("[Anim] %zu animated instance(s) over %zu model(s).\n",
+                    animators_.size(), animationSets_.size());
     }
 }
 
@@ -837,7 +867,9 @@ void Renderer::updateSkinnedInstances(float dt, std::vector<InstanceResources>& 
     bonePalette_.reset();
 
     for (auto& [index, player] : animators_) {
-        if (index >= res.size()) continue;
+        if (index >= res.size() || index >= sceneInstances_.size()) continue;
+        // Re-reading the component keeps Inspector edits (clip, pause, speed) live.
+        player.syncWithComponent(sceneInstances_[index].animation);
         player.update(dt);
 
         const std::vector<dash::anim::Mat4>& mats = player.boneMatrices();
@@ -1244,6 +1276,8 @@ void Renderer::recordDrawCommands(VkCommandBuffer cmd, uint32_t imageIndex)
         for (int c = 0; c < 3; ++c) instanceRes[i].tint[c] = mat.asset.baseColor[c];
     }
 
+    updateSkinnedInstances(frameDeltaSeconds_, instanceRes);
+
     const SceneDrawStats stats = drawSceneInstances(
         cmd, sceneInstances_, instanceRes, editorBridge_.lighting(), drawParams);
 
@@ -1283,6 +1317,7 @@ bool Renderer::runSmoke(WindowContext& window, uint32_t targetFrames)
         // Play-mode transport: 0 while paused, one fixed frame per step request.
         const float dt = infiniteRun ? editorBridge_.applyPlaybackScale(rawDt) : rawDt;
         elapsedSeconds_ += dt;
+        frameDeltaSeconds_ = dt;
 
         if (!(infiniteRun && editorBridge_.hasExternalSelection())) {
             fixedAccumulator_ += dt;

@@ -10,6 +10,7 @@
 #include "rendering/mesh/MeshBuffers.h"
 #include "rendering/textures/TextureLoader.h"
 #include "rendering/animation/AnimationPlayer.h"
+#include "rendering/animation/AnimationWiring.h"
 #include "rendering/animation/BonePalette.h"
 #include "assets/cache/AssetCache3D.h"
 #include "assets/AssetDatabase.h"
@@ -60,6 +61,12 @@ private:
     // caching referenced models. Falls back to the builtin cube when missing.
     void resolveSceneMeshes();
     const MeshBuffers* resolveMesh(const std::string& meshId);
+    // Mesh id -> file on disk, empty when nothing matches the search paths.
+    std::string resolveModelPath(const std::string& meshId) const;
+
+    // Creates one AnimationPlayer per instance with an AnimationComponent.
+    // Must run after resolveSceneMeshes(), which reorders sceneInstances_.
+    void buildSceneAnimators();
 
     // Resolves RenderComponent::material, allocating one descriptor set per
     // material per swapchain image so textures can be bound per draw.
@@ -131,6 +138,8 @@ private:
     dash::anim::BonePalette bonePalette_;
     // One player per scene instance carrying an AnimationComponent.
     std::unordered_map<size_t, dash::anim::AnimationPlayer> animators_;
+    // Skeleton + clips shared by every instance of the same model.
+    dash::anim::AnimationSetCache animationSets_;
 
     bool initialized_ = false;
 
@@ -187,6 +196,8 @@ private:
     EditorBridge editorBridge_;
 
     float elapsedSeconds_ = 0.0f;
+    // Last frame delta, applied to the animators while recording draw commands.
+    float frameDeltaSeconds_ = 0.0f;
     std::string scenePath_;
     InputBindings3D inputBindings_;
 };

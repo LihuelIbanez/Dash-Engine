@@ -4025,6 +4025,10 @@ void EditorApp::buildAndRun()
         }
 #endif
         addLog("Game launched: " + executablePath.string());
+
+        // The launched runtime is a play session: without this the transport
+        // controls stay hidden while the process that consumes them is alive.
+        editorMode_ = EditorMode::Play;
     } else {
         addLog("[VFAIL] Build FAILED (exit " + std::to_string(ret) + ").");
     }

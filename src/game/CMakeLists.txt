@@ -15,6 +15,9 @@ add_library(game_runtime STATIC
     ${GAME_SAVE_SOURCES}
     ${GAME_RENDERING_SOURCES}
     ${GAME_AUDIO_SOURCES}
+    # Audio clips may reference assets by GUID, resolved through the asset database.
+    ${CMAKE_SOURCE_DIR}/src/assets/AssetDatabase.cpp
+    ${CMAKE_SOURCE_DIR}/src/assets/AssetRepositorySqlite.cpp
 )
 
 target_include_directories(game_runtime PUBLIC
@@ -32,6 +35,7 @@ target_include_directories(game_runtime PUBLIC
     ${CMAKE_SOURCE_DIR}/src/game/nav
     ${CMAKE_SOURCE_DIR}/src/game/rendering
     ${CMAKE_SOURCE_DIR}/src/game/audio
+    ${CMAKE_SOURCE_DIR}/src/assets
     ${SDL2_INCLUDE_DIRS}
 )
 

@@ -3,6 +3,7 @@
 #include "AISystem.h"
 #include "CombatSystem.h"
 #include "SpawnRewardSystem.h"
+#include "AudioSystem.h"
 #include "GameplayDatabase.h"
 #include "SaveGame.h"
 #include "Profiler.h"
@@ -87,6 +88,7 @@ void Game::initSystems()
     ctx_.enemies = &enemies_;
     ctx_.score   = &score_;
     ctx_.events  = &dispatcher_;
+    ctx_.audioEmitters = &audioEmitters_;
 
     player_.setWorld(&world_);
 
@@ -94,8 +96,34 @@ void Game::initSystems()
     scheduler_.addSystem(std::make_unique<AISystem>());
     scheduler_.addSystem(std::make_unique<CombatSystem>());
     scheduler_.addSystem(std::make_unique<SpawnRewardSystem>(&gameDb_));
+    // Last, so emitters follow the positions the other systems just produced.
+    scheduler_.addSystem(std::make_unique<AudioSystem>(&audioEngine_, audioAssetDb(),
+                                                       AppPaths::getAssetsDir()));
 
     audioBindings_.bindDefaults(dispatcher_, audioEngine_);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// audioAssetDb — asset database behind GUID clip references. Loaded lazily and
+// at most once; a missing database only means GUID clips will not resolve.
+// ─────────────────────────────────────────────────────────────────────────────
+const AssetDatabase* Game::audioAssetDb()
+{
+    const bool anyGuid = std::any_of(audioEmitters_.begin(), audioEmitters_.end(),
+        [](const AudioEmitter& e) { return dash::audio::looksLikeGuid(e.component.clip); });
+    if (!anyGuid) return nullptr;
+
+    if (!assetDbAttempted_) {
+        assetDbAttempted_ = true;
+        const std::filesystem::path dbPath =
+            std::filesystem::path(AppPaths::getAssetsDir()) / "asset_db.json";
+        assetDbLoaded_ = assetDb_.load(dbPath.string());
+        if (!assetDbLoaded_) {
+            std::fprintf(stderr, "[Audio] Asset database unavailable at '%s'; "
+                                 "GUID clips will not resolve.\n", dbPath.string().c_str());
+        }
+    }
+    return assetDbLoaded_ ? &assetDb_ : nullptr;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -200,6 +228,7 @@ bool Game::loadSceneFile()
     playerSpriteVisible_ = true;
     enemySprites_.clear();
     enemySpriteVisible_.clear();
+    audioEmitters_.clear();
 
     if (j.contains("entities") && j["entities"].is_array()) {
         for (auto& ej : j["entities"]) {
@@ -208,6 +237,7 @@ bool Game::loadSceneFile()
             float ex = ej.value("x", 0.f);
             float ey = ej.value("y", 0.f);
             RenderRuntimeInfo rr = extractRenderInfo(ej);
+            std::optional<AudioEmitter> emitter = audioEmitterFromEntityJson(ej);
 
             if (type == "Player") {
                 // Reposition player
@@ -235,6 +265,11 @@ bool Game::loadSceneFile()
                     player_.mana              = pcd->maxMana;
                     player_.attackCooldownMax = pcd->attackCooldown;
                 }
+
+                if (emitter) {
+                    emitter->attachment = AudioEmitter::Attachment::Player;
+                    audioEmitters_.push_back(*emitter);
+                }
             } else {
                 // Enemy: look up in GameplayDatabase by lowercase name
                 std::string nameLower = name;
@@ -250,6 +285,12 @@ bool Game::loadSceneFile()
                 }
                 enemySprites_.push_back(rr.sprite);
                 enemySpriteVisible_.push_back(rr.visible);
+
+                if (emitter) {
+                    emitter->attachment = AudioEmitter::Attachment::Enemy;
+                    emitter->enemyIndex = static_cast<int>(enemies_.size()) - 1;
+                    audioEmitters_.push_back(*emitter);
+                }
             }
         }
     }

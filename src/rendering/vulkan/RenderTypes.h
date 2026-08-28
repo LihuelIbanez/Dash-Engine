@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <string>
 
+#include "core/components/Components.h"
 #include "game/physics/PhysicsWorld.h"
 
 namespace dash::vkexp {
@@ -28,6 +29,11 @@ struct RenderInstance {
     int renderMode = static_cast<int>(InstanceRenderMode::Mesh3D);
     int layer = 0;
     bool visible = true;
+
+    // Skeletal playback requested by the entity; `animation` is meaningless
+    // unless hasAnimation is set.
+    bool hasAnimation = false;
+    AnimationComponent animation{};
 
     uint64_t entityId = 0;
 };

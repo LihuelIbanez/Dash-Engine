@@ -15,8 +15,10 @@
 #include "EventDispatcher.h"
 #include "rendering/SpriteRenderer.h"
 #include "AudioEngine.h"
+#include "AudioEmitter.h"
 #include "AudioEventBindings.h"
 #include "AudioSettingsRepository.h"
+#include "AssetDatabase.h"
 #include "db/SqliteDb.h"
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -74,6 +76,13 @@ private:
     void initSystems();
     void spawnEnemiesFromData();
     bool loadSceneFile();           // apply scene JSON if sceneFile_ is set
+
+    // ── Scene audio emitters ─────────────────────────────────────────────────
+    std::vector<AudioEmitter> audioEmitters_;
+    AssetDatabase             assetDb_;
+    bool                      assetDbAttempted_ = false;
+    bool                      assetDbLoaded_    = false;
+    const AssetDatabase*      audioAssetDb();  // lazily loaded, only when a clip is a GUID
 
     std::string sceneFile_;         // optional: editor scene to play
 

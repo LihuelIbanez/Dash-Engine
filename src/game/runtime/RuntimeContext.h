@@ -6,6 +6,7 @@
 #include <memory>
 
 class EventDispatcher;   // forward declaration (src/core/events/EventDispatcher.h)
+struct AudioEmitter;     // forward declaration (src/game/audio/AudioEmitter.h)
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RuntimeContext – shared state passed to every system each frame
@@ -21,4 +22,6 @@ struct RuntimeContext {
     int*   score = nullptr;       // points counter
 
     EventDispatcher* events = nullptr;   // event bus (owned by Game)
+
+    std::vector<AudioEmitter>* audioEmitters = nullptr;   // scene sound sources (owned by Game)
 };

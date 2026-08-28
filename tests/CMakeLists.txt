@@ -867,3 +867,78 @@ target_link_libraries(test_runtime_inspector PRIVATE
 )
 target_compile_options(test_runtime_inspector PRIVATE ${DASH_COMPILE_FLAGS})
 add_test(NAME test_runtime_inspector COMMAND test_runtime_inspector)
+
+# ── AnimationComponent -> AnimationPlayer wiring ────────────────────────────
+# buildAnimators() and AnimationSetCache are header-only and Vulkan-free, so
+# this runs headless: no device, no swapchain, just RenderInstance + files.
+add_executable(test_animation_wiring
+    test_animation_wiring.cpp
+    ${CMAKE_SOURCE_DIR}/src/rendering/animation/AnimationPlayer.cpp
+)
+target_include_directories(test_animation_wiring PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/src/core
+    ${CMAKE_SOURCE_DIR}/src/core/components
+    ${SDL2_INCLUDE_DIRS}
+)
+target_compile_options(test_animation_wiring PRIVATE ${DASH_COMPILE_FLAGS})
+add_test(NAME test_animation_wiring COMMAND test_animation_wiring)
+
+# ── Offline asset baker (not a test) ────────────────────────────────────────
+# Writes the .dashmesh/.dashskel/.dashanim triplet the runtime loads. Kept out
+# of the default build; run it by hand when a source model changes.
+if(TARGET assimp::assimp)
+    add_executable(dash_bake_model EXCLUDE_FROM_ALL
+        bake_model_main.cpp
+        ${CMAKE_SOURCE_DIR}/src/assets/importers/ModelImporter.cpp
+    )
+    target_include_directories(dash_bake_model PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+        ${CMAKE_SOURCE_DIR}/src/core
+        ${CMAKE_SOURCE_DIR}/src/assets
+        ${CMAKE_SOURCE_DIR}/src/assets/importers
+        ${CMAKE_SOURCE_DIR}/src/rendering
+    )
+    target_link_libraries(dash_bake_model PRIVATE
+        game_core assimp::assimp nlohmann_json::nlohmann_json
+    )
+    target_compile_options(dash_bake_model PRIVATE ${DASH_COMPILE_FLAGS})
+endif()
+
+# ── AudioSystem: resolucion GUID/path, playOnStart y seguimiento del emisor ──
+# Corre headless: AudioEngine::init() nunca se llama, asi que el motor es no-op.
+add_executable(test_audio_system
+    test_audio_system.cpp
+    ${CMAKE_SOURCE_DIR}/src/game/systems/AudioSystem.cpp
+    ${CMAKE_SOURCE_DIR}/src/game/audio/AudioEngine.cpp
+    ${CMAKE_SOURCE_DIR}/src/assets/AssetDatabase.cpp
+    ${CMAKE_SOURCE_DIR}/src/assets/AssetRepositorySqlite.cpp
+)
+target_include_directories(test_audio_system PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/src/core
+    ${CMAKE_SOURCE_DIR}/src/core/components
+    ${CMAKE_SOURCE_DIR}/src/entities
+    ${CMAKE_SOURCE_DIR}/src/world
+    ${CMAKE_SOURCE_DIR}/src/rendering
+    ${CMAKE_SOURCE_DIR}/src/assets
+    ${CMAKE_SOURCE_DIR}/src/game/audio
+    ${CMAKE_SOURCE_DIR}/src/game/runtime
+    ${CMAKE_SOURCE_DIR}/src/game/systems
+    ${SDL2_INCLUDE_DIRS}
+)
+target_link_libraries(test_audio_system PRIVATE
+    game_core
+    nlohmann_json::nlohmann_json
+    SQLite3::SQLite3
+    ${SDL2_LIBRARIES}
+)
+if(APPLE)
+    target_link_libraries(test_audio_system PRIVATE
+        "-framework AudioToolbox"
+        "-framework CoreFoundation"
+        "-framework CoreAudio"
+    )
+endif()
+target_compile_options(test_audio_system PRIVATE ${DASH_COMPILE_FLAGS})
+add_test(NAME test_audio_system COMMAND test_audio_system)

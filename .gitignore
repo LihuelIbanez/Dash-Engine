@@ -28,3 +28,10 @@ library/*
 # macOS
 .DS_Store
 
+
+# Baked model artifacts: regenerate with the dash_bake_model tool.
+#   cmake --build build --target dash_bake_model
+#   ./build/tests/dash_bake_model assets/models/gltf/<model>.gltf
+*.dashmesh
+*.dashskel
+*.dashanim
