@@ -21,6 +21,7 @@
 #include "game/physics/DebugPhysicsDraw.h"
 #include "rendering/Frustum.h"
 #include "rendering/vulkan/PipelineBuilder.h"
+#include "rendering/vulkan/SceneRenderer.h"
 #include "rendering/mesh/TerrainVertex.h"
 #include "world/TerrainMesh.h"
 
@@ -40,10 +41,6 @@ namespace {
 
 static constexpr const char* kGetPhysicalDeviceProps2Ext = "VK_KHR_get_physical_device_properties2";
 
-// Push constant block shared by the basic/textured pipelines:
-// mat4 model (16 floats) + color/alpha (4) + lightDir/intensity (4).
-constexpr size_t kInstancePushConstantFloats = 24;
-
 // Distinguishes a material GUID from a path reference: 8-4-4-4-12 hex, the
 // shape AssetDatabase::generateGuid() produces.
 bool looksLikeGuid(const std::string& s)
@@ -58,21 +55,6 @@ bool looksLikeGuid(const std::string& s)
         }
     }
     return true;
-}
-void buildInstancePushConstants(const Mat4& model,
-                                float r, float g, float b, float a,
-                                const LightingParams& light,
-                                float (&out)[kInstancePushConstantFloats])
-{
-    std::memcpy(out, model.m, sizeof(model.m));
-    out[16] = r;
-    out[17] = g;
-    out[18] = b;
-    out[19] = a;
-    out[20] = light.dirX;
-    out[21] = light.dirY;
-    out[22] = light.dirZ;
-    out[23] = light.intensity;
 }
 
 static bool hasValidationLayer()
@@ -1017,128 +999,35 @@ void Renderer::recordDrawCommands(VkCommandBuffer cmd, uint32_t imageIndex)
     // Scene entity instances
     const float aspect = static_cast<float>(swapchain_.extent().width)
                        / static_cast<float>(swapchain_.extent().height);
-    const Mat4 viewProj = camera_.computeViewProjection(aspect);
-    const dash::Frustum frustum = dash::Frustum::fromViewProj(viewProj.m);
 
-    const MeshBuffers* boundMesh = &meshBuffers_;
-    int boundMaterial = -1;
-    bool hasBillboards = false;
-    uint32_t drawn = 0, culled = 0;
+    SceneDrawParams drawParams;
+    drawParams.opaquePipeline    = texturedPipeline_ != VK_NULL_HANDLE ? texturedPipeline_ : pipeline_;
+    drawParams.opaqueLayout      = pipelineLayout_;
+    drawParams.billboardPipeline = billboardPipeline_;
+    drawParams.billboardLayout   = billboardPipelineLayout_;
+    drawParams.defaultSet        = descriptorSets_[imageIndex];
+    drawParams.fallbackMesh      = &meshBuffers_;
+    drawParams.viewProj          = camera_.computeViewProjection(aspect);
+    drawParams.cameraRight       = camera_.rightVector();
+    drawParams.cameraUp          = camera_.upVector();
+
+    std::vector<InstanceResources> instanceRes(sceneInstances_.size());
     for (size_t i = 0; i < sceneInstances_.size(); ++i) {
-        const auto& instance = sceneInstances_[i];
-        if (!instance.visible) continue;
-        if (instance.renderMode == static_cast<int>(InstanceRenderMode::BillboardSprite)) {
-            hasBillboards = true;
-            continue;  // drawn in the transparent pass below
-        }
-
-        if (!frustum.intersectsAabb(instance.position.x * TILE_SCALE,
-                                    instance.position.y,
-                                    instance.position.z * TILE_SCALE,
-                                    instance.scale.x, instance.scale.y, instance.scale.z)) {
-            ++culled;
-            continue;
-        }
-        ++drawn;
-
-        const MeshBuffers* mesh = (i < sceneInstanceMeshes_.size() && sceneInstanceMeshes_[i])
-                                ? sceneInstanceMeshes_[i]
-                                : &meshBuffers_;
-        if (mesh != boundMesh) {
-            VkBuffer vb[] = { mesh->vertexBuffer() };
-            VkDeviceSize vbOffsets[] = { 0 };
-            vkCmdBindVertexBuffers(cmd, 0, 1, vb, vbOffsets);
-            vkCmdBindIndexBuffer(cmd, mesh->indexBuffer(), 0, mesh->indexType());
-            boundMesh = mesh;
-        }
+        if (i < sceneInstanceMeshes_.size()) instanceRes[i].mesh = sceneInstanceMeshes_[i];
 
         const int matIdx = (i < sceneInstanceMaterials_.size()) ? sceneInstanceMaterials_[i] : -1;
-        if (matIdx != boundMaterial) {
-            VkDescriptorSet set = (matIdx >= 0 && !materials_[static_cast<size_t>(matIdx)].sets.empty())
-                                ? materials_[static_cast<size_t>(matIdx)].sets[imageIndex]
-                                : descriptorSets_[imageIndex];
-            vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout_,
-                                    0, 1, &set, 0, nullptr);
-            boundMaterial = matIdx;
-        }
+        if (matIdx < 0) continue;
 
-        float cr = instance.color.x, cg = instance.color.y, cb = instance.color.z;
-        if (matIdx >= 0) {
-            const auto& base = materials_[static_cast<size_t>(matIdx)].asset.baseColor;
-            cr *= base[0]; cg *= base[1]; cb *= base[2];
-        }
-
-        const auto& lt3 = editorBridge_.lighting();
-        const Mat4 model = trs(
-            {instance.position.x * TILE_SCALE, instance.position.y, instance.position.z * TILE_SCALE},
-            instance.yawDeg, instance.pitchDeg, instance.rollDeg,
-            {instance.scale.x, instance.scale.y, instance.scale.z});
-        float pc[kInstancePushConstantFloats];
-        buildInstancePushConstants(model, cr, cg, cb, 1.0f, lt3, pc);
-        vkCmdPushConstants(cmd, pipelineLayout_, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), pc);
-        vkCmdDrawIndexed(cmd, mesh->indexCount(), 1, 0, 0, 0);
+        const MaterialGpu& mat = materials_[static_cast<size_t>(matIdx)];
+        if (!mat.sets.empty()) instanceRes[i].materialSet = mat.sets[imageIndex];
+        for (int c = 0; c < 3; ++c) instanceRes[i].tint[c] = mat.asset.baseColor[c];
     }
 
-    // Leave the default set bound for the next frame's terrain/tile passes.
-    if (boundMaterial != -1) {
-        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout_,
-                                0, 1, &descriptorSets_[imageIndex], 0, nullptr);
-    }
+    const SceneDrawStats stats = drawSceneInstances(
+        cmd, sceneInstances_, instanceRes, editorBridge_.lighting(), drawParams);
 
-    // ── Billboard sprites (transparent, drawn after the opaque pass) ─────
-    if (hasBillboards && billboardPipeline_ != VK_NULL_HANDLE) {
-        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, billboardPipeline_);
-
-        const Vec3 camRight = camera_.rightVector();
-        const Vec3 camUp = camera_.upVector();
-        int boundBillboardMaterial = -2;
-
-        for (size_t i = 0; i < sceneInstances_.size(); ++i) {
-            const auto& instance = sceneInstances_[i];
-            if (!instance.visible) continue;
-            if (instance.renderMode != static_cast<int>(InstanceRenderMode::BillboardSprite)) continue;
-
-            if (!frustum.intersectsAabb(instance.position.x * TILE_SCALE,
-                                        instance.position.y,
-                                        instance.position.z * TILE_SCALE,
-                                        instance.scale.x, instance.scale.y, instance.scale.x)) {
-                ++culled;
-                continue;
-            }
-            ++drawn;
-
-            const int matIdx = (i < sceneInstanceMaterials_.size()) ? sceneInstanceMaterials_[i] : -1;
-            if (matIdx != boundBillboardMaterial) {
-                VkDescriptorSet set = (matIdx >= 0 && !materials_[static_cast<size_t>(matIdx)].sets.empty())
-                                    ? materials_[static_cast<size_t>(matIdx)].sets[imageIndex]
-                                    : descriptorSets_[imageIndex];
-                vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, billboardPipelineLayout_,
-                                        0, 1, &set, 0, nullptr);
-                boundBillboardMaterial = matIdx;
-            }
-
-            float cr = instance.color.x, cg = instance.color.y, cb = instance.color.z;
-            if (matIdx >= 0) {
-                const auto& base = materials_[static_cast<size_t>(matIdx)].asset.baseColor;
-                cr *= base[0]; cg *= base[1]; cb *= base[2];
-            }
-
-            const float pc[20] = {
-                instance.position.x * TILE_SCALE, instance.position.y, instance.position.z * TILE_SCALE, 0.0f,
-                instance.scale.x, instance.scale.y, 0.0f, 0.0f,
-                cr, cg, cb, 1.0f,
-                camRight.x, camRight.y, camRight.z, 0.0f,
-                camUp.x, camUp.y, camUp.z, 0.0f
-            };
-            vkCmdPushConstants(cmd, billboardPipelineLayout_,
-                               VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-                               0, sizeof(pc), pc);
-            vkCmdDraw(cmd, 6, 1, 0, 0);
-        }
-    }
-
-    lastDrawnInstances_ = drawn;
-    lastCulledInstances_ = culled;
+    lastDrawnInstances_ = stats.drawn;
+    lastCulledInstances_ = stats.culled;
 
     vkCmdEndRenderPass(cmd);
 }

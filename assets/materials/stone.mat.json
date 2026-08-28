@@ -2,9 +2,5 @@
   "guid": "",
   "name": "stone",
   "albedoTexture": "",
-  "baseColor": [
-    0.55,
-    0.55,
-    0.6
-  ]
+  "baseColor": [0.55, 0.55, 0.6]
 }

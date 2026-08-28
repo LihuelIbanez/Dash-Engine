@@ -227,6 +227,7 @@ if(ENABLE_VULKAN_EXPERIMENTAL AND NOT IOS)
             ${CMAKE_SOURCE_DIR}/src/rendering/vulkan/SwapchainContext.cpp
             ${CMAKE_SOURCE_DIR}/src/rendering/vulkan/FrameGraphLite.cpp
             ${CMAKE_SOURCE_DIR}/src/rendering/vulkan/Renderer.cpp
+            ${CMAKE_SOURCE_DIR}/src/rendering/vulkan/SceneRenderer.cpp
             ${CMAKE_SOURCE_DIR}/src/rendering/vulkan/PipelineBuilder.cpp
             ${CMAKE_SOURCE_DIR}/src/rendering/vulkan/SceneLoader.cpp
         )
