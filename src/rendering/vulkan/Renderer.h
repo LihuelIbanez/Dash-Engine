@@ -17,9 +17,11 @@
 #include "assets/AssetDatabase.h"
 #include "assets/MaterialAsset.h"
 #include "rendering/platform/WindowContext.h"
+#include "rendering/vulkan/ColorGrading.h"
 #include "rendering/vulkan/DeviceContext.h"
 #include "rendering/vulkan/EditorBridge.h"
 #include "rendering/vulkan/FrameGraphLite.h"
+#include "rendering/vulkan/HdrTarget.h"
 #include "rendering/vulkan/SwapchainContext.h"
 #include "rendering/vulkan/CameraController.h"
 #include "rendering/vulkan/PlayerController.h"
@@ -116,6 +118,11 @@ private:
     SwapchainContext swapchain_;
     MeshBuffers meshBuffers_;
     FrameGraphLite frameGraph_;
+
+    // Scene target: everything is shaded here in linear HDR, then resolved to
+    // the swapchain through ACES + grading.
+    HdrTarget hdr_;
+    GradingParams grading_;
 
     VkDescriptorSetLayout descriptorSetLayout_ = VK_NULL_HANDLE;
     VkDescriptorPool descriptorPool_ = VK_NULL_HANDLE;

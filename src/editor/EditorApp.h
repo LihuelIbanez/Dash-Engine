@@ -202,13 +202,12 @@ private:
         bool  fogEnabled = true;
         float fogStart = 60.0f;
         float fogEnd = 120.0f;
-        // Directional light (daylight defaults)
+        // Directional light. Mirrors dash::vkexp::LightingParams: recalibrated
+        // for the Cook-Torrance BRDF behind the HDR + ACES pipeline.
         float lightDirX = 0.3f, lightDirY = 0.9f, lightDirZ = 0.2f;
         float lightColorR = 1.0f, lightColorG = 0.98f, lightColorB = 0.92f;
-        float lightIntensity = 1.3f;
-        float ambientStrength = 0.55f;
-        float specularStrength = 0.15f;
-        float specularShininess = 32.0f;
+        float lightIntensity = 1.7f;
+        float ambientStrength = 0.30f;
     } viewport3D_;
 
     // Displayed size of the viewport image (for mouse coordinate mapping)

@@ -1,0 +1,6 @@
+{
+  "guid": "",
+  "name": "sprite_test",
+  "albedoTexture": "assets/sprites/sprite_32x32.png",
+  "baseColor": [1.0, 1.0, 1.0]
+}

@@ -8,6 +8,7 @@
 #include "rendering/mesh/Vertex.h"
 #include "rendering/mesh/SkinnedVertex.h"
 #include "rendering/mesh/TerrainVertex.h"
+#include "rendering/vulkan/ColorGrading.h"
 #include "rendering/vulkan/SceneRenderer.h"
 
 namespace dash::vkexp {
@@ -277,20 +278,21 @@ bool PipelineBuilder::createTerrainPipeline(
 
     VkPipelineShaderStageCreateInfo shaderStages[] = { vertStage, fragStage };
 
-    // TerrainVkVertex: position(vec3), normal(vec3), color(vec3), texIndicesPacked(uint), texWeightsPacked(uint), flags(ushort), pad(ushort)
+    // TerrainVkVertex: position(vec3), normal(vec3), color(vec3), texIndicesPacked(uint), texWeightsPacked(uint), flags(ushort), pad(ushort), ao(float)
     const VkVertexInputBindingDescription bindingDesc{
         0,
         static_cast<uint32_t>(sizeof(TerrainVkVertex)),
         VK_VERTEX_INPUT_RATE_VERTEX
     };
 
-    const std::array<VkVertexInputAttributeDescription, 6> attrDescs = {{
+    const std::array<VkVertexInputAttributeDescription, 7> attrDescs = {{
         { 0, 0, VK_FORMAT_R32G32B32_SFLOAT, static_cast<uint32_t>(offsetof(TerrainVkVertex, position)) },
         { 1, 0, VK_FORMAT_R32G32B32_SFLOAT, static_cast<uint32_t>(offsetof(TerrainVkVertex, normal)) },
         { 2, 0, VK_FORMAT_R32G32B32_SFLOAT, static_cast<uint32_t>(offsetof(TerrainVkVertex, color)) },
         { 3, 0, VK_FORMAT_R32_UINT,         static_cast<uint32_t>(offsetof(TerrainVkVertex, texIndicesPacked)) },
         { 4, 0, VK_FORMAT_R32_UINT,         static_cast<uint32_t>(offsetof(TerrainVkVertex, texWeightsPacked)) },
         { 5, 0, VK_FORMAT_R16_UINT,         static_cast<uint32_t>(offsetof(TerrainVkVertex, flags)) },
+        { 6, 0, VK_FORMAT_R32_SFLOAT,       static_cast<uint32_t>(offsetof(TerrainVkVertex, ao)) },
     }};
 
     VkPipelineVertexInputStateCreateInfo vertexInput{};
@@ -346,11 +348,12 @@ bool PipelineBuilder::createTerrainPipeline(
     depthStencil.depthWriteEnable = VK_TRUE;
     depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
 
-    // Push constants for eye position, time, fog params, lighting
+    // Push constants for eye position, time, fog params, lighting and the
+    // per-layer roughness table (see kTerrainPushConstantFloats).
     VkPushConstantRange terrainPushRange{};
     terrainPushRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
     terrainPushRange.offset = 0;
-    terrainPushRange.size = sizeof(float) * 16;  // eyePos(3) + time(1) + fogStart(1) + fogEnd(1) + lightDir(3) + intensity(1) + lightColor(3) + ambient(1) + specStr(1) + specShin(1)
+    terrainPushRange.size = static_cast<uint32_t>(sizeof(float) * kTerrainPushConstantFloats);
 
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
     pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -450,12 +453,13 @@ bool PipelineBuilder::createWaterPipeline(
         VK_VERTEX_INPUT_RATE_VERTEX
     };
 
-    const std::array<VkVertexInputAttributeDescription, 5> attrDescs = {{
+    const std::array<VkVertexInputAttributeDescription, 6> attrDescs = {{
         { 0, 0, VK_FORMAT_R32G32B32_SFLOAT, static_cast<uint32_t>(offsetof(TerrainVkVertex, position)) },
         { 1, 0, VK_FORMAT_R32G32B32_SFLOAT, static_cast<uint32_t>(offsetof(TerrainVkVertex, normal)) },
         { 2, 0, VK_FORMAT_R32G32B32_SFLOAT, static_cast<uint32_t>(offsetof(TerrainVkVertex, color)) },
         { 3, 0, VK_FORMAT_R32_UINT,         static_cast<uint32_t>(offsetof(TerrainVkVertex, texIndicesPacked)) },
         { 4, 0, VK_FORMAT_R32_UINT,         static_cast<uint32_t>(offsetof(TerrainVkVertex, texWeightsPacked)) },
+        { 6, 0, VK_FORMAT_R32_SFLOAT,       static_cast<uint32_t>(offsetof(TerrainVkVertex, ao)) },
     }};
 
     VkPipelineVertexInputStateCreateInfo vertexInput{};
@@ -524,7 +528,7 @@ bool PipelineBuilder::createWaterPipeline(
     VkPushConstantRange pushRange{};
     pushRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
     pushRange.offset = 0;
-    pushRange.size = sizeof(float) * 16;
+    pushRange.size = static_cast<uint32_t>(sizeof(float) * kTerrainPushConstantFloats);
 
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
     pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -909,7 +913,9 @@ bool PipelineBuilder::createShadowDepthPipeline(
     const std::string& vertSpvPath,
     VkPipelineLayout& outPipelineLayout,
     VkPipeline& outPipeline,
-    std::string& outError)
+    std::string& outError,
+    uint32_t vertexStride,
+    const char* label)
 {
     const bool skinned = boneSetLayout != VK_NULL_HANDLE;
 
@@ -932,7 +938,8 @@ bool PipelineBuilder::createShadowDepthPipeline(
     vertStage.pName = "main";
 
     const std::array<VkVertexInputBindingDescription, 2> bindingDescs = {{
-        { 0, static_cast<uint32_t>(sizeof(Vertex)),        VK_VERTEX_INPUT_RATE_VERTEX },
+        { 0, vertexStride != 0 ? vertexStride : static_cast<uint32_t>(sizeof(Vertex)),
+             VK_VERTEX_INPUT_RATE_VERTEX },
         { 1, static_cast<uint32_t>(sizeof(SkinnedVertex)), VK_VERTEX_INPUT_RATE_VERTEX },
     }};
 
@@ -1044,7 +1051,307 @@ bool PipelineBuilder::createShadowDepthPipeline(
 
     vkDestroyShaderModule(device, vertModule, nullptr);
     std::fprintf(stdout, "[Shadow] %s depth pipeline created successfully.\n",
-                 skinned ? "Skinned" : "Static");
+                 label ? label : (skinned ? "Skinned" : "Static"));
+    return true;
+}
+
+bool PipelineBuilder::createShadowBillboardPipeline(
+    VkDevice device,
+    VkExtent2D extent,
+    VkRenderPass renderPass,
+    VkDescriptorSetLayout descriptorSetLayout,
+    const std::string& vertSpvPath,
+    const std::string& fragSpvPath,
+    VkPipelineLayout& outPipelineLayout,
+    VkPipeline& outPipeline,
+    std::string& outError)
+{
+    if (descriptorSetLayout == VK_NULL_HANDLE) {
+        outError = "shadow billboard pipeline needs the set 0 layout for the sprite sampler";
+        return false;
+    }
+
+    std::vector<char> vertCode, fragCode;
+    if (!readBinaryFile(vertSpvPath, vertCode)) {
+        outError = "Could not read shadow billboard vertex shader: " + vertSpvPath;
+        return false;
+    }
+    if (!readBinaryFile(fragSpvPath, fragCode)) {
+        outError = "Could not read shadow billboard fragment shader: " + fragSpvPath;
+        return false;
+    }
+
+    VkShaderModule vertModule = createShaderModule(device, vertCode);
+    VkShaderModule fragModule = createShaderModule(device, fragCode);
+    if (vertModule == VK_NULL_HANDLE || fragModule == VK_NULL_HANDLE) {
+        outError = "vkCreateShaderModule failed for shadow billboard shaders";
+        if (vertModule != VK_NULL_HANDLE) vkDestroyShaderModule(device, vertModule, nullptr);
+        if (fragModule != VK_NULL_HANDLE) vkDestroyShaderModule(device, fragModule, nullptr);
+        return false;
+    }
+
+    VkPipelineShaderStageCreateInfo vertStage{};
+    vertStage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    vertStage.stage = VK_SHADER_STAGE_VERTEX_BIT;
+    vertStage.module = vertModule;
+    vertStage.pName = "main";
+
+    VkPipelineShaderStageCreateInfo fragStage{};
+    fragStage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    fragStage.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+    fragStage.module = fragModule;
+    fragStage.pName = "main";
+
+    VkPipelineShaderStageCreateInfo shaderStages[] = { vertStage, fragStage };
+
+    // Quad is generated procedurally in the vertex shader.
+    VkPipelineVertexInputStateCreateInfo vertexInput{};
+    vertexInput.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+    vertexInput.vertexBindingDescriptionCount = 0;
+    vertexInput.vertexAttributeDescriptionCount = 0;
+
+    VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
+    inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+    inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+
+    VkViewport viewport{};
+    viewport.width = static_cast<float>(extent.width);
+    viewport.height = static_cast<float>(extent.height);
+    viewport.maxDepth = 1.0f;
+
+    VkRect2D scissor{};
+    scissor.extent = extent;
+
+    VkPipelineViewportStateCreateInfo viewportState{};
+    viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+    viewportState.viewportCount = 1;
+    viewportState.pViewports = &viewport;
+    viewportState.scissorCount = 1;
+    viewportState.pScissors = &scissor;
+
+    VkPipelineRasterizationStateCreateInfo rasterizer{};
+    rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+    rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
+    rasterizer.lineWidth = 1.0f;
+    rasterizer.cullMode = VK_CULL_MODE_NONE;
+    rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+
+    VkPipelineMultisampleStateCreateInfo multisampling{};
+    multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+    multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+
+    VkPipelineColorBlendStateCreateInfo colorBlending{};
+    colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+    colorBlending.attachmentCount = 0;
+
+    // Unlike the lit pass these do write depth: they are casters, not receivers.
+    VkPipelineDepthStencilStateCreateInfo depthStencil{};
+    depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+    depthStencil.depthTestEnable = VK_TRUE;
+    depthStencil.depthWriteEnable = VK_TRUE;
+    depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
+
+    // The fragment stage only reads the sampler, so the block stays vertex-only.
+    VkPushConstantRange pushRange{};
+    pushRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+    pushRange.offset = 0;
+    pushRange.size = static_cast<uint32_t>(sizeof(float) * kShadowBillboardPushConstantFloats);
+
+    VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
+    pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    pipelineLayoutInfo.setLayoutCount = 1;
+    pipelineLayoutInfo.pSetLayouts = &descriptorSetLayout;
+    pipelineLayoutInfo.pushConstantRangeCount = 1;
+    pipelineLayoutInfo.pPushConstantRanges = &pushRange;
+
+    if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &outPipelineLayout) != VK_SUCCESS) {
+        outError = "vkCreatePipelineLayout failed for shadow billboard";
+        vkDestroyShaderModule(device, vertModule, nullptr);
+        vkDestroyShaderModule(device, fragModule, nullptr);
+        return false;
+    }
+
+    VkGraphicsPipelineCreateInfo pipelineInfo{};
+    pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+    pipelineInfo.stageCount = 2;
+    pipelineInfo.pStages = shaderStages;
+    pipelineInfo.pVertexInputState = &vertexInput;
+    pipelineInfo.pInputAssemblyState = &inputAssembly;
+    pipelineInfo.pViewportState = &viewportState;
+    pipelineInfo.pRasterizationState = &rasterizer;
+    pipelineInfo.pMultisampleState = &multisampling;
+    pipelineInfo.pDepthStencilState = &depthStencil;
+    pipelineInfo.pColorBlendState = &colorBlending;
+    pipelineInfo.layout = outPipelineLayout;
+    pipelineInfo.renderPass = renderPass;
+    pipelineInfo.subpass = 0;
+
+    if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &outPipeline) != VK_SUCCESS) {
+        outError = "vkCreateGraphicsPipelines failed for shadow billboard";
+        vkDestroyPipelineLayout(device, outPipelineLayout, nullptr);
+        outPipelineLayout = VK_NULL_HANDLE;
+        vkDestroyShaderModule(device, vertModule, nullptr);
+        vkDestroyShaderModule(device, fragModule, nullptr);
+        return false;
+    }
+
+    vkDestroyShaderModule(device, vertModule, nullptr);
+    vkDestroyShaderModule(device, fragModule, nullptr);
+
+    std::fprintf(stdout, "[Shadow] Billboard depth pipeline created successfully.\n");
+    return true;
+}
+
+bool PipelineBuilder::createTonemapPipeline(
+    VkDevice device,
+    VkRenderPass renderPass,
+    VkDescriptorSetLayout descriptorSetLayout,
+    const std::string& vertSpvPath,
+    const std::string& fragSpvPath,
+    VkPipelineLayout& outPipelineLayout,
+    VkPipeline& outPipeline,
+    std::string& outError)
+{
+    std::vector<char> vertCode, fragCode;
+    if (!readBinaryFile(vertSpvPath, vertCode)) {
+        outError = "Could not read tonemap vertex shader: " + vertSpvPath;
+        return false;
+    }
+    if (!readBinaryFile(fragSpvPath, fragCode)) {
+        outError = "Could not read tonemap fragment shader: " + fragSpvPath;
+        return false;
+    }
+
+    VkShaderModule vertModule = createShaderModule(device, vertCode);
+    VkShaderModule fragModule = createShaderModule(device, fragCode);
+    if (vertModule == VK_NULL_HANDLE || fragModule == VK_NULL_HANDLE) {
+        outError = "vkCreateShaderModule failed for tonemap shaders";
+        if (vertModule != VK_NULL_HANDLE) vkDestroyShaderModule(device, vertModule, nullptr);
+        if (fragModule != VK_NULL_HANDLE) vkDestroyShaderModule(device, fragModule, nullptr);
+        return false;
+    }
+
+    VkPipelineShaderStageCreateInfo vertStage{};
+    vertStage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    vertStage.stage = VK_SHADER_STAGE_VERTEX_BIT;
+    vertStage.module = vertModule;
+    vertStage.pName = "main";
+
+    VkPipelineShaderStageCreateInfo fragStage{};
+    fragStage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    fragStage.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+    fragStage.module = fragModule;
+    fragStage.pName = "main";
+
+    VkPipelineShaderStageCreateInfo shaderStages[] = { vertStage, fragStage };
+
+    VkPipelineVertexInputStateCreateInfo vertexInput{};
+    vertexInput.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+
+    VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
+    inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+    inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+
+    // Placeholders: both are dynamic, so drawTonemap() supplies the real values.
+    VkViewport viewport{};
+    viewport.width = 1.0f;
+    viewport.height = 1.0f;
+    viewport.maxDepth = 1.0f;
+    VkRect2D scissor{{0, 0}, {1, 1}};
+
+    VkPipelineViewportStateCreateInfo viewportState{};
+    viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+    viewportState.viewportCount = 1;
+    viewportState.pViewports = &viewport;
+    viewportState.scissorCount = 1;
+    viewportState.pScissors = &scissor;
+
+    const VkDynamicState dynamicStates[] = {
+        VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR
+    };
+    VkPipelineDynamicStateCreateInfo dynamicState{};
+    dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+    dynamicState.dynamicStateCount = 2;
+    dynamicState.pDynamicStates = dynamicStates;
+
+    VkPipelineRasterizationStateCreateInfo rasterizer{};
+    rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+    rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
+    rasterizer.lineWidth = 1.0f;
+    rasterizer.cullMode = VK_CULL_MODE_NONE;
+    rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+
+    VkPipelineMultisampleStateCreateInfo multisampling{};
+    multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+    multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+
+    VkPipelineColorBlendAttachmentState colorBlendAttachment{};
+    colorBlendAttachment.colorWriteMask =
+        VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+        VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+    colorBlendAttachment.blendEnable = VK_FALSE;
+
+    VkPipelineColorBlendStateCreateInfo colorBlending{};
+    colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+    colorBlending.attachmentCount = 1;
+    colorBlending.pAttachments = &colorBlendAttachment;
+
+    // The output pass still carries a depth attachment, so the state has to be
+    // present; the resolve itself neither tests nor writes depth.
+    VkPipelineDepthStencilStateCreateInfo depthStencil{};
+    depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+    depthStencil.depthTestEnable = VK_FALSE;
+    depthStencil.depthWriteEnable = VK_FALSE;
+    depthStencil.depthCompareOp = VK_COMPARE_OP_ALWAYS;
+
+    VkPushConstantRange pushRange{};
+    pushRange.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+    pushRange.offset = 0;
+    pushRange.size = static_cast<uint32_t>(sizeof(float) * kTonemapPushConstantFloats);
+
+    VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
+    pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    pipelineLayoutInfo.setLayoutCount = 1;
+    pipelineLayoutInfo.pSetLayouts = &descriptorSetLayout;
+    pipelineLayoutInfo.pushConstantRangeCount = 1;
+    pipelineLayoutInfo.pPushConstantRanges = &pushRange;
+
+    if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &outPipelineLayout) != VK_SUCCESS) {
+        outError = "vkCreatePipelineLayout failed for tonemap";
+        vkDestroyShaderModule(device, vertModule, nullptr);
+        vkDestroyShaderModule(device, fragModule, nullptr);
+        return false;
+    }
+
+    VkGraphicsPipelineCreateInfo pipelineInfo{};
+    pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+    pipelineInfo.stageCount = 2;
+    pipelineInfo.pStages = shaderStages;
+    pipelineInfo.pVertexInputState = &vertexInput;
+    pipelineInfo.pInputAssemblyState = &inputAssembly;
+    pipelineInfo.pViewportState = &viewportState;
+    pipelineInfo.pRasterizationState = &rasterizer;
+    pipelineInfo.pMultisampleState = &multisampling;
+    pipelineInfo.pDepthStencilState = &depthStencil;
+    pipelineInfo.pColorBlendState = &colorBlending;
+    pipelineInfo.pDynamicState = &dynamicState;
+    pipelineInfo.layout = outPipelineLayout;
+    pipelineInfo.renderPass = renderPass;
+    pipelineInfo.subpass = 0;
+
+    if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &outPipeline) != VK_SUCCESS) {
+        outError = "vkCreateGraphicsPipelines failed for tonemap";
+        vkDestroyPipelineLayout(device, outPipelineLayout, nullptr);
+        outPipelineLayout = VK_NULL_HANDLE;
+        vkDestroyShaderModule(device, vertModule, nullptr);
+        vkDestroyShaderModule(device, fragModule, nullptr);
+        return false;
+    }
+
+    vkDestroyShaderModule(device, vertModule, nullptr);
+    vkDestroyShaderModule(device, fragModule, nullptr);
+
+    std::fprintf(stdout, "[HDR] Tonemap pipeline created successfully.\n");
     return true;
 }
 

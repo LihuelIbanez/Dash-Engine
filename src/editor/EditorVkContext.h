@@ -4,15 +4,19 @@
 #include <SDL2/SDL.h>
 #include "imgui.h"
 #include "assets/cache/AssetCache3D.h"
+#include "rendering/vulkan/ColorGrading.h"
 #include "rendering/vulkan/DeviceContext.h"
 #include "rendering/vulkan/SwapchainContext.h"
 #include "rendering/vulkan/FrameGraphLite.h"
+#include "rendering/vulkan/HdrTarget.h"
 #include "rendering/vulkan/SceneRenderer.h"
+#include "rendering/vulkan/ShadowMap.h"
 #include "rendering/mesh/MeshBuffers.h"
 #include "rendering/textures/TerrainTextureArray.h"
 #include "world/TerrainMesh.h"
 #include <cstdint>
 #include <string>
+#include <vector>
 
 // ─────────────────────────────────────────────────────────────────────────────
 // EditorVkContext – Vulkan lifecycle + offscreen viewport for the editor
@@ -43,6 +47,30 @@ public:
     // read by the shader.
     void updateSceneLights(const dash::vkexp::SceneLightsUbo& ubo, int count);
 
+    // ── Directional shadow cascades ─────────────────────────────────────────
+    // Mirrors the runtime renderer so the viewport shows the same shadows the
+    // game will. False means the depth target never came up, in which case the
+    // scene layout has no binding 3 and the "_lit" fragment variants are bound.
+    bool shadowsEnabled() const { return shadowMap_.valid(); }
+
+    // Recomputes the per-cascade light matrices for this camera and light.
+    // `lightIndex` < 0 leaves the block zeroed, which disables the lookup.
+    void updateShadowCascades(const dash::vkexp::Vec3& camPos,
+                              const dash::vkexp::Vec3& forward,
+                              const dash::vkexp::Vec3& right,
+                              const dash::vkexp::Vec3& up,
+                              float fovYRadians, float aspect,
+                              const dash::vkexp::Vec3& lightDir,
+                              int lightIndex);
+
+    // Copies the cascade block into the UBO the caller is about to upload.
+    void fillShadowUbo(dash::vkexp::SceneLightsUbo& ubo) const;
+
+    // One depth pass per cascade over the same casters the viewport draws.
+    // Must be recorded before beginViewportRender(): render passes cannot nest.
+    void recordShadowPass(const std::vector<dash::vkexp::RenderInstance>& instances,
+                          const std::vector<dash::vkexp::InstanceResources>& resources);
+
     // ── Pipeline access ─────────────────────────────────────────────────────
     VkPipeline          terrainPipeline()       const { return terrainPipeline_; }
     VkPipelineLayout    terrainPipelineLayout() const { return terrainPipelineLayout_; }
@@ -67,7 +95,9 @@ public:
     // Returns nullptr for the builtin cube or when the model cannot be loaded.
     const dash::vkexp::MeshBuffers* resolveMesh(const std::string& meshId);
 
-    VkRenderPass viewportRenderPass() const { return vpRenderPass_; }
+    // Scene pass the viewport pipelines are built against (HDR, not the LDR
+    // image ImGui ends up sampling).
+    VkRenderPass viewportRenderPass() const { return hdr_.renderPass(); }
 
 private:
     bool createInstance(SDL_Window* window);
@@ -89,14 +119,17 @@ private:
     VkImage        vpColorImage_    = VK_NULL_HANDLE;
     VkDeviceMemory vpColorMemory_   = VK_NULL_HANDLE;
     VkImageView    vpColorView_     = VK_NULL_HANDLE;
-    VkImage        vpDepthImage_    = VK_NULL_HANDLE;
-    VkDeviceMemory vpDepthMemory_   = VK_NULL_HANDLE;
-    VkImageView    vpDepthView_     = VK_NULL_HANDLE;
     VkFramebuffer  vpFramebuffer_   = VK_NULL_HANDLE;
     VkDescriptorSet vpImGuiDesc_    = VK_NULL_HANDLE;
     VkSampler      vpSampler_       = VK_NULL_HANDLE;
     uint32_t       vpWidth_  = 0;
     uint32_t       vpHeight_ = 0;
+
+    // Scene target plus the tonemap that resolves it into vpColorImage_. ImGui
+    // samples that image raw onto a _UNORM swapchain, so the resolve is the one
+    // that has to encode sRGB by hand.
+    dash::vkexp::HdrTarget      hdr_;
+    dash::vkexp::GradingParams  grading_;
 
     // Scene descriptor (UBO binding 0)
     VkDescriptorSetLayout sceneDescLayout_ = VK_NULL_HANDLE;
@@ -125,6 +158,17 @@ private:
     VkPipeline       billboardPipeline_       = VK_NULL_HANDLE;
 
     dash::vkexp::AssetCache3D meshCache_;
+
+    // Cascaded shadow map, sized and tuned exactly like the runtime one.
+    dash::vkexp::ShadowMap shadowMap_;
+    dash::vkexp::Mat4      shadowMatrices_[dash::vkexp::kShadowCascades]{};
+    float                  shadowSplits_[4]{};
+    float                  shadowTexels_[4]{};
+    float                  shadowDepthBias_[4]{};
+    float                  shadowParams_[4]{};
+    dash::vkexp::Vec3      shadowLightDir_{0.0f, -1.0f, 0.0f};
+    int                    shadowLightIndex_ = -1;
+    bool                   shadowLogged_ = false;
 
     // Terrain texture arrays (shared with the runtime renderer)
     dash::vkexp::TerrainTextureSet terrainTextures_;

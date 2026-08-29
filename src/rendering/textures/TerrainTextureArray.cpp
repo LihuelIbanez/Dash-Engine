@@ -29,19 +29,22 @@ struct LayerSpec {
     uint8_t     colorB[3];   // procedural highlight
     int         basePeriod;  // procedural noise lattice
     float       bump;        // normal-map slope gain
+    // Scalar: the *_rough_4k maps that ship with these sets are OpenEXR, which
+    // stb_image cannot decode, so there is no per-texel source to sample.
+    float       roughness;
 };
 
 // Indexed by TerrainTextureId.
 constexpr std::array<LayerSpec, kLayerCount> kLayers = {{
-    {"",                        "",                  { 58,  92,  38}, {112, 142,  62},  8, 0.020f}, // Grass
-    {"rocky_terrain_02_4k.blend", "rocky_terrain_02", {106,  84,  58}, {138, 116,  84},  6, 0.060f}, // Dirt
-    {"gray_rocks_4k.blend",       "gray_rocks",       {120, 118, 112}, {158, 156, 150},  5, 0.090f}, // Rock
-    {"sandy_gravel_02_4k.blend",  "sandy_gravel_02",  {186, 166, 126}, {214, 198, 162},  7, 0.050f}, // Sand
-    {"snow_02_4k.blend",          "snow_02",          {224, 230, 240}, {252, 253, 255},  6, 0.030f}, // Snow
-    {"",                        "",                  { 72,  52,  34}, { 98,  74,  50},  6, 0.045f}, // Mud
-    {"",                        "",                  { 34,  62,  28}, { 64,  92,  42},  9, 0.022f}, // DarkGrass
-    {"",                        "",                  { 96,  94,  88}, {148, 145, 138}, 16, 0.070f}, // Gravel
-    {"",                        "",                  {176, 204, 220}, {226, 240, 248},  5, 0.015f}, // Ice
+    {"",                        "",                  { 58,  92,  38}, {112, 142,  62},  8, 0.020f, 0.92f}, // Grass
+    {"rocky_terrain_02_4k.blend", "rocky_terrain_02", {106,  84,  58}, {138, 116,  84},  6, 0.060f, 0.88f}, // Dirt
+    {"gray_rocks_4k.blend",       "gray_rocks",       {120, 118, 112}, {158, 156, 150},  5, 0.090f, 0.72f}, // Rock
+    {"sandy_gravel_02_4k.blend",  "sandy_gravel_02",  {186, 166, 126}, {214, 198, 162},  7, 0.050f, 0.85f}, // Sand
+    {"snow_02_4k.blend",          "snow_02",          {224, 230, 240}, {252, 253, 255},  6, 0.030f, 0.55f}, // Snow
+    {"",                        "",                  { 72,  52,  34}, { 98,  74,  50},  6, 0.045f, 0.65f}, // Mud
+    {"",                        "",                  { 34,  62,  28}, { 64,  92,  42},  9, 0.022f, 0.90f}, // DarkGrass
+    {"",                        "",                  { 96,  94,  88}, {148, 145, 138}, 16, 0.070f, 0.80f}, // Gravel
+    {"",                        "",                  {176, 204, 220}, {226, 240, 248},  5, 0.015f, 0.18f}, // Ice
 }};
 
 // ── Tileable value-noise fbm ────────────────────────────────────────────────
@@ -313,11 +316,11 @@ bool createStagingBuffer(VkPhysicalDevice pd, VkDevice dev, VkDeviceSize size,
 
 bool uploadArray(VkPhysicalDevice pd, VkDevice dev, VkQueue queue, VkCommandPool pool,
                  const std::vector<uint8_t>& pixels, uint32_t extent, uint32_t mipLevels,
-                 TerrainTextureArray& out)
+                 VkFormat format, TerrainTextureArray& out)
 {
     VkImageCreateInfo ici{VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};
     ici.imageType = VK_IMAGE_TYPE_2D;
-    ici.format = VK_FORMAT_R8G8B8A8_UNORM;
+    ici.format = format;
     ici.extent = {extent, extent, 1};
     ici.mipLevels = mipLevels;
     ici.arrayLayers = kLayerCount;
@@ -412,7 +415,7 @@ bool uploadArray(VkPhysicalDevice pd, VkDevice dev, VkQueue queue, VkCommandPool
     VkImageViewCreateInfo vci{VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
     vci.image = out.image;
     vci.viewType = VK_IMAGE_VIEW_TYPE_2D_ARRAY;
-    vci.format = VK_FORMAT_R8G8B8A8_UNORM;
+    vci.format = format;
     vci.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, mipLevels, 0, kLayerCount};
     if (vkCreateImageView(dev, &vci, nullptr, &out.view) != VK_SUCCESS) return false;
 
@@ -451,6 +454,12 @@ std::string defaultTerrainTextureRoot()
 #else
     return "assets/models/terrain/";
 #endif
+}
+
+void packTerrainLayerRoughness(float (&out)[kTerrainRoughnessFloats])
+{
+    for (std::size_t i = 0; i < kTerrainRoughnessFloats; ++i)
+        out[i] = i < kLayerCount ? kLayers[i].roughness : 1.0f;
 }
 
 bool createTerrainTextureSet(VkPhysicalDevice physicalDevice,
@@ -507,13 +516,17 @@ bool createTerrainTextureSet(VkPhysicalDevice physicalDevice,
         generateMips(normalDst, kNormalExtent, normalMips, true);
     }
 
+    // Albedo is authored in sRGB, so the sampler decodes it to linear for us;
+    // the normal map is geometry, not colour, and must stay untouched.
     if (!uploadArray(physicalDevice, device, graphicsQueue, commandPool,
-                     albedo, kAlbedoExtent, albedoMips, out.albedo)) {
+                     albedo, kAlbedoExtent, albedoMips,
+                     VK_FORMAT_R8G8B8A8_SRGB, out.albedo)) {
         std::fprintf(stderr, "[TerrainTex] Failed to upload albedo array\n");
         return false;
     }
     if (!uploadArray(physicalDevice, device, graphicsQueue, commandPool,
-                     normal, kNormalExtent, normalMips, out.normal)) {
+                     normal, kNormalExtent, normalMips,
+                     VK_FORMAT_R8G8B8A8_UNORM, out.normal)) {
         std::fprintf(stderr, "[TerrainTex] Failed to upload normal array\n");
         return false;
     }

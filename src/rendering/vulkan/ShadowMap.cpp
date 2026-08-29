@@ -3,6 +3,7 @@
 #include <array>
 #include <cstdio>
 
+#include "rendering/mesh/TerrainVertex.h"
 #include "rendering/vulkan/PipelineBuilder.h"
 #include "rendering/vulkan/VkMath.h"
 
@@ -214,6 +215,30 @@ bool ShadowMap::createPipelines(VkDevice device,
             skinnedPipeline_ = VK_NULL_HANDLE;
         }
     }
+
+    // The terrain stream is 48 B per vertex instead of 32, but it also keeps the
+    // position at offset 0, so the very same vertex shader works.
+    if (!PipelineBuilder::createShadowDepthPipeline(
+            device, extent, renderPass_, VK_NULL_HANDLE, VK_NULL_HANDLE,
+            shaderDir + "/shadow_depth.vert.spv",
+            terrainPipelineLayout_, terrainPipeline_, error,
+            static_cast<uint32_t>(sizeof(TerrainVkVertex)), "Terrain")) {
+        std::fprintf(stderr, "[Shadow] Terrain depth pipeline unavailable: %s\n", error.c_str());
+        terrainPipelineLayout_ = VK_NULL_HANDLE;
+        terrainPipeline_ = VK_NULL_HANDLE;
+    }
+
+    if (sceneSetLayout != VK_NULL_HANDLE) {
+        if (!PipelineBuilder::createShadowBillboardPipeline(
+                device, extent, renderPass_, sceneSetLayout,
+                shaderDir + "/shadow_billboard.vert.spv",
+                shaderDir + "/shadow_billboard.frag.spv",
+                billboardPipelineLayout_, billboardPipeline_, error)) {
+            std::fprintf(stderr, "[Shadow] Billboard depth pipeline unavailable: %s\n", error.c_str());
+            billboardPipelineLayout_ = VK_NULL_HANDLE;
+            billboardPipeline_ = VK_NULL_HANDLE;
+        }
+    }
     return true;
 }
 
@@ -245,6 +270,14 @@ void ShadowMap::endPass(VkCommandBuffer cmd) const
 void ShadowMap::shutdown(VkDevice device)
 {
     if (device == VK_NULL_HANDLE) return;
+
+    PipelineBuilder::destroy(device, billboardPipelineLayout_, billboardPipeline_);
+    billboardPipelineLayout_ = VK_NULL_HANDLE;
+    billboardPipeline_ = VK_NULL_HANDLE;
+
+    PipelineBuilder::destroy(device, terrainPipelineLayout_, terrainPipeline_);
+    terrainPipelineLayout_ = VK_NULL_HANDLE;
+    terrainPipeline_ = VK_NULL_HANDLE;
 
     PipelineBuilder::destroy(device, skinnedPipelineLayout_, skinnedPipeline_);
     skinnedPipelineLayout_ = VK_NULL_HANDLE;

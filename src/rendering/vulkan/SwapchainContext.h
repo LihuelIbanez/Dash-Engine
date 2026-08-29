@@ -18,6 +18,11 @@ public:
     SwapchainContext(const SwapchainContext&) = delete;
     SwapchainContext& operator=(const SwapchainContext&) = delete;
 
+    // The runtime shades in linear and wants the presentation engine to encode
+    // for it. The editor cannot: ImGui writes colours that are already sRGB, so
+    // an _SRGB target would encode them twice and wash the whole UI out.
+    void setPreferSrgb(bool enabled) { preferSrgb_ = enabled; }
+
     bool init(const DeviceContext& deviceContext, VkSurfaceKHR surface, GLFWwindow* window);
     bool init(const DeviceContext& deviceContext, VkSurfaceKHR surface, uint32_t width, uint32_t height);
     void shutdown(VkDevice device);
@@ -39,6 +44,7 @@ private:
     std::vector<VkImage> images_;
     std::vector<VkImageView> imageViews_;
     VkFormat imageFormat_ = VK_FORMAT_B8G8R8A8_UNORM;
+    bool preferSrgb_ = false;
     VkExtent2D extent_{};
     VkRenderPass renderPass_ = VK_NULL_HANDLE;
 

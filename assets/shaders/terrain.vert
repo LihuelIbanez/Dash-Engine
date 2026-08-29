@@ -6,6 +6,7 @@ layout(location = 2) in vec3 inColor;
 layout(location = 3) in uint inTexIndicesPacked;
 layout(location = 4) in uint inTexWeightsPacked;
 layout(location = 5) in uint inFlags;
+layout(location = 6) in float inAo;
 
 layout(location = 0) out vec3 vColor;
 layout(location = 1) out vec3 vNormal;
@@ -13,6 +14,7 @@ layout(location = 2) out vec3 vWorldPos;
 layout(location = 3) flat out uvec4 vTexIndices;
 layout(location = 4) out vec4 vTexWeights;
 layout(location = 5) flat out uint vFlags;
+layout(location = 6) out float vAo;
 
 layout(set = 0, binding = 0) uniform CameraUBO {
     mat4 viewProj;
@@ -22,7 +24,7 @@ layout(set = 0, binding = 0) uniform CameraUBO {
 // [0] = vec4(eyePos.xyz, time)
 // [1] = vec4(fogStart, fogEnd, lightDir.x, lightDir.y)
 // [2] = vec4(lightDir.z, lightIntensity, lightColor.r, lightColor.g)
-// [3] = vec4(lightColor.b, ambientStrength, specularStrength, specularShininess)
+// [3] = vec4(lightColor.b, ambientStrength, unused, unused)
 layout(push_constant) uniform TerrainPC {
     vec4 data0;
     vec4 data1;
@@ -45,6 +47,7 @@ void main() {
     vNormal   = inNormal;
     vWorldPos = pos;
     vFlags    = inFlags;
+    vAo       = inAo;
 
     // Unpack texture blend data
     vTexIndices = uvec4(

@@ -126,10 +126,8 @@ void EditorBridge::poll(GLFWwindow* window, CameraController& camera,
         lighting_.colorR    = vp.value("lightColorR", 1.0f);
         lighting_.colorG    = vp.value("lightColorG", 0.98f);
         lighting_.colorB    = vp.value("lightColorB", 0.92f);
-        lighting_.intensity = vp.value("lightIntensity", 1.3f);
-        lighting_.ambient   = vp.value("ambientStrength", 0.55f);
-        lighting_.specStr   = vp.value("specularStrength", 0.15f);
-        lighting_.specShin  = vp.value("specularShininess", 32.0f);
+        lighting_.intensity = vp.value("lightIntensity", 1.7f);
+        lighting_.ambient   = vp.value("ambientStrength", 0.30f);
 
         int sx = static_cast<int>(vp.value("screenX", 0.0f));
         int sy = static_cast<int>(vp.value("screenY", 0.0f));

@@ -56,7 +56,9 @@ void buildInstancePushConstants(const Mat4& model,
                                 float r, float g, float b, float a,
                                 const LightingParams& light,
                                 float (&out)[kInstancePushConstantFloats],
-                                int sceneLightCount)
+                                int sceneLightCount,
+                                float metallic,
+                                float roughness)
 {
     std::memcpy(out, model.m, sizeof(model.m));
     out[16] = r;
@@ -69,8 +71,12 @@ void buildInstancePushConstants(const Mat4& model,
     out[23] = light.intensity;
     out[24] = static_cast<float>(sceneLightCount);
     out[25] = light.ambient;
-    out[26] = light.specStr;
-    out[27] = light.specShin;
+    out[26] = 0.0f;
+    out[27] = 0.0f;
+    out[28] = metallic;
+    out[29] = roughness;
+    out[30] = 0.0f;
+    out[31] = 0.0f;
 }
 
 int packSceneLights(const std::vector<SceneLight>* lights,
@@ -188,7 +194,8 @@ SceneDrawStats drawSceneInstances(VkCommandBuffer cmd,
                                    inst.color.x * res.tint[0],
                                    inst.color.y * res.tint[1],
                                    inst.color.z * res.tint[2],
-                                   1.0f, lighting, pc, lightCount);
+                                   1.0f, lighting, pc, lightCount,
+                                   res.metallic, res.roughness);
         vkCmdPushConstants(cmd, params.opaqueLayout,
                            VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
                            0, sizeof(pc), pc);
@@ -258,7 +265,8 @@ SceneDrawStats drawSceneInstances(VkCommandBuffer cmd,
                                        inst.color.x * res.tint[0],
                                        inst.color.y * res.tint[1],
                                        inst.color.z * res.tint[2],
-                                       1.0f, lighting, pc, lightCount);
+                                       1.0f, lighting, pc, lightCount,
+                                       res.metallic, res.roughness);
             vkCmdPushConstants(cmd, params.skinnedLayout,
                                VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
                                0, sizeof(pc), pc);
@@ -266,9 +274,10 @@ SceneDrawStats drawSceneInstances(VkCommandBuffer cmd,
         }
     }
 
-    // ── Billboards (transparent, after the opaque pass) ──────────────────────
-    // Skipped in the depth pass: an alpha-cut quad would cast a solid rectangle.
-    if (params.depthOnly) return stats;
+    // ── Billboards ──────────────────────────────────────────────────────────
+    // Transparent, so they come after the opaque pass. In the depth pass they
+    // go through the alpha-cut variant, which discards on the sprite alpha
+    // instead of stamping the solid quad.
     if (!hasBillboards || params.billboardPipeline == VK_NULL_HANDLE) return stats;
 
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, params.billboardPipeline);
@@ -295,6 +304,31 @@ SceneDrawStats drawSceneInstances(VkCommandBuffer cmd,
             vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
                                     params.billboardLayout, 0, 1, &set, 0, nullptr);
             boundBillboardSet = set;
+        }
+
+        if (params.depthOnly) {
+            float pc[kShadowBillboardPushConstantFloats];
+            std::memcpy(pc, params.viewProj.m, sizeof(params.viewProj.m));
+            pc[16] = inst.position.x * TILE_SCALE;
+            pc[17] = inst.position.y;
+            pc[18] = inst.position.z * TILE_SCALE;
+            pc[19] = 0.0f;
+            pc[20] = inst.scale.x;
+            pc[21] = inst.scale.y;
+            pc[22] = 0.0f;
+            pc[23] = 0.0f;
+            pc[24] = params.cameraRight.x;
+            pc[25] = params.cameraRight.y;
+            pc[26] = params.cameraRight.z;
+            pc[27] = 0.0f;
+            pc[28] = params.cameraUp.x;
+            pc[29] = params.cameraUp.y;
+            pc[30] = params.cameraUp.z;
+            pc[31] = 0.0f;
+            vkCmdPushConstants(cmd, params.billboardLayout,
+                               VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pc), pc);
+            vkCmdDraw(cmd, 6, 1, 0, 0);
+            continue;
         }
 
         const float pc[20] = {

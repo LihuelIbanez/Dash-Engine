@@ -376,7 +376,7 @@ bool Renderer::createPipeline()
     if (!PipelineBuilder::createBasicPipeline(
             deviceContext_.device(),
             swapchain_.extent(),
-            swapchain_.renderPass(),
+            hdr_.renderPass(),
             descriptorSetLayout_,
             vert,
             frag,
@@ -395,7 +395,7 @@ bool Renderer::createPipeline()
     if (!PipelineBuilder::createBasicPipeline(
             deviceContext_.device(),
             swapchain_.extent(),
-            swapchain_.renderPass(),
+            hdr_.renderPass(),
             descriptorSetLayout_,
             texVert,
             texFrag,
@@ -417,7 +417,7 @@ bool Renderer::createPipeline()
     if (!PipelineBuilder::createTerrainPipeline(
             deviceContext_.device(),
             swapchain_.extent(),
-            swapchain_.renderPass(),
+            hdr_.renderPass(),
             descriptorSetLayout_,
             terrainVert,
             terrainFrag,
@@ -437,7 +437,7 @@ bool Renderer::createPipeline()
     if (!PipelineBuilder::createWaterPipeline(
             deviceContext_.device(),
             swapchain_.extent(),
-            swapchain_.renderPass(),
+            hdr_.renderPass(),
             descriptorSetLayout_,
             waterVert,
             waterFrag,
@@ -456,7 +456,7 @@ bool Renderer::createPipeline()
     if (!PipelineBuilder::createBillboardPipeline(
             deviceContext_.device(),
             swapchain_.extent(),
-            swapchain_.renderPass(),
+            hdr_.renderPass(),
             descriptorSetLayout_,
             billboardVert,
             billboardFrag,
@@ -475,7 +475,21 @@ bool Renderer::init(WindowContext& window)
     if (!createInstance(window.requiredVulkanExtensions())) return false;
     if (!window.createSurface(instance_, surface_)) return false;
     if (!deviceContext_.init(instance_, surface_)) return false;
+    swapchain_.setPreferSrgb(true);
     if (!swapchain_.init(deviceContext_, surface_, window.handle())) return false;
+
+    // Before the pipelines: every scene pipeline is built against the HDR pass,
+    // not the swapchain one.
+    if (!hdr_.init(deviceContext_.device())) return false;
+    if (!hdr_.createResources(deviceContext_.physicalDevice(), deviceContext_.device(),
+                              swapchain_.extent().width, swapchain_.extent().height)) {
+        return false;
+    }
+    // Resolve target is the swapchain, which is _SRGB here, so the tonemap
+    // writes linear and the presentation engine encodes.
+    if (!hdr_.createPipeline(deviceContext_.device(), swapchain_.renderPass(), VULKAN_SHADER_DIR)) {
+        return false;
+    }
 
     // Before the descriptors: whether the depth target came up decides if the
     // scene layout declares binding 3 and which fragment variants are loaded.
@@ -511,7 +525,7 @@ bool Renderer::init(WindowContext& window)
         const std::string skinFrag = shadowMap_.valid() ? "/skinned_shadow.frag.spv"
                                                         : "/skinned_lit.frag.spv";
         if (!PipelineBuilder::createSkinnedPipeline(
-                deviceContext_.device(), swapchain_.extent(), swapchain_.renderPass(),
+                deviceContext_.device(), swapchain_.extent(), hdr_.renderPass(),
                 descriptorSetLayout_, boneSetLayout_,
                 shaderDir + "/skinned.vert.spv", shaderDir + skinFrag,
                 skinnedPipelineLayout_, skinnedPipeline_, skinErr)) {
@@ -842,11 +856,47 @@ void Renderer::recordShadowPass(VkCommandBuffer cmd, uint32_t imageIndex,
     if (!shadowMap_.valid()) return;
 
     const bool draws = shadowLightIndex_ >= 0 && shadowMap_.hasPipelines();
+    const bool terrainCasts = draws
+                           && shadowMap_.terrainPipeline() != VK_NULL_HANDLE
+                           && terrainMeshBuffers_.indexCount() > 0;
+
+    // Billboards are vertical cutouts, so the depth quad only spins around Y to
+    // face the light: keeping its up axis world-vertical is what anchors the
+    // shadow at the foot of the sprite and stretches it with the sun elevation.
+    // A quad fully perpendicular to the light would instead lift off the ground
+    // and project an unstretched, detached silhouette.
+    Vec3 lightRight{1.0f, 0.0f, 0.0f};
+    if (shadowLightIndex_ >= 0) {
+        const SceneLight& light = sceneLights_[static_cast<size_t>(shadowLightIndex_)];
+        const Vec3 axis = cross(Vec3{light.dirX, light.dirY, light.dirZ}, Vec3{0.0f, 1.0f, 0.0f});
+        const Vec3 normalized = normalize(axis);
+        if (dot(normalized, normalized) > 0.5f) lightRight = normalized;
+    }
 
     for (int cascade = 0; cascade < kShadowCascades; ++cascade) {
         // Entered even with no caster: the clear is what leaves the layer in
         // the layout the descriptor written at init already promises.
         shadowMap_.beginPass(cmd, cascade);
+
+        if (terrainCasts) {
+            // First, and the biggest occluder by far: filling depth here lets
+            // early-Z reject most of the instance fragments that follow.
+            vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, shadowMap_.terrainPipeline());
+            VkBuffer terrainVB[] = { terrainMeshBuffers_.vertexBuffer() };
+            VkDeviceSize terrainOffsets[] = { 0 };
+            vkCmdBindVertexBuffers(cmd, 0, 1, terrainVB, terrainOffsets);
+            vkCmdBindIndexBuffer(cmd, terrainMeshBuffers_.indexBuffer(), 0, VK_INDEX_TYPE_UINT32);
+
+            // Terrain vertices are already in world space.
+            float terrainPC[kShadowPushConstantFloats];
+            const Mat4 model = identity();
+            std::memcpy(terrainPC, model.m, sizeof(model.m));
+            std::memcpy(terrainPC + 16, shadowMatrices_[cascade].m, sizeof(shadowMatrices_[cascade].m));
+            vkCmdPushConstants(cmd, shadowMap_.terrainPipelineLayout(),
+                               VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(terrainPC), terrainPC);
+
+            vkCmdDrawIndexed(cmd, terrainMeshBuffers_.indexCount(), 1, 0, 0, 0);
+        }
 
         if (draws) {
             vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, shadowMap_.pipeline());
@@ -862,6 +912,9 @@ void Renderer::recordShadowPass(VkCommandBuffer cmd, uint32_t imageIndex,
             shadowParams.opaqueLayout    = shadowMap_.pipelineLayout();
             shadowParams.skinnedPipeline = shadowMap_.skinnedPipeline();
             shadowParams.skinnedLayout   = shadowMap_.skinnedPipelineLayout();
+            // Alpha-cut depth variant: same call site, different pipeline.
+            shadowParams.billboardPipeline = shadowMap_.billboardPipeline();
+            shadowParams.billboardLayout   = shadowMap_.billboardPipelineLayout();
             shadowParams.boneSet         = boneSet_;
             shadowParams.bonePalette     = &bonePalette_;
             shadowParams.defaultSet      = descriptorSets_[imageIndex];
@@ -869,6 +922,8 @@ void Renderer::recordShadowPass(VkCommandBuffer cmd, uint32_t imageIndex,
             // Culling then happens against this cascade's frustum, so a caster
             // is only recorded into the maps that can actually see it.
             shadowParams.viewProj        = shadowMatrices_[cascade];
+            shadowParams.cameraRight     = lightRight;
+            shadowParams.cameraUp        = Vec3{0.0f, 1.0f, 0.0f};
 
             drawSceneInstances(cmd, sceneInstances_, res, editorBridge_.lighting(), shadowParams);
         }
@@ -1252,9 +1307,15 @@ bool Renderer::resolveSceneMaterials()
     const uint32_t images = swapchain_.imageCount();
     const uint32_t setCount = static_cast<uint32_t>(materials_.size()) * images;
 
+    // Has to mirror the binding list built in createDescriptors(): every set
+    // carries the material sampler and the terrain array, plus the shadow map
+    // when the depth target came up. Undercounting here fails the allocation
+    // for every scene that references a material.
+    const uint32_t samplersPerSet = shadowMap_.valid() ? 3u : 2u;
+
     std::array<VkDescriptorPoolSize, 2> poolSizes = {{
         {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, setCount * 2},
-        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setCount}
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setCount * samplersPerSet}
     }};
     VkDescriptorPoolCreateInfo poolInfo{};
     poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
@@ -1388,26 +1449,18 @@ void Renderer::recordDrawCommands(VkCommandBuffer cmd, uint32_t imageIndex)
         const MaterialGpu& mat = materials_[static_cast<size_t>(matIdx)];
         if (!mat.sets.empty()) instanceRes[i].materialSet = mat.sets[imageIndex];
         for (int c = 0; c < 3; ++c) instanceRes[i].tint[c] = mat.asset.baseColor[c];
+        instanceRes[i].metallic = mat.asset.metallic;
+        instanceRes[i].roughness = mat.asset.roughness;
     }
 
     updateSkinnedInstances(frameDeltaSeconds_, instanceRes);
 
     recordShadowPass(cmd, imageIndex, instanceRes);
 
-    VkClearValue clearValues[2]{};
-    clearValues[0].color = { {0.72f, 0.82f, 0.95f, 1.0f} };
-    clearValues[1].depthStencil = {1.0f, 0};
-
-    VkRenderPassBeginInfo rpBegin{};
-    rpBegin.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-    rpBegin.renderPass = swapchain_.renderPass();
-    rpBegin.framebuffer = frameGraph_.framebuffer(imageIndex);
-    rpBegin.renderArea.offset = {0, 0};
-    rpBegin.renderArea.extent = swapchain_.extent();
-    rpBegin.clearValueCount = 2;
-    rpBegin.pClearValues = clearValues;
-
-    vkCmdBeginRenderPass(cmd, &rpBegin, VK_SUBPASS_CONTENTS_INLINE);
+    // Sky/clear colour, authored as a display value and linearised here so it
+    // enters the HDR target in the same space the shaders write.
+    const float clearColor[4] = {0.478f, 0.639f, 0.891f, 1.0f};
+    hdr_.beginPass(cmd, clearColor);
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
                       texturedPipeline_ != VK_NULL_HANDLE ? texturedPipeline_ : pipeline_);
     vkCmdBindDescriptorSets(
@@ -1461,12 +1514,15 @@ void Renderer::recordDrawCommands(VkCommandBuffer cmd, uint32_t imageIndex)
 
         const auto& lt = editorBridge_.lighting();
         const auto& fg = editorBridge_.fog();
-        const float terrainPC[16] = {
+        float layerRoughness[kTerrainRoughnessFloats];
+        packTerrainLayerRoughness(layerRoughness);
+        float terrainPC[kTerrainPushConstantFloats] = {
             camera_.x(), camera_.y(), camera_.z(), elapsedSeconds_,
             fg.start, fg.end, lt.dirX, lt.dirY,
             lt.dirZ, lt.intensity, lt.colorR, lt.colorG,
-            lt.colorB, lt.ambient, lt.specStr, lt.specShin
+            lt.colorB, lt.ambient, 0.0f, 0.0f
         };
+        std::copy(std::begin(layerRoughness), std::end(layerRoughness), terrainPC + 16);
         vkCmdPushConstants(cmd, terrainPipelineLayout_,
             VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
             0, sizeof(terrainPC), terrainPC);
@@ -1528,6 +1584,23 @@ void Renderer::recordDrawCommands(VkCommandBuffer cmd, uint32_t imageIndex)
     lastDrawnInstances_ = stats.drawn;
     lastCulledInstances_ = stats.culled;
 
+    hdr_.endPass(cmd);
+
+    // Resolve: exposure + ACES + grading into the swapchain image.
+    VkClearValue resolveClears[2]{};
+    resolveClears[1].depthStencil = {1.0f, 0};
+
+    VkRenderPassBeginInfo resolveBegin{};
+    resolveBegin.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    resolveBegin.renderPass = swapchain_.renderPass();
+    resolveBegin.framebuffer = frameGraph_.framebuffer(imageIndex);
+    resolveBegin.renderArea.offset = {0, 0};
+    resolveBegin.renderArea.extent = swapchain_.extent();
+    resolveBegin.clearValueCount = 2;
+    resolveBegin.pClearValues = resolveClears;
+
+    vkCmdBeginRenderPass(cmd, &resolveBegin, VK_SUBPASS_CONTENTS_INLINE);
+    hdr_.drawTonemap(cmd, grading_, /*encodeSrgb=*/false);
     vkCmdEndRenderPass(cmd);
 }
 
@@ -1688,6 +1761,7 @@ void Renderer::shutdown()
 
     frameGraph_.shutdown();
 
+    hdr_.shutdown(deviceContext_.device());
     shadowMap_.shutdown(deviceContext_.device());
     destroyBoneResources();
     destroySceneMaterials();

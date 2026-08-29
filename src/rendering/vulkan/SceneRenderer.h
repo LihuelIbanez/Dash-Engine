@@ -25,20 +25,34 @@ namespace dash::vkexp {
 // ─────────────────────────────────────────────────────────────────────────────
 
 // mat4 model (16 floats) + color/alpha (4) + lightDir/intensity (4)
-// + lightParams (4: count, ambient, specular strength, shininess) = 112 bytes,
-// inside the 128 bytes Vulkan guarantees for push constants.
-inline constexpr std::size_t kInstancePushConstantFloats = 28;
+// + lightParams (4: count, ambient, 2 spare) + material (4: metallic,
+// roughness, 2 spare) = 128 bytes, exactly what Vulkan guarantees for push
+// constants. There is no room left for another vec4.
+inline constexpr std::size_t kInstancePushConstantFloats = 32;
+
+// eyePos(3) + time(1) + fogStart(1) + fogEnd(1) + lightDir(3) + intensity(1)
+// + lightColor(3) + ambient(1) + 2 spare, followed by the per-layer terrain
+// roughness table. Shared by the terrain and water pipelines so both can be fed
+// from the same array.
+inline constexpr std::size_t kTerrainPushConstantFloats = 28;
 
 // mat4 model + mat4 lightViewProj = 128 bytes, exactly the push constant size
 // Vulkan guarantees. Used by the depth-only shadow pass, which needs no
 // descriptor set for static casters as a result.
 inline constexpr std::size_t kShadowPushConstantFloats = 32;
 
+// mat4 lightViewProj + center + half extents + the two quad axes: also exactly
+// 128 bytes. The billboard depth pass has no per-instance model matrix, so the
+// quad is rebuilt in the vertex shader from these axes.
+inline constexpr std::size_t kShadowBillboardPushConstantFloats = 32;
+
 void buildInstancePushConstants(const Mat4& model,
                                 float r, float g, float b, float a,
                                 const LightingParams& light,
                                 float (&out)[kInstancePushConstantFloats],
-                                int sceneLightCount = 0);
+                                int sceneLightCount = 0,
+                                float metallic = 0.0f,
+                                float roughness = 0.8f);
 
 // std140 mirror of the SceneLightsUBO block in assets/shaders/scene_lights.glsl.
 // Too large for push constants (kMaxSceneLights * 64 bytes), so it travels as a
@@ -73,6 +87,8 @@ struct InstanceResources {
     const MeshBuffers* mesh = nullptr;                // nullptr → fallbackMesh
     VkDescriptorSet    materialSet = VK_NULL_HANDLE;  // null    → defaultSet
     float              tint[3] = {1.0f, 1.0f, 1.0f};
+    float              metallic = 0.0f;
+    float              roughness = 0.8f;
 
     // Skinning: non-null selects the skinned pipeline for this instance.
     const float* boneMatrices = nullptr;   // boneCount * 16 floats, column-major
@@ -83,6 +99,7 @@ struct InstanceResources {
 struct SceneDrawParams {
     VkPipeline         opaquePipeline    = VK_NULL_HANDLE;
     VkPipelineLayout   opaqueLayout      = VK_NULL_HANDLE;
+    // In the depth pass these carry the alpha-cut depth variant instead.
     VkPipeline         billboardPipeline = VK_NULL_HANDLE;
     VkPipelineLayout   billboardLayout   = VK_NULL_HANDLE;
     VkPipeline         skinnedPipeline   = VK_NULL_HANDLE;
@@ -103,10 +120,10 @@ struct SceneDrawParams {
     Vec3 cameraRight{1.0f, 0.0f, 0.0f};
     Vec3 cameraUp{0.0f, 1.0f, 0.0f};
 
-    // Depth-only shadow pass: skips billboards and every material/descriptor
-    // bind, and pushes `model + viewProj` instead of the lit instance block.
-    // `viewProj` is then the light matrix, so culling happens against the light
-    // frustum for free.
+    // Depth-only shadow pass: skips every material/descriptor bind on meshes and
+    // pushes `model + viewProj` instead of the lit instance block. `viewProj` is
+    // then the light matrix, so culling happens against the light frustum for
+    // free, and cameraRight/cameraUp are the light-aligned billboard axes.
     bool depthOnly = false;
 };
 

@@ -1,0 +1,135 @@
+{
+  "name": "Billboard Shadow Check",
+  "worldSeed": 12345,
+  "tileOverrides": [],
+  "entities": [
+    {
+      "type": "Enemy",
+      "name": "Sun",
+      "x": 32.0,
+      "y": 32.0,
+      "components": [
+        {
+          "type": "Transform",
+          "x": 32.0,
+          "y": 32.0,
+          "z": 40.0,
+          "yawDeg": 35.0,
+          "pitchDeg": -52.0,
+          "rollDeg": 0.0,
+          "scale": 1.0
+        },
+        {
+          "type": "Render",
+          "renderMode": 0,
+          "mesh": "cube",
+          "material": "",
+          "sprite": "",
+          "layer": 0,
+          "visible": false
+        },
+        {
+          "type": "Light",
+          "lightType": 0,
+          "colorR": 1.0,
+          "colorG": 0.94,
+          "colorB": 0.82,
+          "intensity": 1.45,
+          "range": 10.0,
+          "innerConeDeg": 20.0,
+          "outerConeDeg": 35.0,
+          "castsShadows": true,
+          "enabled": true
+        }
+      ]
+    },
+    {
+      "type": "Player",
+      "name": "Hero",
+      "x": 32.0,
+      "y": 32.0,
+      "class": "Warrior"
+    },
+    {
+      "type": "Enemy",
+      "name": "SpriteA",
+      "x": 34.0,
+      "y": 32.0,
+      "components": [
+        {
+          "type": "Transform",
+          "x": 34.0,
+          "y": 32.0,
+          "z": 1.6,
+          "yawDeg": 0.0,
+          "pitchDeg": 0.0,
+          "rollDeg": 0.0,
+          "scale": 4.0
+        },
+        {
+          "type": "Render",
+          "renderMode": 1,
+          "mesh": "cube",
+          "material": "materials/sprite_test.mat.json",
+          "sprite": "",
+          "layer": 0,
+          "visible": true
+        }
+      ]
+    },
+    {
+      "type": "Enemy",
+      "name": "SpriteB",
+      "x": 30.0,
+      "y": 34.0,
+      "components": [
+        {
+          "type": "Transform",
+          "x": 30.0,
+          "y": 34.0,
+          "z": 1.6,
+          "yawDeg": 0.0,
+          "pitchDeg": 0.0,
+          "rollDeg": 0.0,
+          "scale": 4.0
+        },
+        {
+          "type": "Render",
+          "renderMode": 1,
+          "mesh": "cube",
+          "material": "materials/sprite_test.mat.json",
+          "sprite": "",
+          "layer": 0,
+          "visible": true
+        }
+      ]
+    },
+    {
+      "type": "Enemy",
+      "name": "SpriteC",
+      "x": 32.0,
+      "y": 29.0,
+      "components": [
+        {
+          "type": "Transform",
+          "x": 32.0,
+          "y": 29.0,
+          "z": 1.6,
+          "yawDeg": 0.0,
+          "pitchDeg": 0.0,
+          "rollDeg": 0.0,
+          "scale": 4.0
+        },
+        {
+          "type": "Render",
+          "renderMode": 1,
+          "mesh": "cube",
+          "material": "materials/sprite_test.mat.json",
+          "sprite": "",
+          "layer": 0,
+          "visible": true
+        }
+      ]
+    }
+  ]
+}

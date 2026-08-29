@@ -13,7 +13,8 @@ layout(push_constant) uniform InstancePC {
     mat4 model;
     vec4 color;
     vec4 lightDir;
-    vec4 lightParams; // x = active scene lights, y = ambient, z = spec strength, w = shininess
+    vec4 lightParams; // x = active scene lights, y = ambient
+    vec4 material;    // x = metallic, y = roughness
 } pc;
 
 #ifdef DASH_SCENE_LIGHTS
@@ -28,9 +29,10 @@ void main()
 #ifdef DASH_SCENE_LIGHTS
     int lightCount = int(pc.lightParams.x);
     if (lightCount > 0) {
-        vec3 lit = accumulateSceneLights(normal, vWorldPos, lightCount,
-                                         pc.lightParams.y, pc.lightParams.z, pc.lightParams.w);
-        outColor = vec4(texColor.rgb * vColor * lit, texColor.a);
+        vec3 albedo = texColor.rgb * vColor;
+        vec3 lit = accumulateSceneLights(normal, vWorldPos, lightCount, pc.lightParams.y,
+                                         albedo, pc.material.x, pc.material.y);
+        outColor = vec4(lit, texColor.a);
         return;
     }
 #endif

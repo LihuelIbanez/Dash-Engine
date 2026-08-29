@@ -10,7 +10,7 @@ layout(push_constant) uniform TerrainPC {
     vec4 data0;  // eyePos.xyz, time
     vec4 data1;  // fogStart, fogEnd, lightDir.x, lightDir.y
     vec4 data2;  // lightDir.z, lightIntensity, lightColor.r, lightColor.g
-    vec4 data3;  // lightColor.b, ambientStrength, specularStrength, specularShininess
+    vec4 data3;  // lightColor.b, ambientStrength, unused, unused
 } pc;
 
 void main() {

@@ -1,5 +1,6 @@
 #include "MaterialAsset.h"
 
+#include <algorithm>
 #include <fstream>
 
 using json = nlohmann::json;
@@ -11,6 +12,8 @@ nlohmann::json MaterialAsset::toJson() const
     j["name"] = name;
     j["albedoTexture"] = albedoTexture;
     j["baseColor"] = {baseColor[0], baseColor[1], baseColor[2]};
+    j["metallic"] = metallic;
+    j["roughness"] = roughness;
     return j;
 }
 
@@ -29,6 +32,13 @@ MaterialAsset MaterialAsset::fromJson(const nlohmann::json& j)
                 m.baseColor[i] = j["baseColor"][i].get<float>();
         }
     }
+
+    // Absent in materials authored before the PBR switch: keep the defaults.
+    if (j.contains("metallic") && j["metallic"].is_number())
+        m.metallic = std::clamp(j["metallic"].get<float>(), 0.0f, 1.0f);
+    if (j.contains("roughness") && j["roughness"].is_number())
+        m.roughness = std::clamp(j["roughness"].get<float>(), 0.0f, 1.0f);
+
     return m;
 }
 

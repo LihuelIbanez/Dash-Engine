@@ -63,6 +63,11 @@ public:
     VkPipelineLayout pipelineLayout() const { return pipelineLayout_; }
     VkPipeline       skinnedPipeline() const { return skinnedPipeline_; }
     VkPipelineLayout skinnedPipelineLayout() const { return skinnedPipelineLayout_; }
+    // Same shader as pipeline(), only the vertex stride differs.
+    VkPipeline       terrainPipeline() const { return terrainPipeline_; }
+    VkPipelineLayout terrainPipelineLayout() const { return terrainPipelineLayout_; }
+    VkPipeline       billboardPipeline() const { return billboardPipeline_; }
+    VkPipelineLayout billboardPipelineLayout() const { return billboardPipelineLayout_; }
 
 private:
     VkImage        image_ = VK_NULL_HANDLE;
@@ -78,6 +83,10 @@ private:
     VkPipeline       pipeline_ = VK_NULL_HANDLE;
     VkPipelineLayout skinnedPipelineLayout_ = VK_NULL_HANDLE;
     VkPipeline       skinnedPipeline_ = VK_NULL_HANDLE;
+    VkPipelineLayout terrainPipelineLayout_ = VK_NULL_HANDLE;
+    VkPipeline       terrainPipeline_ = VK_NULL_HANDLE;
+    VkPipelineLayout billboardPipelineLayout_ = VK_NULL_HANDLE;
+    VkPipeline       billboardPipeline_ = VK_NULL_HANDLE;
 };
 
 } // namespace dash::vkexp

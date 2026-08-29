@@ -648,11 +648,16 @@ void TerrainMesh::buildVulkanMesh(
             packTexData(fx,   fy+1, ti01, tw01);
             packTexData(fx+1, fy+1, ti11, tw11);
 
+            const float ao00 = vert(fx,   fy  ).ao;
+            const float ao10 = vert(fx+1, fy  ).ao;
+            const float ao01 = vert(fx,   fy+1).ao;
+            const float ao11 = vert(fx+1, fy+1).ao;
+
             uint32_t baseIdx = static_cast<uint32_t>(outVerts.size());
-            outVerts.push_back({ p00, n00, c00, ti00, tw00, 0, 0 });
-            outVerts.push_back({ p10, n10, c10, ti10, tw10, 0, 0 });
-            outVerts.push_back({ p01, n01, c01, ti01, tw01, 0, 0 });
-            outVerts.push_back({ p11, n11, c11, ti11, tw11, 0, 0 });
+            outVerts.push_back({ p00, n00, c00, ti00, tw00, 0, 0, ao00 });
+            outVerts.push_back({ p10, n10, c10, ti10, tw10, 0, 0, ao10 });
+            outVerts.push_back({ p01, n01, c01, ti01, tw01, 0, 0, ao01 });
+            outVerts.push_back({ p11, n11, c11, ti11, tw11, 0, 0, ao11 });
 
             // Triangle 1: TL, TR, BL
             outIndices.push_back(baseIdx + 0);
@@ -679,6 +684,10 @@ void TerrainMesh::buildCliffWalls(
         static_cast<uint8_t>(TerrainTextureId::Rock), 0, 0, 0);
     const uint32_t rockTexWt = packU8x4(255, 0, 0, 0);
 
+    // Wall bases sit in the crease against the lower terrain, so they darken.
+    constexpr float kCliffTopAo = 1.0f;
+    constexpr float kCliffBottomAo = 0.45f;
+
     auto addCliffQuad = [&](float x0, float z0, float topY0, float botY0,
                             float x1, float z1, float topY1, float botY1,
                             float nx, float nz) {
@@ -687,10 +696,10 @@ void TerrainMesh::buildCliffWalls(
         uint32_t baseIdx = static_cast<uint32_t>(outVerts.size());
 
         // Four corners: topLeft, topRight, botLeft, botRight
-        outVerts.push_back({{x0, topY0, z0}, n, rockCol, rockTexIdx, rockTexWt, 1, 0});
-        outVerts.push_back({{x1, topY1, z1}, n, rockCol, rockTexIdx, rockTexWt, 1, 0});
-        outVerts.push_back({{x0, botY0, z0}, n, rockCol, rockTexIdx, rockTexWt, 1, 0});
-        outVerts.push_back({{x1, botY1, z1}, n, rockCol, rockTexIdx, rockTexWt, 1, 0});
+        outVerts.push_back({{x0, topY0, z0}, n, rockCol, rockTexIdx, rockTexWt, 1, 0, kCliffTopAo});
+        outVerts.push_back({{x1, topY1, z1}, n, rockCol, rockTexIdx, rockTexWt, 1, 0, kCliffTopAo});
+        outVerts.push_back({{x0, botY0, z0}, n, rockCol, rockTexIdx, rockTexWt, 1, 0, kCliffBottomAo});
+        outVerts.push_back({{x1, botY1, z1}, n, rockCol, rockTexIdx, rockTexWt, 1, 0, kCliffBottomAo});
 
         outIndices.push_back(baseIdx + 0);
         outIndices.push_back(baseIdx + 1);
@@ -782,10 +791,10 @@ void TerrainMesh::buildWaterMesh(
                 float z1 = (fy + 1) * TILE_SCALE;
 
                 uint32_t baseIdx = static_cast<uint32_t>(outVerts.size());
-                outVerts.push_back({{x0, wl, z0}, waterNorm, waterCol, waterTexIdx, waterTexWt, waterFlags, 0});
-                outVerts.push_back({{x1, wl, z0}, waterNorm, waterCol, waterTexIdx, waterTexWt, waterFlags, 0});
-                outVerts.push_back({{x0, wl, z1}, waterNorm, waterCol, waterTexIdx, waterTexWt, waterFlags, 0});
-                outVerts.push_back({{x1, wl, z1}, waterNorm, waterCol, waterTexIdx, waterTexWt, waterFlags, 0});
+                outVerts.push_back({{x0, wl, z0}, waterNorm, waterCol, waterTexIdx, waterTexWt, waterFlags, 0, 1.0f});
+                outVerts.push_back({{x1, wl, z0}, waterNorm, waterCol, waterTexIdx, waterTexWt, waterFlags, 0, 1.0f});
+                outVerts.push_back({{x0, wl, z1}, waterNorm, waterCol, waterTexIdx, waterTexWt, waterFlags, 0, 1.0f});
+                outVerts.push_back({{x1, wl, z1}, waterNorm, waterCol, waterTexIdx, waterTexWt, waterFlags, 0, 1.0f});
 
                 outIndices.push_back(baseIdx + 0);
                 outIndices.push_back(baseIdx + 1);

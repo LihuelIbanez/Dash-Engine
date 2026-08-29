@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <string>
 
 #include <vulkan/vulkan.h>
@@ -76,6 +77,9 @@ public:
     // descriptor set is needed for static casters. Passing a non-null
     // `boneSetLayout` builds the skinned variant, which adds the .dashmesh v2
     // stream at binding 1 and expects the bone palette at set 1.
+    // `vertexStride` overrides the binding 0 stride for streams that are not the
+    // shared Vertex layout — the shader only reads location 0, which every one of
+    // them keeps at offset 0. `label` names the log line, nothing else.
     static bool createShadowDepthPipeline(
         VkDevice device,
         VkExtent2D extent,
@@ -83,6 +87,36 @@ public:
         VkDescriptorSetLayout descriptorSetLayout,
         VkDescriptorSetLayout boneSetLayout,
         const std::string& vertSpvPath,
+        VkPipelineLayout& outPipelineLayout,
+        VkPipeline& outPipeline,
+        std::string& outError,
+        uint32_t vertexStride = 0,
+        const char* label = nullptr);
+
+    // Fullscreen resolve of the HDR target. No vertex input (the triangle comes
+    // from gl_VertexIndex), no depth, and dynamic viewport/scissor so one
+    // pipeline serves every target size — the editor viewport resizes freely.
+    static bool createTonemapPipeline(
+        VkDevice device,
+        VkRenderPass renderPass,
+        VkDescriptorSetLayout descriptorSetLayout,
+        const std::string& vertSpvPath,
+        const std::string& fragSpvPath,
+        VkPipelineLayout& outPipelineLayout,
+        VkPipeline& outPipeline,
+        std::string& outError);
+
+    // Depth-only billboard pass: the same procedural quad as
+    // createBillboardPipeline, but with a fragment stage that discards on the
+    // sprite alpha so the caster is the silhouette and not a solid rectangle.
+    // Needs set 0 bound for that sampler, unlike the static depth pipeline.
+    static bool createShadowBillboardPipeline(
+        VkDevice device,
+        VkExtent2D extent,
+        VkRenderPass renderPass,
+        VkDescriptorSetLayout descriptorSetLayout,
+        const std::string& vertSpvPath,
+        const std::string& fragSpvPath,
         VkPipelineLayout& outPipelineLayout,
         VkPipeline& outPipeline,
         std::string& outError);

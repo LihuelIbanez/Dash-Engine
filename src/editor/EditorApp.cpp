@@ -2860,6 +2860,94 @@ void EditorApp::renderWorldToTexture()
 
     vkCtx_.updateCamera(viewProj);
 
+    // ── Scene instances and lights ──────────────────────────────────────────
+    // Built up front because the shadow depth pass draws the very same casters,
+    // and it has to be recorded before the viewport pass: passes cannot nest.
+    const SceneData flatScene = dash::editor::flattenHierarchy(scene_);
+    std::vector<dash::vkexp::RenderInstance> instances =
+        dash::vkexp::SceneLoader::buildInstances(flatScene);
+    std::vector<dash::vkexp::SceneLight> sceneLights =
+        dash::vkexp::SceneLoader::buildLights(flatScene);
+
+    std::vector<dash::vkexp::InstanceResources> resources(instances.size());
+    for (size_t i = 0; i < instances.size(); ++i) {
+        auto& inst = instances[i];
+        inst.position.y += world_.terrain().sampleHeight(inst.position.x, inst.position.z);
+        resources[i].mesh = vkCtx_.resolveMesh(inst.meshId);
+        // Enemies fall back to the wolf model, as before, when no mesh is set.
+        if (!resources[i].mesh && !inst.isPlayer && vkCtx_.wolfMesh().indexCount() > 0)
+            resources[i].mesh = &vkCtx_.wolfMesh();
+    }
+
+    dash::vkexp::LightingParams lighting;
+    lighting.dirX = viewport3D_.lightDirX;
+    lighting.dirY = viewport3D_.lightDirY;
+    lighting.dirZ = viewport3D_.lightDirZ;
+    lighting.intensity = viewport3D_.lightIntensity;
+    lighting.colorR = viewport3D_.lightColorR;
+    lighting.colorG = viewport3D_.lightColorG;
+    lighting.colorB = viewport3D_.lightColorB;
+    lighting.ambient = viewport3D_.ambientStrength;
+
+    // Same sun Renderer::init synthesizes when a scene declares no light, so the
+    // Lighting panel drives the viewport shadows live. LightingParams.dir is the
+    // surface-to-light vector, SceneLight.dir the emission direction.
+    if (sceneLights.empty()) {
+        dash::vkexp::SceneLight sun;
+        sun.type = 0;
+        sun.dirX = -lighting.dirX;
+        sun.dirY = -lighting.dirY;
+        sun.dirZ = -lighting.dirZ;
+        sun.colorR = lighting.colorR;
+        sun.colorG = lighting.colorG;
+        sun.colorB = lighting.colorB;
+        sun.intensity = lighting.intensity;
+        sun.castsShadows = true;
+        sceneLights.push_back(sun);
+    }
+
+    // ── Shadow cascades ─────────────────────────────────────────────────────
+    int shadowLight = -1;
+    for (size_t i = 0; i < sceneLights.size(); ++i) {
+        if (sceneLights[i].type == 0 && sceneLights[i].castsShadows) {
+            shadowLight = static_cast<int>(i);
+            break;
+        }
+    }
+
+    // Same basis buildViewProjMatrix derives, reused for the frustum slices and
+    // for the billboard axes further down.
+    const dash::vkexp::Vec3 forward = dash::vkexp::normalize(
+        {camX_ * TILE_SCALE - eyeX, viewport3D_.cameraHeight - eyeY, camY_ * TILE_SCALE - eyeZ});
+    const dash::vkexp::Vec3 camRight = dash::vkexp::normalize(
+        dash::vkexp::cross(forward, {0.0f, 1.0f, 0.0f}));
+    const dash::vkexp::Vec3 camUp = dash::vkexp::cross(camRight, forward);
+
+    dash::vkexp::Vec3 shadowDir{-lighting.dirX, -lighting.dirY, -lighting.dirZ};
+    if (shadowLight >= 0) {
+        const dash::vkexp::SceneLight& l = sceneLights[static_cast<size_t>(shadowLight)];
+        shadowDir = {l.dirX, l.dirY, l.dirZ};
+    }
+    vkCtx_.updateShadowCascades({eyeX, eyeY, eyeZ}, forward, camRight, camUp,
+                                45.0f * 3.14159265f / 180.0f,
+                                static_cast<float>(vpW) / static_cast<float>(vpH),
+                                shadowDir, shadowLight);
+
+    // Scene lights need the "_lit"/"_shadow" pipeline; without it the viewport
+    // keeps the flat directional shading it always had.
+    const bool useSceneLights = vkCtx_.basicLitPipeline() != VK_NULL_HANDLE;
+
+    // Uploaded even when the lit pipeline is missing: the terrain shader reads
+    // the camera position and the cascade block out of the same buffer.
+    dash::vkexp::SceneLightsUbo lightUbo;
+    const int lightCount = dash::vkexp::packSceneLights(
+        &sceneLights, {eyeX, eyeY, eyeZ}, lightUbo);
+    vkCtx_.fillShadowUbo(lightUbo);
+    vkCtx_.updateSceneLights(lightUbo, lightCount);
+
+    // ── Shadow depth pass (outside the viewport render pass) ────────────────
+    vkCtx_.recordShadowPass(instances, resources);
+
     // ── Begin offscreen viewport render pass ────────────────────────────────
     vkCtx_.beginViewportRender(vpW, vpH);
     VkCommandBuffer cmd = vkCtx_.currentCmd();
@@ -2876,16 +2964,20 @@ void EditorApp::renderWorldToTexture()
         vkCmdBindVertexBuffers(cmd, 0, 1, vb, offsets);
         vkCmdBindIndexBuffer(cmd, vkCtx_.terrainMesh().indexBuffer(), 0, VK_INDEX_TYPE_UINT32);
 
-        // Push constants: eyePos(3) + time(1) + fogStart(1) + fogEnd(1) + lightDir(3) + intensity(1) + lightColor(3) + ambient(1) + specStr(1) + specShin(1) = 16 floats
+        // Push constants: eyePos(3) + time(1) + fogStart(1) + fogEnd(1) + lightDir(3) + intensity(1) + lightColor(3) + ambient(1) + 2 spare, then the per-layer roughness table
         static auto startTime = std::chrono::high_resolution_clock::now();
         float elapsed = std::chrono::duration<float>(std::chrono::high_resolution_clock::now() - startTime).count();
 
-        float terrainPC[16] = {
+        float layerRoughness[dash::vkexp::kTerrainRoughnessFloats];
+        dash::vkexp::packTerrainLayerRoughness(layerRoughness);
+
+        float terrainPC[dash::vkexp::kTerrainPushConstantFloats] = {
             eyeX, eyeY, eyeZ, elapsed,
             viewport3D_.fogStart, viewport3D_.fogEnd, viewport3D_.lightDirX, viewport3D_.lightDirY,
             viewport3D_.lightDirZ, viewport3D_.lightIntensity, viewport3D_.lightColorR, viewport3D_.lightColorG,
-            viewport3D_.lightColorB, viewport3D_.ambientStrength, viewport3D_.specularStrength, viewport3D_.specularShininess
+            viewport3D_.lightColorB, viewport3D_.ambientStrength, 0.0f, 0.0f
         };
+        std::copy(std::begin(layerRoughness), std::end(layerRoughness), terrainPC + 16);
         vkCmdPushConstants(cmd, vkCtx_.terrainPipelineLayout(),
                            VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
                            0, sizeof(terrainPC), terrainPC);
@@ -2907,11 +2999,11 @@ void EditorApp::renderWorldToTexture()
 
         static auto startTime2 = std::chrono::high_resolution_clock::now();
         float elapsed2 = std::chrono::duration<float>(std::chrono::high_resolution_clock::now() - startTime2).count();
-        float waterPC[16] = {
+        float waterPC[dash::vkexp::kTerrainPushConstantFloats] = {
             eyeX, eyeY, eyeZ, elapsed2,
             viewport3D_.fogStart, viewport3D_.fogEnd, viewport3D_.lightDirX, viewport3D_.lightDirY,
             viewport3D_.lightDirZ, viewport3D_.lightIntensity, viewport3D_.lightColorR, viewport3D_.lightColorG,
-            viewport3D_.lightColorB, viewport3D_.ambientStrength, viewport3D_.specularStrength, viewport3D_.specularShininess
+            viewport3D_.lightColorB, viewport3D_.ambientStrength, 0.0f, 0.0f
         };
         vkCmdPushConstants(cmd, vkCtx_.waterPipelineLayout(),
                            VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
@@ -2922,24 +3014,6 @@ void EditorApp::renderWorldToTexture()
 
     // ── Entity rendering ─────────────────────────────────────────────────────
     if (vkCtx_.cubeMesh().indexCount() > 0) {
-        // Resolve parenting first: the renderer knows nothing about parentId.
-        const SceneData flatScene = dash::editor::flattenHierarchy(scene_);
-        std::vector<dash::vkexp::RenderInstance> instances =
-            dash::vkexp::SceneLoader::buildInstances(flatScene);
-        const std::vector<dash::vkexp::SceneLight> sceneLights =
-            dash::vkexp::SceneLoader::buildLights(flatScene);
-
-        // Scene lights need the "_lit" pipeline; without it (or without lights)
-        // the viewport keeps the flat directional shading it always had.
-        const bool useSceneLights = !sceneLights.empty()
-                                 && vkCtx_.basicLitPipeline() != VK_NULL_HANDLE;
-        if (useSceneLights) {
-            dash::vkexp::SceneLightsUbo lightUbo;
-            const int lightCount = dash::vkexp::packSceneLights(
-                &sceneLights, {eyeX, eyeY, eyeZ}, lightUbo);
-            vkCtx_.updateSceneLights(lightUbo, lightCount);
-        }
-
         VkPipeline       opaquePipeline = useSceneLights ? vkCtx_.basicLitPipeline()
                                                          : vkCtx_.basicPipeline();
         VkPipelineLayout opaqueLayout   = useSceneLights ? vkCtx_.basicLitPipelineLayout()
@@ -2955,28 +3029,6 @@ void EditorApp::renderWorldToTexture()
         vkCmdBindVertexBuffers(cmd, 0, 1, vb, vbOffsets);
         vkCmdBindIndexBuffer(cmd, vkCtx_.cubeMesh().indexBuffer(), 0, vkCtx_.cubeMesh().indexType());
 
-        std::vector<dash::vkexp::InstanceResources> resources(instances.size());
-        for (size_t i = 0; i < instances.size(); ++i) {
-            auto& inst = instances[i];
-            inst.position.y += world_.terrain().sampleHeight(inst.position.x, inst.position.z);
-            resources[i].mesh = vkCtx_.resolveMesh(inst.meshId);
-            // Enemies fall back to the wolf model, as before, when no mesh is set.
-            if (!resources[i].mesh && !inst.isPlayer && vkCtx_.wolfMesh().indexCount() > 0)
-                resources[i].mesh = &vkCtx_.wolfMesh();
-        }
-
-        dash::vkexp::LightingParams lighting;
-        lighting.dirX = viewport3D_.lightDirX;
-        lighting.dirY = viewport3D_.lightDirY;
-        lighting.dirZ = viewport3D_.lightDirZ;
-        lighting.intensity = viewport3D_.lightIntensity;
-        lighting.colorR = viewport3D_.lightColorR;
-        lighting.colorG = viewport3D_.lightColorG;
-        lighting.colorB = viewport3D_.lightColorB;
-        lighting.ambient = viewport3D_.ambientStrength;
-        lighting.specStr = viewport3D_.specularStrength;
-        lighting.specShin = viewport3D_.specularShininess;
-
         dash::vkexp::SceneDrawParams params;
         params.opaquePipeline    = opaquePipeline;
         params.opaqueLayout      = opaqueLayout;
@@ -2985,13 +3037,9 @@ void EditorApp::renderWorldToTexture()
         params.defaultSet        = ds;
         params.fallbackMesh      = &vkCtx_.cubeMesh();
         params.lights            = useSceneLights ? &sceneLights : nullptr;
+        params.cameraRight       = camRight;
+        params.cameraUp          = camUp;
         std::memcpy(params.viewProj.m, viewProj, sizeof(params.viewProj.m));
-
-        // Billboard basis, same derivation as CameraController.
-        const dash::vkexp::Vec3 forward = dash::vkexp::normalize(
-            {camX_ * TILE_SCALE - eyeX, viewport3D_.cameraHeight - eyeY, camY_ * TILE_SCALE - eyeZ});
-        params.cameraRight = dash::vkexp::normalize(dash::vkexp::cross(forward, {0.0f, 1.0f, 0.0f}));
-        params.cameraUp    = dash::vkexp::cross(params.cameraRight, forward);
 
         dash::vkexp::drawSceneInstances(cmd, instances, resources, lighting, params);
     }
@@ -3248,31 +3296,22 @@ void EditorApp::drawLightingPanel()
     ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
     ImGui::SliderFloat("##intensity", &viewport3D_.lightIntensity, 0.0f, 3.0f, "%.2f");
 
-    ImGui::SeparatorText("Ambient & Specular");
+    ImGui::SeparatorText("Ambient");
 
     ImGui::Text("Ambient");
     ImGui::SameLine();
     ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
     ImGui::SliderFloat("##ambient", &viewport3D_.ambientStrength, 0.0f, 1.0f, "%.2f");
 
-    ImGui::Text("Specular");
-    ImGui::SameLine();
-    ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
-    ImGui::SliderFloat("##specstr", &viewport3D_.specularStrength, 0.0f, 1.0f, "%.2f");
-
-    ImGui::Text("Shininess");
-    ImGui::SameLine();
-    ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
-    ImGui::SliderFloat("##specshin", &viewport3D_.specularShininess, 1.0f, 128.0f, "%.0f");
+    // Specular is no longer a global knob: it falls out of each material's
+    // metallic/roughness through the Cook-Torrance BRDF.
 
     ImGui::Separator();
     if (ImGui::Button("Reset Defaults")) {
         viewport3D_.lightDirX = 0.3f;  viewport3D_.lightDirY = 0.9f;  viewport3D_.lightDirZ = 0.2f;
         viewport3D_.lightColorR = 1.0f; viewport3D_.lightColorG = 0.98f; viewport3D_.lightColorB = 0.92f;
-        viewport3D_.lightIntensity = 1.3f;
-        viewport3D_.ambientStrength = 0.55f;
-        viewport3D_.specularStrength = 0.15f;
-        viewport3D_.specularShininess = 32.0f;
+        viewport3D_.lightIntensity = 1.7f;
+        viewport3D_.ambientStrength = 0.30f;
     }
 
     ImGui::End();

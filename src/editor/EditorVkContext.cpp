@@ -84,6 +84,81 @@ static void checkVkResult(VkResult r) {
         std::fprintf(stderr, "[EditorVk] VkResult = %d\n", static_cast<int>(r));
 }
 
+// TEMP-VERIFY
+#include "stb_image_write.h"
+static void tempDumpViewport(VkPhysicalDevice pd, VkDevice dev, VkQueue queue,
+                             uint32_t queueFamily, VkImage image,
+                             uint32_t w, uint32_t h, const char* path)
+{
+    vkDeviceWaitIdle(dev);
+    const VkDeviceSize bytes = static_cast<VkDeviceSize>(w) * h * 4;
+
+    VkBuffer buf = VK_NULL_HANDLE; VkDeviceMemory mem = VK_NULL_HANDLE;
+    if (!createBuffer(pd, dev, bytes, VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                      buf, mem)) {
+        std::fprintf(stderr, "[Dump] buffer failed\n");
+        return;
+    }
+
+    VkCommandPoolCreateInfo pci{VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO};
+    pci.queueFamilyIndex = queueFamily;
+    VkCommandPool pool = VK_NULL_HANDLE;
+    vkCreateCommandPool(dev, &pci, nullptr, &pool);
+
+    VkCommandBufferAllocateInfo cai{VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO};
+    cai.commandPool = pool; cai.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY; cai.commandBufferCount = 1;
+    VkCommandBuffer cmd = VK_NULL_HANDLE;
+    vkAllocateCommandBuffers(dev, &cai, &cmd);
+
+    VkCommandBufferBeginInfo bi{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
+    bi.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    vkBeginCommandBuffer(cmd, &bi);
+
+    VkImageMemoryBarrier b{VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
+    b.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    b.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    b.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    b.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    b.image = image;
+    b.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+    b.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+    b.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+    vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                         VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1, &b);
+
+    VkBufferImageCopy region{};
+    region.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+    region.imageExtent = {w, h, 1};
+    vkCmdCopyImageToBuffer(cmd, image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, buf, 1, &region);
+
+    std::swap(b.oldLayout, b.newLayout);
+    b.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+    b.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+    vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                         VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1, &b);
+
+    vkEndCommandBuffer(cmd);
+    VkSubmitInfo si{VK_STRUCTURE_TYPE_SUBMIT_INFO};
+    si.commandBufferCount = 1; si.pCommandBuffers = &cmd;
+    vkQueueSubmit(queue, 1, &si, VK_NULL_HANDLE);
+    vkQueueWaitIdle(queue);
+
+    void* mapped = nullptr;
+    if (vkMapMemory(dev, mem, 0, bytes, 0, &mapped) == VK_SUCCESS) {
+        auto* px = static_cast<unsigned char*>(mapped);
+        for (VkDeviceSize i = 0; i < bytes; i += 4) std::swap(px[i], px[i + 2]);
+        stbi_write_png(path, static_cast<int>(w), static_cast<int>(h), 4, px,
+                       static_cast<int>(w) * 4);
+        vkUnmapMemory(dev, mem);
+        std::fprintf(stdout, "[Dump] wrote %s (%ux%u)\n", path, w, h);
+    }
+
+    vkDestroyCommandPool(dev, pool, nullptr);
+    vkDestroyBuffer(dev, buf, nullptr);
+    vkFreeMemory(dev, mem, nullptr);
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // init
 // ─────────────────────────────────────────────────────────────────────────────
@@ -166,15 +241,26 @@ bool EditorVkContext::init(SDL_Window* window)
     // ── Terrain texture array (load before descriptors) ───────────────────
     createTerrainTextureArray(); // non-fatal: falls back to dummy if it fails
 
+    // Before the descriptors: whether the depth target came up decides if the
+    // scene layout declares binding 3 and which fragment variants are loaded.
+    shadowMap_.initTarget(deviceCtx_.physicalDevice(), deviceCtx_.device());
+
     // ── Scene descriptors (UBO for camera) ──────────────────────────────────
     if (!createSceneDescriptors()) return false;
 
-    // ── Offscreen viewport render pass ──────────────────────────────────────
+    // ── HDR scene target: every viewport pipeline targets this pass ─────────
+    if (!hdr_.init(deviceCtx_.device())) {
+        std::fprintf(stderr, "[EditorVk] HDR target init failed.\n");
+        return false;
+    }
+
+    // ── Offscreen resolve pass (tonemap output, sampled by ImGui) ───────────
     {
         VkAttachmentDescription colorAtt{};
         colorAtt.format = VK_FORMAT_B8G8R8A8_UNORM;
         colorAtt.samples = VK_SAMPLE_COUNT_1_BIT;
-        colorAtt.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        // The fullscreen triangle covers every texel, so nothing is preserved.
+        colorAtt.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
         colorAtt.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
         colorAtt.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
         colorAtt.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
@@ -183,43 +269,48 @@ bool EditorVkContext::init(SDL_Window* window)
 
         VkAttachmentReference colorRef{0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL};
 
-        VkAttachmentDescription depthAtt{};
-        depthAtt.format = VK_FORMAT_D32_SFLOAT;
-        depthAtt.samples = VK_SAMPLE_COUNT_1_BIT;
-        depthAtt.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-        depthAtt.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-        depthAtt.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-        depthAtt.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-        depthAtt.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        depthAtt.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-
-        VkAttachmentReference depthRef{1, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL};
-
         VkSubpassDescription sub{};
         sub.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
         sub.colorAttachmentCount = 1;
         sub.pColorAttachments = &colorRef;
-        sub.pDepthStencilAttachment = &depthRef;
 
-        VkSubpassDependency dep{};
-        dep.srcSubpass = VK_SUBPASS_EXTERNAL;
-        dep.dstSubpass = 0;
-        dep.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-        dep.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-        dep.srcAccessMask = 0;
-        dep.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+        std::array<VkSubpassDependency, 2> deps{};
+        deps[0].srcSubpass = VK_SUBPASS_EXTERNAL;
+        deps[0].dstSubpass = 0;
+        deps[0].srcStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+        deps[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        deps[0].srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+        deps[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        deps[1].srcSubpass = 0;
+        deps[1].dstSubpass = VK_SUBPASS_EXTERNAL;
+        deps[1].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        deps[1].dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+        deps[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        deps[1].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 
-        std::array<VkAttachmentDescription, 2> atts = {colorAtt, depthAtt};
         VkRenderPassCreateInfo rpci{VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO};
-        rpci.attachmentCount = 2; rpci.pAttachments = atts.data();
+        rpci.attachmentCount = 1; rpci.pAttachments = &colorAtt;
         rpci.subpassCount = 1; rpci.pSubpasses = &sub;
-        rpci.dependencyCount = 1; rpci.pDependencies = &dep;
+        rpci.dependencyCount = static_cast<uint32_t>(deps.size());
+        rpci.pDependencies = deps.data();
         if (vkCreateRenderPass(deviceCtx_.device(), &rpci, nullptr, &vpRenderPass_) != VK_SUCCESS)
             return false;
     }
 
     // ── Pipelines ───────────────────────────────────────────────────────────
     if (!createPipelines()) return false;
+
+    if (!hdr_.createPipeline(deviceCtx_.device(), vpRenderPass_, VULKAN_SHADER_DIR)) {
+        std::fprintf(stderr, "[EditorVk] Tonemap pipeline unavailable.\n");
+        return false;
+    }
+
+    // Depth-only casters. The viewport has no bone palette, so skinned meshes
+    // cast their bind-pose silhouette.
+    if (shadowMap_.valid()) {
+        shadowMap_.createPipelines(deviceCtx_.device(), VULKAN_SHADER_DIR,
+                                   sceneDescLayout_, VK_NULL_HANDLE);
+    }
 
     // ── Cube mesh (for entity rendering) ────────────────────────────────────
     cubeMeshBuf_.initCube(deviceCtx_.physicalDevice(), deviceCtx_.device());
@@ -296,31 +387,45 @@ bool EditorVkContext::createSceneDescriptors()
     lightsB.binding = 2; lightsB.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
     lightsB.descriptorCount = 1; lightsB.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
-    // 3 is reserved for the runtime shadow cascades, which the viewport lacks.
+    // Only declared when the depth target exists: the "_lit" variants used
+    // otherwise never reference it.
+    VkDescriptorSetLayoutBinding shadowB{};
+    shadowB.binding = 3; shadowB.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    shadowB.descriptorCount = 1; shadowB.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
     VkDescriptorSetLayoutBinding terrainAlbedoB{};
     terrainAlbedoB.binding = 4; terrainAlbedoB.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
     terrainAlbedoB.descriptorCount = 1; terrainAlbedoB.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
-    std::array<VkDescriptorSetLayoutBinding, 4> bindings = {uboB, samplerB, lightsB, terrainAlbedoB};
+    std::vector<VkDescriptorSetLayoutBinding> bindings = {uboB, samplerB, lightsB};
+    if (shadowMap_.valid()) bindings.push_back(shadowB);
+    bindings.push_back(terrainAlbedoB);
+
     VkDescriptorSetLayoutCreateInfo lci{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
     lci.bindingCount = static_cast<uint32_t>(bindings.size()); lci.pBindings = bindings.data();
     if (vkCreateDescriptorSetLayout(dev, &lci, nullptr, &sceneDescLayout_) != VK_SUCCESS)
         return false;
 
+    // The shadow map is a third combined sampler in the set; undercounting here
+    // makes vkAllocateDescriptorSets fail and the viewport come up empty.
+    const uint32_t samplersPerSet = shadowMap_.valid() ? 3u : 2u;
     std::array<VkDescriptorPoolSize, 2> poolSizes = {{
         {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 2},
-        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 2}
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, samplersPerSet}
     }};
     VkDescriptorPoolCreateInfo pci{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
-    pci.maxSets = 1; pci.poolSizeCount = 2; pci.pPoolSizes = poolSizes.data();
+    pci.maxSets = 1; pci.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
+    pci.pPoolSizes = poolSizes.data();
     if (vkCreateDescriptorPool(dev, &pci, nullptr, &sceneDescPool_) != VK_SUCCESS)
         return false;
 
     VkDescriptorSetAllocateInfo dsai{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
     dsai.descriptorPool = sceneDescPool_; dsai.descriptorSetCount = 1;
     dsai.pSetLayouts = &sceneDescLayout_;
-    if (vkAllocateDescriptorSets(dev, &dsai, &sceneDescSet_) != VK_SUCCESS)
+    if (vkAllocateDescriptorSets(dev, &dsai, &sceneDescSet_) != VK_SUCCESS) {
+        std::fprintf(stderr, "[EditorVk] Failed to allocate descriptor sets.\n");
         return false;
+    }
 
     // UBO buffer (persistently mapped to avoid per-frame map/unmap)
     if (!createBuffer(deviceCtx_.physicalDevice(), dev, 64, // Mat4 = 64 bytes
@@ -391,7 +496,14 @@ bool EditorVkContext::createSceneDescriptors()
     terrainAlbedoInfo.imageView = terrainTextures_.albedo.valid() ? terrainTextures_.albedo.view : dummyTexView_;
     terrainAlbedoInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-    std::array<VkWriteDescriptorSet, 4> writes{};
+    // The depth pass runs before the viewport pass of every frame, so by the
+    // time a fragment samples this the array is already read-only.
+    VkDescriptorImageInfo shadowInfo{};
+    shadowInfo.sampler = shadowMap_.sampler();
+    shadowInfo.imageView = shadowMap_.imageView();
+    shadowInfo.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+
+    std::array<VkWriteDescriptorSet, 5> writes{};
     writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
     writes[0].dstSet = sceneDescSet_; writes[0].dstBinding = 0;
     writes[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
@@ -408,11 +520,20 @@ bool EditorVkContext::createSceneDescriptors()
     writes[2].descriptorCount = 1; writes[2].pBufferInfo = &lightBinfo;
 
     writes[3].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    writes[3].dstSet = sceneDescSet_; writes[3].dstBinding = 4;
+    writes[3].dstSet = sceneDescSet_; writes[3].dstBinding = 3;
     writes[3].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    writes[3].descriptorCount = 1; writes[3].pImageInfo = &terrainAlbedoInfo;
+    writes[3].descriptorCount = 1; writes[3].pImageInfo = &shadowInfo;
 
-    vkUpdateDescriptorSets(dev, static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
+    writes[4].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    writes[4].dstSet = sceneDescSet_; writes[4].dstBinding = 4;
+    writes[4].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    writes[4].descriptorCount = 1; writes[4].pImageInfo = &terrainAlbedoInfo;
+
+    // Without a depth target binding 3 is absent, so its write is skipped by
+    // moving the terrain write into its slot.
+    if (!shadowMap_.valid()) writes[3] = writes[4];
+
+    vkUpdateDescriptorSets(dev, shadowMap_.valid() ? 5u : 4u, writes.data(), 0, nullptr);
 
     return true;
 }
@@ -428,21 +549,29 @@ bool EditorVkContext::createPipelines()
     std::string shaderDir = VULKAN_SHADER_DIR;
     std::string err;
 
-    if (!PipelineBuilder::createTerrainPipeline(dev, ext, vpRenderPass_, sceneDescLayout_,
-            shaderDir + "/terrain.vert.spv", shaderDir + "/terrain.frag.spv",
+    // With a live depth target the layout also carries binding 3, which only the
+    // "_shadow" fragment variants declare.
+    const bool shadows = shadowMap_.valid();
+
+    // The scene is shaded into the HDR attachment; vpRenderPass_ only resolves it.
+    const VkRenderPass scenePass = hdr_.renderPass();
+
+    if (!PipelineBuilder::createTerrainPipeline(dev, ext, scenePass, sceneDescLayout_,
+            shaderDir + "/terrain.vert.spv",
+            shaderDir + (shadows ? "/terrain_shadow.frag.spv" : "/terrain.frag.spv"),
             terrainPipelineLayout_, terrainPipeline_, err)) {
         std::fprintf(stderr, "[EditorVk] Terrain pipeline: %s\n", err.c_str());
         return false;
     }
 
-    if (!PipelineBuilder::createWaterPipeline(dev, ext, vpRenderPass_, sceneDescLayout_,
+    if (!PipelineBuilder::createWaterPipeline(dev, ext, scenePass, sceneDescLayout_,
             shaderDir + "/water.vert.spv", shaderDir + "/water.frag.spv",
             waterPipelineLayout_, waterPipeline_, err)) {
         std::fprintf(stderr, "[EditorVk] Water pipeline: %s\n", err.c_str());
         return false;
     }
 
-    if (!PipelineBuilder::createBasicPipeline(dev, ext, vpRenderPass_, sceneDescLayout_,
+    if (!PipelineBuilder::createBasicPipeline(dev, ext, scenePass, sceneDescLayout_,
             shaderDir + "/basic.vert.spv", shaderDir + "/basic.frag.spv",
             basicPipelineLayout_, basicPipeline_, err)) {
         std::fprintf(stderr, "[EditorVk] Basic pipeline: %s\n", err.c_str());
@@ -450,8 +579,9 @@ bool EditorVkContext::createPipelines()
     }
 
     // Lit variant is optional: without it the viewport keeps the flat shading.
-    if (!PipelineBuilder::createBasicPipeline(dev, ext, vpRenderPass_, sceneDescLayout_,
-            shaderDir + "/basic.vert.spv", shaderDir + "/basic_lit.frag.spv",
+    if (!PipelineBuilder::createBasicPipeline(dev, ext, scenePass, sceneDescLayout_,
+            shaderDir + "/basic.vert.spv",
+            shaderDir + (shadows ? "/basic_shadow.frag.spv" : "/basic_lit.frag.spv"),
             basicLitPipelineLayout_, basicLitPipeline_, err)) {
         std::fprintf(stderr, "[EditorVk] Lit basic pipeline: %s (scene lights disabled)\n", err.c_str());
         basicLitPipeline_ = VK_NULL_HANDLE;
@@ -459,7 +589,7 @@ bool EditorVkContext::createPipelines()
     }
 
     // Billboards are optional: without them the viewport still draws meshes.
-    if (!PipelineBuilder::createBillboardPipeline(dev, ext, vpRenderPass_, sceneDescLayout_,
+    if (!PipelineBuilder::createBillboardPipeline(dev, ext, scenePass, sceneDescLayout_,
             shaderDir + "/billboard.vert.spv", shaderDir + "/billboard.frag.spv",
             billboardPipelineLayout_, billboardPipeline_, err)) {
         std::fprintf(stderr, "[EditorVk] Billboard pipeline: %s (billboards disabled)\n", err.c_str());
@@ -526,23 +656,20 @@ bool EditorVkContext::createOffscreenTarget(uint32_t w, uint32_t h)
 
     // Color image
     if (!createImage(pd, dev, w, h, VK_FORMAT_B8G8R8A8_UNORM,
-            VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+            VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT
+            | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
             vpColorImage_, vpColorMemory_))
         return false;
     vpColorView_ = createView(dev, vpColorImage_, VK_FORMAT_B8G8R8A8_UNORM, VK_IMAGE_ASPECT_COLOR_BIT);
 
-    // Depth image
-    if (!createImage(pd, dev, w, h, VK_FORMAT_D32_SFLOAT,
-            VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-            vpDepthImage_, vpDepthMemory_))
-        return false;
-    vpDepthView_ = createView(dev, vpDepthImage_, VK_FORMAT_D32_SFLOAT, VK_IMAGE_ASPECT_DEPTH_BIT);
+    // Scene colour and depth live in the HDR target; this one only receives the
+    // resolved image, so it needs no depth attachment.
+    if (!hdr_.createResources(pd, dev, w, h)) return false;
 
-    // Framebuffer
-    std::array<VkImageView, 2> atts = {vpColorView_, vpDepthView_};
+    std::array<VkImageView, 1> atts = {vpColorView_};
     VkFramebufferCreateInfo fci{VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO};
     fci.renderPass = vpRenderPass_;
-    fci.attachmentCount = 2; fci.pAttachments = atts.data();
+    fci.attachmentCount = 1; fci.pAttachments = atts.data();
     fci.width = w; fci.height = h; fci.layers = 1;
     if (vkCreateFramebuffer(dev, &fci, nullptr, &vpFramebuffer_) != VK_SUCCESS)
         return false;
@@ -573,9 +700,7 @@ void EditorVkContext::destroyOffscreenTarget()
         vpImGuiDesc_ = VK_NULL_HANDLE;
     }
     if (vpFramebuffer_) { vkDestroyFramebuffer(dev, vpFramebuffer_, nullptr); vpFramebuffer_ = VK_NULL_HANDLE; }
-    if (vpDepthView_)   { vkDestroyImageView(dev, vpDepthView_, nullptr);     vpDepthView_ = VK_NULL_HANDLE; }
-    if (vpDepthImage_)  { vkDestroyImage(dev, vpDepthImage_, nullptr);        vpDepthImage_ = VK_NULL_HANDLE; }
-    if (vpDepthMemory_) { vkFreeMemory(dev, vpDepthMemory_, nullptr);         vpDepthMemory_ = VK_NULL_HANDLE; }
+    hdr_.destroyResources(dev);
     if (vpColorView_)   { vkDestroyImageView(dev, vpColorView_, nullptr);     vpColorView_ = VK_NULL_HANDLE; }
     if (vpColorImage_)  { vkDestroyImage(dev, vpColorImage_, nullptr);        vpColorImage_ = VK_NULL_HANDLE; }
     if (vpColorMemory_) { vkFreeMemory(dev, vpColorMemory_, nullptr);         vpColorMemory_ = VK_NULL_HANDLE; }
@@ -584,10 +709,28 @@ void EditorVkContext::destroyOffscreenTarget()
 // ─────────────────────────────────────────────────────────────────────────────
 // Per-frame lifecycle
 // ─────────────────────────────────────────────────────────────────────────────
+// TEMP-VERIFY: dumps the offscreen viewport to PNG so the shadows can be
+// eyeballed without screen-recording permission. Removed after verification.
+static void tempDumpViewport(VkPhysicalDevice pd, VkDevice dev, VkQueue queue,
+                             uint32_t queueFamily, VkImage image,
+                             uint32_t w, uint32_t h, const char* path);
+
 bool EditorVkContext::beginFrame()
 {
     if (!frameGraph_.beginFrame(currentImageIndex_))
         return false;
+
+    if (const char* dumpAt = std::getenv("DASH_DUMP_VIEWPORT")) {
+        static int frame = 0;
+        if (++frame == std::atoi(dumpAt) && vpColorImage_ != VK_NULL_HANDLE) {
+            tempDumpViewport(deviceCtx_.physicalDevice(), deviceCtx_.device(),
+                             deviceCtx_.graphicsQueue(),
+                             deviceCtx_.queueFamilies().graphicsFamily.value(),
+                             vpColorImage_, vpWidth_, vpHeight_,
+                             "/tmp/editor_viewport.png");
+        }
+    }
+
     frameInFlight_ = true;
 
     VkCommandBuffer cmd = frameGraph_.commandBuffer(currentImageIndex_);
@@ -645,15 +788,8 @@ void EditorVkContext::beginViewportRender(uint32_t width, uint32_t height)
 
     VkCommandBuffer cmd = currentCmd();
 
-    VkRenderPassBeginInfo rpbi{VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
-    rpbi.renderPass = vpRenderPass_;
-    rpbi.framebuffer = vpFramebuffer_;
-    rpbi.renderArea.extent = {vpWidth_, vpHeight_};
-    VkClearValue clears[2]{};
-    clears[0].color = {{0.157f, 0.216f, 0.294f, 1.0f}}; // dark sky blue
-    clears[1].depthStencil = {1.0f, 0};
-    rpbi.clearValueCount = 2; rpbi.pClearValues = clears;
-    vkCmdBeginRenderPass(cmd, &rpbi, VK_SUBPASS_CONTENTS_INLINE);
+    const float clear[4] = {0.157f, 0.216f, 0.294f, 1.0f};  // dark sky blue
+    hdr_.beginPass(cmd, clear);
 
     // Set viewport + scissor
     VkViewport vp{};
@@ -668,8 +804,19 @@ void EditorVkContext::beginViewportRender(uint32_t width, uint32_t height)
 void EditorVkContext::endViewportRender()
 {
     VkCommandBuffer cmd = currentCmd();
+    hdr_.endPass(cmd);
+
+    // ImGui samples vpColorImage_ raw onto a _UNORM swapchain, so this resolve
+    // is the one that has to encode sRGB itself.
+    VkRenderPassBeginInfo rpbi{VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
+    rpbi.renderPass = vpRenderPass_;
+    rpbi.framebuffer = vpFramebuffer_;
+    rpbi.renderArea.extent = {vpWidth_, vpHeight_};
+    VkClearValue clear{};
+    rpbi.clearValueCount = 1; rpbi.pClearValues = &clear;
+    vkCmdBeginRenderPass(cmd, &rpbi, VK_SUBPASS_CONTENTS_INLINE);
+    hdr_.drawTonemap(cmd, grading_, true);
     vkCmdEndRenderPass(cmd);
-    // The render pass finalLayout transitions color to SHADER_READ_ONLY_OPTIMAL automatically
 }
 
 ImTextureID EditorVkContext::viewportTexture() const
@@ -698,6 +845,142 @@ void EditorVkContext::updateSceneLights(const SceneLightsUbo& ubo, int count)
     const std::size_t bytes = offsetof(SceneLightsUbo, lights)
                             + static_cast<std::size_t>(clamped) * sizeof(SceneLightGpu);
     std::memcpy(lightUboMapped_, &ubo, bytes);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Directional shadow cascades — same math and tuning as Renderer, so the
+// viewport and the game agree on where the shadows land.
+// ─────────────────────────────────────────────────────────────────────────────
+void EditorVkContext::updateShadowCascades(const Vec3& camPos, const Vec3& forward,
+                                           const Vec3& right, const Vec3& up,
+                                           float fovYRadians, float aspect,
+                                           const Vec3& lightDir, int lightIndex)
+{
+    for (Mat4& m : shadowMatrices_) m = Mat4{};
+    for (float& v : shadowSplits_) v = 0.0f;
+    for (float& v : shadowTexels_) v = 0.0f;
+    for (float& v : shadowDepthBias_) v = 0.0f;
+    for (float& v : shadowParams_) v = 0.0f;
+    shadowLightIndex_ = -1;
+
+    if (!shadowMap_.valid() || lightIndex < 0) return;
+
+    shadowLightIndex_ = lightIndex;
+    shadowLightDir_ = lightDir;
+    shadowParams_[0] = static_cast<float>(lightIndex + 1);
+    shadowParams_[1] = 1.0f / static_cast<float>(ShadowMap::kResolution);
+    shadowParams_[2] = 0.10f;
+
+    float splits[kShadowCascades];
+    computeCascadeSplits(0.5f, kShadowMaxDistance, 0.7f, splits);
+
+    float sliceNear = 0.1f;
+    for (int i = 0; i < kShadowCascades; ++i) {
+        const ShadowVolume slice = frustumSliceVolume(camPos, forward, right, up,
+                                                      fovYRadians, aspect,
+                                                      sliceNear, splits[i]);
+        const ShadowVolume snapped =
+            snapVolumeToTexelGrid(lightDir, slice, ShadowMap::kResolution);
+        shadowMatrices_[i] = directionalLightMatrix(lightDir, snapped);
+
+        const float texel = shadowTexelWorldSize(snapped, ShadowMap::kResolution);
+        shadowSplits_[i] = splits[i];
+        shadowTexels_[i] = texel;
+        shadowDepthBias_[i] = (texel * 1.5f) / (2.0f * snapped.radius);
+
+        sliceNear = splits[i];
+    }
+
+    if (!shadowLogged_) {
+        shadowLogged_ = true;
+        std::printf("[Shadow] Viewport light %d casts over %d cascades to %.0f units"
+                    " (%.0f / %.0f / %.0f mm per texel).\n",
+                    lightIndex, kShadowCascades, kShadowMaxDistance,
+                    shadowTexels_[0] * 1000.0f,
+                    shadowTexels_[1] * 1000.0f,
+                    shadowTexels_[2] * 1000.0f);
+    }
+}
+
+void EditorVkContext::fillShadowUbo(SceneLightsUbo& ubo) const
+{
+    for (int i = 0; i < kShadowCascades; ++i) {
+        std::memcpy(ubo.shadowMatrices[i], shadowMatrices_[i].m, sizeof(shadowMatrices_[i].m));
+    }
+    std::memcpy(ubo.shadowSplits, shadowSplits_, sizeof(ubo.shadowSplits));
+    std::memcpy(ubo.shadowTexels, shadowTexels_, sizeof(ubo.shadowTexels));
+    std::memcpy(ubo.shadowDepthBias, shadowDepthBias_, sizeof(ubo.shadowDepthBias));
+    std::memcpy(ubo.shadowParams, shadowParams_, sizeof(ubo.shadowParams));
+}
+
+void EditorVkContext::recordShadowPass(const std::vector<RenderInstance>& instances,
+                                       const std::vector<InstanceResources>& resources)
+{
+    if (!shadowMap_.valid()) return;
+
+    VkCommandBuffer cmd = currentCmd();
+    const bool draws = shadowLightIndex_ >= 0 && shadowMap_.hasPipelines();
+    const bool terrainCasts = draws
+                           && shadowMap_.terrainPipeline() != VK_NULL_HANDLE
+                           && terrainMeshBuf_.indexCount() > 0;
+
+    // Billboards only spin around Y to face the light, which anchors the shadow
+    // at the foot of the sprite instead of detaching it.
+    Vec3 lightRight{1.0f, 0.0f, 0.0f};
+    {
+        const Vec3 axis = normalize(cross(shadowLightDir_, Vec3{0.0f, 1.0f, 0.0f}));
+        if (dot(axis, axis) > 0.5f) lightRight = axis;
+    }
+
+    for (int cascade = 0; cascade < kShadowCascades; ++cascade) {
+        // Entered even with no caster: the clear is what leaves the layer in the
+        // layout the descriptor written at init already promises.
+        shadowMap_.beginPass(cmd, cascade);
+
+        if (terrainCasts) {
+            vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, shadowMap_.terrainPipeline());
+            VkBuffer vb[] = { terrainMeshBuf_.vertexBuffer() };
+            VkDeviceSize offsets[] = { 0 };
+            vkCmdBindVertexBuffers(cmd, 0, 1, vb, offsets);
+            vkCmdBindIndexBuffer(cmd, terrainMeshBuf_.indexBuffer(), 0, VK_INDEX_TYPE_UINT32);
+
+            // Terrain vertices are already in world space.
+            float terrainPC[kShadowPushConstantFloats];
+            const Mat4 model = identity();
+            std::memcpy(terrainPC, model.m, sizeof(model.m));
+            std::memcpy(terrainPC + 16, shadowMatrices_[cascade].m,
+                        sizeof(shadowMatrices_[cascade].m));
+            vkCmdPushConstants(cmd, shadowMap_.terrainPipelineLayout(),
+                               VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(terrainPC), terrainPC);
+
+            vkCmdDrawIndexed(cmd, terrainMeshBuf_.indexCount(), 1, 0, 0, 0);
+        }
+
+        if (draws && cubeMeshBuf_.indexCount() > 0) {
+            vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, shadowMap_.pipeline());
+            VkBuffer vb[] = { cubeMeshBuf_.vertexBuffer() };
+            VkDeviceSize offsets[] = { 0 };
+            vkCmdBindVertexBuffers(cmd, 0, 1, vb, offsets);
+            vkCmdBindIndexBuffer(cmd, cubeMeshBuf_.indexBuffer(), 0, cubeMeshBuf_.indexType());
+
+            SceneDrawParams params;
+            params.depthOnly         = true;
+            params.opaquePipeline    = shadowMap_.pipeline();
+            params.opaqueLayout      = shadowMap_.pipelineLayout();
+            params.billboardPipeline = shadowMap_.billboardPipeline();
+            params.billboardLayout   = shadowMap_.billboardPipelineLayout();
+            params.defaultSet        = sceneDescSet_;
+            params.fallbackMesh      = &cubeMeshBuf_;
+            // Culling then happens against this cascade's frustum.
+            params.viewProj          = shadowMatrices_[cascade];
+            params.cameraRight       = lightRight;
+            params.cameraUp          = Vec3{0.0f, 1.0f, 0.0f};
+
+            drawSceneInstances(cmd, instances, resources, LightingParams{}, params);
+        }
+
+        shadowMap_.endPass(cmd);
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -760,6 +1043,8 @@ void EditorVkContext::shutdown()
 
     if (vpSampler_) { vkDestroySampler(dev, vpSampler_, nullptr); vpSampler_ = VK_NULL_HANDLE; }
     if (vpRenderPass_) { vkDestroyRenderPass(dev, vpRenderPass_, nullptr); vpRenderPass_ = VK_NULL_HANDLE; }
+
+    shadowMap_.shutdown(dev);
 
     // Terrain texture arrays
     destroyTerrainTextureSet(dev, terrainTextures_);

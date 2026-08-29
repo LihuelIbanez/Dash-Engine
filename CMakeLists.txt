@@ -228,6 +228,7 @@ if(ENABLE_VULKAN_EXPERIMENTAL AND NOT IOS)
             ${CMAKE_SOURCE_DIR}/src/rendering/vulkan/PlayerController.cpp
             ${CMAKE_SOURCE_DIR}/src/rendering/vulkan/SwapchainContext.cpp
             ${CMAKE_SOURCE_DIR}/src/rendering/vulkan/FrameGraphLite.cpp
+            ${CMAKE_SOURCE_DIR}/src/rendering/vulkan/HdrTarget.cpp
             ${CMAKE_SOURCE_DIR}/src/rendering/vulkan/Renderer.cpp
             ${CMAKE_SOURCE_DIR}/src/rendering/vulkan/SceneRenderer.cpp
             ${CMAKE_SOURCE_DIR}/src/rendering/vulkan/ShadowMap.cpp
@@ -261,7 +262,9 @@ if(ENABLE_VULKAN_EXPERIMENTAL AND NOT IOS)
                 water.vert water.frag
                 billboard.vert billboard.frag
                 skinned.vert skinned.frag
-                shadow_depth.vert shadow_depth_skinned.vert)
+                shadow_depth.vert shadow_depth_skinned.vert
+                shadow_billboard.vert shadow_billboard.frag
+                tonemap.vert tonemap.frag)
 
             # Fragment shaders compiled twice: the plain variant targets descriptor
             # layouts without the scene-light binding (editor viewport), the "_lit"

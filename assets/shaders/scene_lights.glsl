@@ -30,19 +30,20 @@ layout(set = 0, binding = 2) uniform SceneLightsUBO {
 #include "shadow_sample.glsl"
 #endif
 
-vec3 hemisphericAmbient(vec3 N, float strength)
-{
-    const vec3 kSky    = vec3(0.58, 0.64, 0.78);
-    const vec3 kGround = vec3(0.26, 0.22, 0.18);
-    return mix(kGround, kSky, N.y * 0.5 + 0.5) * strength;
-}
+#include "pbr.glsl"
 
-// Blinn-Phong accumulation over the first `count` scene lights.
-vec3 accumulateSceneLights(vec3 N, vec3 worldPos, int count,
-                           float ambient, float specStrength, float shininess)
+// Cook-Torrance accumulation over the first `count` scene lights. Returns the
+// final surface colour, not a multiplier: albedo enters inside the BRDF.
+vec3 accumulateSceneLights(vec3 N, vec3 worldPos, int count, float ambient,
+                           vec3 albedo, float metallic, float roughness)
 {
     const vec3 V = normalize(scene.cameraPos.xyz - worldPos);
-    vec3 acc = hemisphericAmbient(N, ambient);
+    // GGX blows up as roughness reaches zero; this keeps the highlight finite.
+    roughness = clamp(roughness, 0.045, 1.0);
+    metallic  = clamp(metallic, 0.0, 1.0);
+
+    vec3 acc = dashPbrAmbient(N, V, albedo, metallic, roughness, ambient,
+                              kDashSkyAmbient, kDashGroundAmbient);
 
     for (int i = 0; i < min(count, kMaxSceneLights); ++i) {
         const SceneLight l = scene.lights[i];
@@ -67,7 +68,7 @@ vec3 accumulateSceneLights(vec3 N, vec3 worldPos, int count,
         }
         if (attenuation <= 0.0) continue;
 
-        vec3 radiance = l.colorInt.rgb * l.colorInt.a * attenuation;
+        vec3 radiance = l.colorInt.rgb * (l.colorInt.a * kDashLightUnit) * attenuation;
         const float NdotL = max(dot(N, L), 0.0);
 
 #ifdef DASH_SHADOWS
@@ -77,11 +78,7 @@ vec3 accumulateSceneLights(vec3 N, vec3 worldPos, int count,
         }
 #endif
 
-        acc += radiance * NdotL;
-
-        const vec3 H = normalize(L + V);
-        const float spec = pow(max(dot(N, H), 0.0), max(shininess, 1.0));
-        acc += radiance * spec * specStrength * step(1e-4, NdotL);
+        acc += dashPbrDirect(N, V, L, radiance, albedo, metallic, roughness);
     }
 
     return acc;

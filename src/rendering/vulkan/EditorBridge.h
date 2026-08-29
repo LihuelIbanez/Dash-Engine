@@ -11,13 +11,17 @@ struct GLFWwindow;
 
 namespace dash::vkexp {
 
+// Recalibrated for the Cook-Torrance BRDF (assets/shaders/pbr.glsl). Intensity
+// keeps its authored unit — the shader multiplies by pi to cancel the diffuse
+// normalisation — but it is nudged up because the old flat Blinn-Phong sheen is
+// gone and a rough dielectric now reflects almost nothing off-specular.
+// `ambient` had to rise too: it is the only fill left in shadow now that the
+// terrain's half-Lambert wrap is gone.
 struct LightingParams {
     float dirX = 0.3f, dirY = 0.9f, dirZ = 0.2f;
-    float intensity = 1.3f;
+    float intensity = 1.7f;
     float colorR = 1.0f, colorG = 0.98f, colorB = 0.92f;
-    float ambient = 0.55f;
-    float specStr = 0.15f;
-    float specShin = 32.0f;
+    float ambient = 0.30f;
 };
 
 struct FogParams {

@@ -140,7 +140,9 @@ bool TextureLoader::createTextureFromPixels(VkPhysicalDevice physicalDevice,
     VkImageCreateInfo imgInfo{};
     imgInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
     imgInfo.imageType = VK_IMAGE_TYPE_2D;
-    imgInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
+    // Albedo is authored in sRGB; the sampler decodes it so the shading maths
+    // downstream operates on linear values.
+    imgInfo.format = VK_FORMAT_R8G8B8A8_SRGB;
     imgInfo.extent = {width, height, 1};
     imgInfo.mipLevels = 1;
     imgInfo.arrayLayers = 1;
@@ -241,7 +243,7 @@ bool TextureLoader::createTextureFromPixels(VkPhysicalDevice physicalDevice,
     viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
     viewInfo.image = out.image;
     viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-    viewInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
+    viewInfo.format = VK_FORMAT_R8G8B8A8_SRGB;
     viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
     viewInfo.subresourceRange.baseMipLevel = 0;
     viewInfo.subresourceRange.levelCount = 1;
