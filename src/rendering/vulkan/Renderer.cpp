@@ -178,6 +178,10 @@ bool Renderer::createDescriptors()
     shadowBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
     shadowBinding.descriptorCount = 1;
     shadowBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+    // MoltenVK reports mutableComparisonSamplers as unsupported, so a sampler
+    // with compareEnable may only reach a shader as an immutable one.
+    const VkSampler shadowSampler = shadowMap_.sampler();
+    shadowBinding.pImmutableSamplers = &shadowSampler;
 
     VkDescriptorSetLayoutBinding terrainAlbedoBinding{};
     terrainAlbedoBinding.binding = 4;
@@ -185,12 +189,27 @@ bool Renderer::createDescriptors()
     terrainAlbedoBinding.descriptorCount = 1;
     terrainAlbedoBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
+    VkDescriptorSetLayoutBinding ssaoBinding{};
+    ssaoBinding.binding = 5;
+    ssaoBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    ssaoBinding.descriptorCount = 1;
+    ssaoBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+    VkDescriptorSetLayoutBinding terrainNormalBinding{};
+    terrainNormalBinding.binding = 6;
+    terrainNormalBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    terrainNormalBinding.descriptorCount = 1;
+    terrainNormalBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
     // Binding 3 only exists when the depth target came up; the "_lit" shader
-    // variants used in that case never declare it. Binding 4 is always present
-    // because both terrain fragment variants sample the layer array.
+    // variants used in that case never declare it. Bindings 4, 5 and 6 are always
+    // present: every terrain variant samples the layer arrays, and every shader
+    // that pulls in ssao_sample.glsl samples the AO buffer.
     std::vector<VkDescriptorSetLayoutBinding> bindings = {uboBinding, samplerBinding, lightsBinding};
     if (shadowMap_.valid()) bindings.push_back(shadowBinding);
     bindings.push_back(terrainAlbedoBinding);
+    bindings.push_back(ssaoBinding);
+    bindings.push_back(terrainNormalBinding);
 
     VkDescriptorSetLayoutCreateInfo layoutInfo{};
     layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
@@ -201,9 +220,11 @@ bool Renderer::createDescriptors()
         return false;
     }
 
+    // Five combined samplers per set: the material texture, the shadow array,
+    // the two terrain arrays and the AO buffer.
     std::array<VkDescriptorPoolSize, 2> poolSizes = {{
         {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, swapchain_.imageCount() * 2},
-        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, swapchain_.imageCount() * 4}
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, swapchain_.imageCount() * 5}
     }};
 
     VkDescriptorPoolCreateInfo poolInfo{};
@@ -312,7 +333,22 @@ bool Renderer::createPerFrameUniformBuffers()
         terrainAlbedoInfo.sampler = terrainTextures_.albedo.valid()
                                   ? terrainTextures_.albedo.sampler : defaultTexture_.sampler;
 
-        std::array<VkWriteDescriptorSet, 5> writes{};
+        // The blur ends before the scene pass begins, so the image is already
+        // read-only here. Without SSAO this is the 1x1 white texture, which the
+        // shaders resolve to a factor of 1.0.
+        VkDescriptorImageInfo ssaoInfo{};
+        ssaoInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        ssaoInfo.imageView = ssao_.valid() ? ssao_.aoView() : defaultTexture_.imageView;
+        ssaoInfo.sampler = ssao_.valid() ? ssao_.sampler() : defaultTexture_.sampler;
+
+        VkDescriptorImageInfo terrainNormalInfo{};
+        terrainNormalInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        terrainNormalInfo.imageView = terrainTextures_.normal.valid()
+                                    ? terrainTextures_.normal.view : defaultTexture_.imageView;
+        terrainNormalInfo.sampler = terrainTextures_.normal.valid()
+                                  ? terrainTextures_.normal.sampler : defaultTexture_.sampler;
+
+        std::array<VkWriteDescriptorSet, 7> writes{};
 
         writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         writes[0].dstSet = descriptorSets_[i];
@@ -349,12 +385,30 @@ bool Renderer::createPerFrameUniformBuffers()
         writes[4].descriptorCount = 1;
         writes[4].pImageInfo = &terrainAlbedoInfo;
 
+        writes[5].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writes[5].dstSet = descriptorSets_[i];
+        writes[5].dstBinding = 5;
+        writes[5].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        writes[5].descriptorCount = 1;
+        writes[5].pImageInfo = &ssaoInfo;
+
+        writes[6].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writes[6].dstSet = descriptorSets_[i];
+        writes[6].dstBinding = 6;
+        writes[6].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        writes[6].descriptorCount = 1;
+        writes[6].pImageInfo = &terrainNormalInfo;
+
         // Without a shadow map binding 3 is absent, so its write is skipped by
-        // moving the terrain write into its slot.
-        if (!shadowMap_.valid()) writes[3] = writes[4];
+        // sliding the three that follow down one slot.
+        if (!shadowMap_.valid()) {
+            writes[3] = writes[4];
+            writes[4] = writes[5];
+            writes[5] = writes[6];
+        }
 
         vkUpdateDescriptorSets(deviceContext_.device(),
-                               shadowMap_.valid() ? 5u : 4u,
+                               shadowMap_.valid() ? 7u : 6u,
                                writes.data(), 0, nullptr);
     }
 
@@ -495,6 +549,13 @@ bool Renderer::init(WindowContext& window)
     // scene layout declares binding 3 and which fragment variants are loaded.
     shadowMap_.initTarget(deviceContext_.physicalDevice(), deviceContext_.device());
 
+    // Also before the descriptors: binding 5 is written straight to the AO image
+    // when this succeeds, and to the default white texture when it does not.
+    if (ssao_.init(deviceContext_.device(), VULKAN_SHADER_DIR)) {
+        ssao_.createResources(deviceContext_.physicalDevice(), deviceContext_.device(),
+                              swapchain_.extent().width, swapchain_.extent().height);
+    }
+
     if (!createDescriptors()) return false;
     if (!createPipeline()) return false;
 
@@ -518,6 +579,13 @@ bool Renderer::init(WindowContext& window)
 
     if (!createPerFrameUniformBuffers()) return false;
 
+    // Combat VFX. Non-fatal: without it the game runs, just without effects.
+    if (!particles_.init(deviceContext_.physicalDevice(), deviceContext_.device(),
+                         deviceContext_.graphicsQueue(), frameGraph_.commandPool(),
+                         hdr_.renderPass(), swapchain_.imageCount(), VULKAN_SHADER_DIR)) {
+        std::fprintf(stderr, "[VFX] Particle renderer unavailable; combat effects disabled.\n");
+    }
+
     // Skinning is optional: without it animated meshes just draw in bind pose.
     if (createBoneResources()) {
         std::string skinErr;
@@ -540,6 +608,12 @@ bool Renderer::init(WindowContext& window)
     if (shadowMap_.valid()) {
         shadowMap_.createPipelines(deviceContext_.device(), VULKAN_SHADER_DIR,
                                    descriptorSetLayout_, boneSetLayout_);
+    }
+
+    // Same reason, same shaders: the SSAO prepass draws the same casters.
+    if (ssao_.valid()) {
+        ssao_.createPipelines(deviceContext_.device(), VULKAN_SHADER_DIR,
+                              descriptorSetLayout_, boneSetLayout_);
     }
 
     if (!physicsWorld_.init()) {
@@ -664,7 +738,24 @@ bool Renderer::init(WindowContext& window)
 
         snapInstancesToTerrain();
         spawnSceneryPhysicsBodies(loadedScene);
+        enemySim_.build(loadedScene.data, sceneInstances_);
+
+        if (!enemySim_.empty()) {
+            events_.subscribe<DamageEvent>([](const DamageEvent& e) {
+                std::printf("[Combat] %llu hit %s for %d (hp left %d)\n",
+                            static_cast<unsigned long long>(e.attackerId),
+                            e.targetName.c_str(), e.damage, e.finalHealth);
+            });
+            events_.subscribe<DeathEvent>([](const DeathEvent& e) {
+                std::printf("[Combat] %s died at tile (%.2f, %.2f), %d xp\n",
+                            e.entityName.c_str(), e.x, e.y, e.expReward);
+            });
+        }
     }
+
+    // After the combat log subscriptions so the VFX handlers see the same
+    // events, and after the scene load so the terrain sampler is usable.
+    subscribeCombatVfx();
 
     if (sceneInstances_.empty()) {
         sceneInstances_.push_back({spawn, {0.26f, 0.52f, 0.26f}, {0.30f, 0.58f, 0.95f}});
@@ -754,7 +845,7 @@ bool Renderer::updateSceneLightsUbo(uint32_t imageIndex)
     }
 
     SceneLightsUbo ubo{};
-    packSceneLights(&sceneLights_, {camera_.x(), camera_.y(), camera_.z()}, ubo);
+    packSceneLights(&activeLights_, {camera_.x(), camera_.y(), camera_.z()}, ubo);
     for (int i = 0; i < kShadowCascades; ++i) {
         std::memcpy(ubo.shadowMatrices[i], shadowMatrices_[i].m, sizeof(shadowMatrices_[i].m));
     }
@@ -930,6 +1021,74 @@ void Renderer::recordShadowPass(VkCommandBuffer cmd, uint32_t imageIndex,
 
         shadowMap_.endPass(cmd);
     }
+}
+
+void Renderer::recordSsaoPass(VkCommandBuffer cmd, uint32_t imageIndex,
+                              const std::vector<InstanceResources>& res,
+                              const Mat4& viewProj, float aspect)
+{
+    if (!ssao_.valid()) return;
+
+    // Entered even with nothing to draw: the clear is what leaves the depth
+    // image in the layout the descriptor written at init already promises.
+    ssao_.beginDepthPass(cmd);
+
+    const bool draws = ssao_.hasPipelines();
+
+    if (draws && ssao_.terrainPipeline() != VK_NULL_HANDLE &&
+        terrainMeshBuffers_.indexCount() > 0) {
+        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, ssao_.terrainPipeline());
+        VkBuffer terrainVB[] = { terrainMeshBuffers_.vertexBuffer() };
+        VkDeviceSize terrainOffsets[] = { 0 };
+        vkCmdBindVertexBuffers(cmd, 0, 1, terrainVB, terrainOffsets);
+        vkCmdBindIndexBuffer(cmd, terrainMeshBuffers_.indexBuffer(), 0, VK_INDEX_TYPE_UINT32);
+
+        float terrainPC[kShadowPushConstantFloats];
+        const Mat4 model = identity();
+        std::memcpy(terrainPC, model.m, sizeof(model.m));
+        std::memcpy(terrainPC + 16, viewProj.m, sizeof(viewProj.m));
+        vkCmdPushConstants(cmd, ssao_.terrainPipelineLayout(),
+                           VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(terrainPC), terrainPC);
+
+        vkCmdDrawIndexed(cmd, terrainMeshBuffers_.indexCount(), 1, 0, 0, 0);
+    }
+
+    if (draws) {
+        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, ssao_.depthPipeline());
+
+        VkBuffer vertexBuffers[] = { meshBuffers_.vertexBuffer() };
+        VkDeviceSize offsets[] = { 0 };
+        vkCmdBindVertexBuffers(cmd, 0, 1, vertexBuffers, offsets);
+        vkCmdBindIndexBuffer(cmd, meshBuffers_.indexBuffer(), 0, meshBuffers_.indexType());
+
+        SceneDrawParams params;
+        params.depthOnly         = true;
+        params.opaquePipeline    = ssao_.depthPipeline();
+        params.opaqueLayout      = ssao_.depthPipelineLayout();
+        params.skinnedPipeline   = ssao_.skinnedPipeline();
+        params.skinnedLayout     = ssao_.skinnedPipelineLayout();
+        params.billboardPipeline = ssao_.billboardPipeline();
+        params.billboardLayout   = ssao_.billboardPipelineLayout();
+        params.boneSet           = boneSet_;
+        params.bonePalette       = &bonePalette_;
+        params.defaultSet        = descriptorSets_[imageIndex];
+        params.fallbackMesh      = &meshBuffers_;
+        params.viewProj          = viewProj;
+        params.cameraRight       = camera_.rightVector();
+        params.cameraUp          = camera_.upVector();
+
+        drawSceneInstances(cmd, sceneInstances_, res, editorBridge_.lighting(), params);
+    }
+
+    ssao_.endDepthPass(cmd);
+
+    // Mirrors CameraController::computeViewProjection, including the Y flip it
+    // applies to P[1][1] for Vulkan's clip space.
+    constexpr float kFovY = 60.0f * 0.0174532925f;
+    constexpr float kNear = 0.1f;
+    constexpr float kFar = 500.0f;
+    const float focal = 1.0f / std::tan(kFovY * 0.5f);
+    ssao_.recordResolve(cmd, ssaoParams_, focal / aspect, -focal, kNear, kFar);
 }
 
 // Locates a mesh id on disk using the model dir, the scene dir and the raw path
@@ -1308,10 +1467,10 @@ bool Renderer::resolveSceneMaterials()
     const uint32_t setCount = static_cast<uint32_t>(materials_.size()) * images;
 
     // Has to mirror the binding list built in createDescriptors(): every set
-    // carries the material sampler and the terrain array, plus the shadow map
-    // when the depth target came up. Undercounting here fails the allocation
-    // for every scene that references a material.
-    const uint32_t samplersPerSet = shadowMap_.valid() ? 3u : 2u;
+    // carries the material sampler, the two terrain arrays and the AO buffer,
+    // plus the shadow map when the depth target came up. Undercounting here fails
+    // the allocation for every scene that references a material.
+    const uint32_t samplersPerSet = shadowMap_.valid() ? 5u : 4u;
 
     std::array<VkDescriptorPoolSize, 2> poolSizes = {{
         {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, setCount * 2},
@@ -1359,7 +1518,34 @@ bool Renderer::resolveSceneMaterials()
             imageInfo.imageView = tex.imageView;
             imageInfo.sampler = tex.sampler;
 
-            std::array<VkWriteDescriptorSet, 3> writes{};
+            // A material set replaces the default one for the whole draw, so it
+            // has to carry every binding the bound fragment shader reads — not
+            // just the material's own texture.
+            VkDescriptorImageInfo shadowInfo{};
+            shadowInfo.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+            shadowInfo.imageView = shadowMap_.imageView();
+            shadowInfo.sampler = shadowMap_.sampler();
+
+            VkDescriptorImageInfo terrainAlbedoInfo{};
+            terrainAlbedoInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            terrainAlbedoInfo.imageView = terrainTextures_.albedo.valid()
+                                        ? terrainTextures_.albedo.view : defaultTexture_.imageView;
+            terrainAlbedoInfo.sampler = terrainTextures_.albedo.valid()
+                                      ? terrainTextures_.albedo.sampler : defaultTexture_.sampler;
+
+            VkDescriptorImageInfo ssaoInfo{};
+            ssaoInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            ssaoInfo.imageView = ssao_.valid() ? ssao_.aoView() : defaultTexture_.imageView;
+            ssaoInfo.sampler = ssao_.valid() ? ssao_.sampler() : defaultTexture_.sampler;
+
+            VkDescriptorImageInfo terrainNormalInfo{};
+            terrainNormalInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            terrainNormalInfo.imageView = terrainTextures_.normal.valid()
+                                        ? terrainTextures_.normal.view : defaultTexture_.imageView;
+            terrainNormalInfo.sampler = terrainTextures_.normal.valid()
+                                      ? terrainTextures_.normal.sampler : defaultTexture_.sampler;
+
+            std::array<VkWriteDescriptorSet, 7> writes{};
             writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
             writes[0].dstSet = mat.sets[i];
             writes[0].dstBinding = 0;
@@ -1381,7 +1567,41 @@ bool Renderer::resolveSceneMaterials()
             writes[2].descriptorCount = 1;
             writes[2].pBufferInfo = &lightInfo;
 
-            vkUpdateDescriptorSets(dev, static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
+            writes[3].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            writes[3].dstSet = mat.sets[i];
+            writes[3].dstBinding = 3;
+            writes[3].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            writes[3].descriptorCount = 1;
+            writes[3].pImageInfo = &shadowInfo;
+
+            writes[4].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            writes[4].dstSet = mat.sets[i];
+            writes[4].dstBinding = 4;
+            writes[4].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            writes[4].descriptorCount = 1;
+            writes[4].pImageInfo = &terrainAlbedoInfo;
+
+            writes[5].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            writes[5].dstSet = mat.sets[i];
+            writes[5].dstBinding = 5;
+            writes[5].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            writes[5].descriptorCount = 1;
+            writes[5].pImageInfo = &ssaoInfo;
+
+            writes[6].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            writes[6].dstSet = mat.sets[i];
+            writes[6].dstBinding = 6;
+            writes[6].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            writes[6].descriptorCount = 1;
+            writes[6].pImageInfo = &terrainNormalInfo;
+
+            if (!shadowMap_.valid()) {
+                writes[3] = writes[4];
+                writes[4] = writes[5];
+                writes[5] = writes[6];
+            }
+
+            vkUpdateDescriptorSets(dev, shadowMap_.valid() ? 7u : 6u, writes.data(), 0, nullptr);
         }
     }
 
@@ -1435,6 +1655,159 @@ void Renderer::syncPhysicsToInstances()
     }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Combat VFX
+// ─────────────────────────────────────────────────────────────────────────────
+
+float Renderer::vfxGroundHeight(float tileX, float tileZ) const
+{
+    return terrainMeshReady_ ? terrainMesh_.sampleHeight(tileX, tileZ) : 0.0f;
+}
+
+void Renderer::subscribeCombatVfx()
+{
+    particleSim_.setSeed(0xC0FFEEu);
+    hitFlash_.setTint(1.0f, 0.10f, 0.07f);
+
+    // Tile-space position of a live entity, taken from the render instances the
+    // enemy simulation syncs every frame. Falls back to the player controller,
+    // whose transform is not in that vector.
+    auto locate = [this](uint64_t entityId, float& tx, float& y, float& tz) -> bool {
+        for (const RenderInstance& inst : sceneInstances_) {
+            if (inst.entityId != entityId) continue;
+            tx = inst.position.x;
+            y  = inst.position.y;
+            tz = inst.position.z;
+            return true;
+        }
+        return false;
+    };
+
+    events_.subscribe<DamageEvent>([this, locate](const DamageEvent& e) {
+        const bool targetIsPlayer = (e.targetName == "Player");
+
+        float tx = player_.x(), ty = player_.y(), tz = player_.z();
+        if (!targetIsPlayer && !locate(e.targetId, tx, ty, tz)) return;
+
+        float ax = tx, ay = ty, az = tz;
+        bool haveAttacker = false;
+        if (targetIsPlayer) {
+            haveAttacker = locate(e.attackerId, ax, ay, az);
+        } else {
+            ax = player_.x();
+            ay = player_.y();
+            az = player_.z();
+            haveAttacker = true;
+        }
+        (void)ay;
+
+        // Blow the hit back along the attack, or straight up if we could not
+        // work out where the blow came from.
+        float dx = tx - ax, dz = tz - az;
+        const float len = std::sqrt(dx * dx + dz * dz);
+        if (!haveAttacker || len < 1e-3f) { dx = 0.0f; dz = 0.0f; }
+        else { dx /= len; dz /= len; }
+
+        const float ground = vfxGroundHeight(tx, tz);
+        const float wx = tx * TILE_SCALE;
+        const float wz = tz * TILE_SCALE;
+        const float wy = std::max(ground, ty) + 0.35f;
+
+        particleSim_.emit(dash::vfx::bloodSplatter(wx, wy, wz, dx, dz, e.damage,
+                                                   ground + 0.02f));
+        particleSim_.emit(dash::vfx::impactSparks(wx, wy, wz, dx, dz, e.damage));
+
+        dash::vfx::TransientLight flash;
+        flash.x = wx; flash.y = wy + 0.15f; flash.z = wz;
+        flash.r = 1.00f; flash.g = 0.42f; flash.b = 0.22f;
+        flash.peakIntensity = 7.0f + 0.25f * static_cast<float>(e.damage);
+        flash.range = 5.0f;
+        flash.life = 0.20f;
+        transientLights_.spawn(flash);
+
+        if (targetIsPlayer) {
+            const float severity = std::min(1.0f, static_cast<float>(e.damage) / 25.0f);
+            hitFlash_.trigger(0.30f + 0.50f * severity);
+            shake_.addTrauma(0.28f + 0.42f * severity);
+        }
+        ++vfxCombatEvents_;
+    });
+
+    events_.subscribe<DeathEvent>([this](const DeathEvent& e) {
+        // DeathEvent carries tile coordinates: x is the tile X, y the tile Z.
+        const float ground = vfxGroundHeight(e.x, e.y);
+        const float wx = e.x * TILE_SCALE;
+        const float wz = e.y * TILE_SCALE;
+        const float wy = ground + 0.55f;
+
+        particleSim_.emit(dash::vfx::deathShockwave(wx, wy, wz));
+        particleSim_.emit(dash::vfx::deathGibs(wx, wy, wz, ground + 0.02f));
+        particleSim_.emit(dash::vfx::deathSmoke(wx, wy, wz));
+
+        dash::vfx::TransientLight burst;
+        burst.x = wx; burst.y = wy + 0.4f; burst.z = wz;
+        burst.r = 1.00f; burst.g = 0.30f; burst.b = 0.16f;
+        burst.peakIntensity = 22.0f;
+        burst.range = 9.0f;
+        burst.life = 0.32f;
+        transientLights_.spawn(burst);
+
+        if (e.entityName == "Player") {
+            hitFlash_.trigger(0.80f);
+            shake_.addTrauma(1.0f);
+        } else {
+            shake_.addTrauma(0.22f);
+        }
+        ++vfxCombatEvents_;
+    });
+}
+
+void Renderer::updateVfx(float dt)
+{
+    particleSim_.update(dt);
+    transientLights_.update(dt);
+    shake_.update(dt);
+    hitFlash_.update(dt);
+
+    float offset[3] = {0.0f, 0.0f, 0.0f};
+    shake_.offset(0.32f, offset);
+    camera_.setShakeOffset(offset[0], offset[1], offset[2]);
+
+    particleSim_.buildInstances(particleAlphaBatch_, particleAdditiveBatch_,
+                                dash::vfx::kAtlasCols, dash::vfx::kAtlasRows);
+    buildActiveLights();
+}
+
+void Renderer::buildActiveLights()
+{
+    // Authored lights keep their indices: shadowParams_[0] points at one of them
+    // and the shadow matrices are built from sceneLights_[shadowLightIndex_].
+    activeLights_ = sceneLights_;
+    if (activeLights_.size() >= static_cast<std::size_t>(kMaxSceneLights)) return;
+    if (transientLights_.liveCount() == 0) return;
+
+    const std::size_t freeSlots =
+        static_cast<std::size_t>(kMaxSceneLights) - activeLights_.size();
+    transientLights_.select(camera_.x(), camera_.y(), camera_.z(),
+                            freeSlots, transientPick_);
+
+    for (std::size_t idx : transientPick_) {
+        const dash::vfx::TransientLight& src = transientLights_.lights()[idx];
+        SceneLight l;
+        l.type = 1;  // point
+        l.posX = src.x;
+        l.posY = src.y;
+        l.posZ = src.z;
+        l.colorR = src.r;
+        l.colorG = src.g;
+        l.colorB = src.b;
+        l.intensity = dash::vfx::TransientLights::currentIntensity(src);
+        l.range = src.range;
+        l.castsShadows = false;
+        activeLights_.push_back(l);
+    }
+}
+
 void Renderer::recordDrawCommands(VkCommandBuffer cmd, uint32_t imageIndex)
 {
     // Resolved up front because the depth pass, recorded before the main render
@@ -1456,6 +1829,11 @@ void Renderer::recordDrawCommands(VkCommandBuffer cmd, uint32_t imageIndex)
     updateSkinnedInstances(frameDeltaSeconds_, instanceRes);
 
     recordShadowPass(cmd, imageIndex, instanceRes);
+
+    const float ssaoAspect = static_cast<float>(swapchain_.extent().width)
+                           / static_cast<float>(swapchain_.extent().height);
+    recordSsaoPass(cmd, imageIndex, instanceRes,
+                   camera_.computeViewProjection(ssaoAspect), ssaoAspect);
 
     // Sky/clear colour, authored as a display value and linearised here so it
     // enters the HDR target in the same space the shaders write.
@@ -1514,15 +1892,12 @@ void Renderer::recordDrawCommands(VkCommandBuffer cmd, uint32_t imageIndex)
 
         const auto& lt = editorBridge_.lighting();
         const auto& fg = editorBridge_.fog();
-        float layerRoughness[kTerrainRoughnessFloats];
-        packTerrainLayerRoughness(layerRoughness);
         float terrainPC[kTerrainPushConstantFloats] = {
             camera_.x(), camera_.y(), camera_.z(), elapsedSeconds_,
             fg.start, fg.end, lt.dirX, lt.dirY,
             lt.dirZ, lt.intensity, lt.colorR, lt.colorG,
             lt.colorB, lt.ambient, 0.0f, 0.0f
         };
-        std::copy(std::begin(layerRoughness), std::end(layerRoughness), terrainPC + 16);
         vkCmdPushConstants(cmd, terrainPipelineLayout_,
             VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
             0, sizeof(terrainPC), terrainPC);
@@ -1573,7 +1948,7 @@ void Renderer::recordDrawCommands(VkCommandBuffer cmd, uint32_t imageIndex)
     drawParams.bonePalette       = &bonePalette_;
     drawParams.defaultSet        = descriptorSets_[imageIndex];
     drawParams.fallbackMesh      = &meshBuffers_;
-    drawParams.lights            = &sceneLights_;
+    drawParams.lights            = &activeLights_;
     drawParams.viewProj          = camera_.computeViewProjection(aspect);
     drawParams.cameraRight       = camera_.rightVector();
     drawParams.cameraUp          = camera_.upVector();
@@ -1583,6 +1958,13 @@ void Renderer::recordDrawCommands(VkCommandBuffer cmd, uint32_t imageIndex)
 
     lastDrawnInstances_ = stats.drawn;
     lastCulledInstances_ = stats.culled;
+
+    // Combat VFX last inside the HDR pass: transparent, depth-tested but never
+    // depth-writing, and emitting well past 1.0 for the tonemap to roll off.
+    vfxDrawCalls_ = particles_.record(
+        cmd, deviceContext_.device(), imageIndex, swapchain_.extent(),
+        drawParams.viewProj, drawParams.cameraRight, drawParams.cameraUp,
+        particleAlphaBatch_, particleAdditiveBatch_);
 
     hdr_.endPass(cmd);
 
@@ -1600,7 +1982,10 @@ void Renderer::recordDrawCommands(VkCommandBuffer cmd, uint32_t imageIndex)
     resolveBegin.pClearValues = resolveClears;
 
     vkCmdBeginRenderPass(cmd, &resolveBegin, VK_SUBPASS_CONTENTS_INLINE);
-    hdr_.drawTonemap(cmd, grading_, /*encodeSrgb=*/false);
+    float flash[3] = {0.0f, 0.0f, 0.0f};
+    hitFlash_.packPremultiplied(flash);
+    hdr_.drawTonemap(cmd, grading_, /*encodeSrgb=*/false,
+                     hitFlash_.active() ? flash : nullptr);
     vkCmdEndRenderPass(cmd);
 }
 
@@ -1661,8 +2046,27 @@ bool Renderer::runSmoke(WindowContext& window, uint32_t targetFrames)
                            terrainHeightMap_, terrainMapWidth_, terrainMapHeight_);
             player_.syncToInstances(sceneInstances_);
 
+            // ── Enemy AI + melee, planned on the tile grid, drawn in 3D ─────
+            enemySim_.update(dt, player_.x(), player_.z(),
+                             &terrainMesh_, terrainMeshReady_, events_);
+            enemySim_.syncToInstances(sceneInstances_);
+            events_.flush();
+
             // ── Camera follows player (centered isometric view) ────────────────
             camera_.followPlayer(player_.x(), player_.y(), player_.z());
+        }
+
+        // After the flush above, so this frame's damage and deaths are already
+        // in the pools when they get integrated and batched.
+        updateVfx(dt);
+
+        if (!infiniteRun && !enemySim_.empty()) {
+            const uint32_t frameNo = renderedFrames + 1;
+            if (frameNo == 10 || frameNo == 110 || frameNo == 300 || frameNo == 600) {
+                char tag[32];
+                std::snprintf(tag, sizeof(tag), "frame %u", frameNo);
+                enemySim_.logAgentPositions(tag);
+            }
         }
         // ── Mouse look with right-click (legacy mode) ──────────────────────
         camera_.updateMouseLook(window.handle(), inputBindings_);
@@ -1687,6 +2091,25 @@ bool Renderer::runSmoke(WindowContext& window, uint32_t targetFrames)
 
         if (!frameGraph_.endFrame(imageIndex)) break;
         ++renderedFrames;
+
+        // Evidence for the smoke run: a constant or zero live count means the
+        // pool is not being fed or not being retired.
+        if (!infiniteRun && (renderedFrames % 20u) == 0u) {
+            std::printf("[VFX] frame %3u | alive %4zu (emitted %llu, retired %llu)"
+                        " | instances alpha %4u add %4u | draws %u"
+                        " | lights %zu (+%zu flash) | trauma %.2f flash %.2f | events %llu\n",
+                        renderedFrames,
+                        particleSim_.aliveCount(),
+                        static_cast<unsigned long long>(particleSim_.totalEmitted()),
+                        static_cast<unsigned long long>(particleSim_.totalRetired()),
+                        particles_.lastAlphaDrawn(), particles_.lastAdditiveDrawn(),
+                        vfxDrawCalls_,
+                        activeLights_.size(), transientLights_.liveCount(),
+                        static_cast<double>(shake_.trauma()),
+                        static_cast<double>(hitFlash_.strength()),
+                        static_cast<unsigned long long>(vfxCombatEvents_));
+            ++vfxLoggedFrames_;
+        }
 
         if (!infiniteRun) {
             const auto frameT1 = std::chrono::steady_clock::now();
@@ -1763,6 +2186,8 @@ void Renderer::shutdown()
 
     hdr_.shutdown(deviceContext_.device());
     shadowMap_.shutdown(deviceContext_.device());
+    ssao_.shutdown(deviceContext_.device());
+    particles_.shutdown(deviceContext_.device());
     destroyBoneResources();
     destroySceneMaterials();
 

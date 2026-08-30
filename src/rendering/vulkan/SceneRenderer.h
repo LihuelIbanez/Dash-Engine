@@ -31,10 +31,9 @@ namespace dash::vkexp {
 inline constexpr std::size_t kInstancePushConstantFloats = 32;
 
 // eyePos(3) + time(1) + fogStart(1) + fogEnd(1) + lightDir(3) + intensity(1)
-// + lightColor(3) + ambient(1) + 2 spare, followed by the per-layer terrain
-// roughness table. Shared by the terrain and water pipelines so both can be fed
-// from the same array.
-inline constexpr std::size_t kTerrainPushConstantFloats = 28;
+// + lightColor(3) + ambient(1) + 2 spare. Shared by the terrain and water
+// pipelines so both can be fed from the same array.
+inline constexpr std::size_t kTerrainPushConstantFloats = 16;
 
 // mat4 model + mat4 lightViewProj = 128 bytes, exactly the push constant size
 // Vulkan guarantees. Used by the depth-only shadow pass, which needs no
@@ -45,6 +44,14 @@ inline constexpr std::size_t kShadowPushConstantFloats = 32;
 // 128 bytes. The billboard depth pass has no per-instance model matrix, so the
 // quad is rebuilt in the vertex shader from these axes.
 inline constexpr std::size_t kShadowBillboardPushConstantFloats = 32;
+
+// mat4 viewProj + camRight + camUp = 96 bytes. Particles carry everything else
+// per instance, so this is the whole per-draw state of the VFX pass.
+inline constexpr std::size_t kParticlePushConstantFloats = 24;
+
+// centre+size, colour, uv rect and params: four vec4s per particle, the vertex
+// stride of the instance buffer. Mirrors dash::vfx::ParticleInstance.
+inline constexpr std::size_t kParticleInstanceFloats = 16;
 
 void buildInstancePushConstants(const Mat4& model,
                                 float r, float g, float b, float a,

@@ -312,6 +312,8 @@ bool EditorVkContext::init(SDL_Window* window)
                                    sceneDescLayout_, VK_NULL_HANDLE);
     }
 
+    ssao_.init(deviceCtx_.device(), VULKAN_SHADER_DIR);
+
     // ── Cube mesh (for entity rendering) ────────────────────────────────────
     cubeMeshBuf_.initCube(deviceCtx_.physicalDevice(), deviceCtx_.device());
 
@@ -367,7 +369,7 @@ bool EditorVkContext::createTerrainTextureArray()
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Scene descriptors (camera UBO at binding 0, dummy sampler at binding 1,
-// scene lights UBO at binding 2, terrain arrays at bindings 4/5)
+// scene lights UBO at binding 2, terrain arrays at bindings 4/6)
 // ─────────────────────────────────────────────────────────────────────────────
 bool EditorVkContext::createSceneDescriptors()
 {
@@ -392,23 +394,40 @@ bool EditorVkContext::createSceneDescriptors()
     VkDescriptorSetLayoutBinding shadowB{};
     shadowB.binding = 3; shadowB.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
     shadowB.descriptorCount = 1; shadowB.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+    // MoltenVK reports mutableComparisonSamplers as unsupported, so a sampler
+    // with compareEnable may only reach a shader as an immutable one.
+    const VkSampler shadowSampler = shadowMap_.sampler();
+    shadowB.pImmutableSamplers = &shadowSampler;
 
     VkDescriptorSetLayoutBinding terrainAlbedoB{};
     terrainAlbedoB.binding = 4; terrainAlbedoB.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
     terrainAlbedoB.descriptorCount = 1; terrainAlbedoB.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
+    // scene_lights.glsl includes ssao_sample.glsl unconditionally, so every
+    // fragment shader built here declares binding 5 whether the viewport
+    // computes SSAO or not. It points at the white dummy, which reads as 1.0.
+    VkDescriptorSetLayoutBinding ssaoB{};
+    ssaoB.binding = 5; ssaoB.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    ssaoB.descriptorCount = 1; ssaoB.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+    VkDescriptorSetLayoutBinding terrainNormalB{};
+    terrainNormalB.binding = 6; terrainNormalB.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    terrainNormalB.descriptorCount = 1; terrainNormalB.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
     std::vector<VkDescriptorSetLayoutBinding> bindings = {uboB, samplerB, lightsB};
     if (shadowMap_.valid()) bindings.push_back(shadowB);
     bindings.push_back(terrainAlbedoB);
+    bindings.push_back(ssaoB);
+    bindings.push_back(terrainNormalB);
 
     VkDescriptorSetLayoutCreateInfo lci{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
     lci.bindingCount = static_cast<uint32_t>(bindings.size()); lci.pBindings = bindings.data();
     if (vkCreateDescriptorSetLayout(dev, &lci, nullptr, &sceneDescLayout_) != VK_SUCCESS)
         return false;
 
-    // The shadow map is a third combined sampler in the set; undercounting here
+    // The shadow map is a fourth combined sampler in the set; undercounting here
     // makes vkAllocateDescriptorSets fail and the viewport come up empty.
-    const uint32_t samplersPerSet = shadowMap_.valid() ? 3u : 2u;
+    const uint32_t samplersPerSet = shadowMap_.valid() ? 5u : 4u;
     std::array<VkDescriptorPoolSize, 2> poolSizes = {{
         {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 2},
         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, samplersPerSet}
@@ -503,7 +522,12 @@ bool EditorVkContext::createSceneDescriptors()
     shadowInfo.imageView = shadowMap_.imageView();
     shadowInfo.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
 
-    std::array<VkWriteDescriptorSet, 5> writes{};
+    VkDescriptorImageInfo terrainNormalInfo{};
+    terrainNormalInfo.sampler = terrainTextures_.normal.valid() ? terrainTextures_.normal.sampler : vpSampler_;
+    terrainNormalInfo.imageView = terrainTextures_.normal.valid() ? terrainTextures_.normal.view : dummyTexView_;
+    terrainNormalInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+    std::array<VkWriteDescriptorSet, 7> writes{};
     writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
     writes[0].dstSet = sceneDescSet_; writes[0].dstBinding = 0;
     writes[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
@@ -529,11 +553,25 @@ bool EditorVkContext::createSceneDescriptors()
     writes[4].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
     writes[4].descriptorCount = 1; writes[4].pImageInfo = &terrainAlbedoInfo;
 
-    // Without a depth target binding 3 is absent, so its write is skipped by
-    // moving the terrain write into its slot.
-    if (!shadowMap_.valid()) writes[3] = writes[4];
+    writes[5].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    writes[5].dstSet = sceneDescSet_; writes[5].dstBinding = 5;
+    writes[5].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    writes[5].descriptorCount = 1; writes[5].pImageInfo = &imgInfo;
 
-    vkUpdateDescriptorSets(dev, shadowMap_.valid() ? 5u : 4u, writes.data(), 0, nullptr);
+    writes[6].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    writes[6].dstSet = sceneDescSet_; writes[6].dstBinding = 6;
+    writes[6].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    writes[6].descriptorCount = 1; writes[6].pImageInfo = &terrainNormalInfo;
+
+    // Without a depth target binding 3 is absent, so its write is skipped by
+    // sliding the remaining writes down one slot.
+    if (!shadowMap_.valid()) {
+        writes[3] = writes[4];
+        writes[4] = writes[5];
+        writes[5] = writes[6];
+    }
+
+    vkUpdateDescriptorSets(dev, shadowMap_.valid() ? 7u : 6u, writes.data(), 0, nullptr);
 
     return true;
 }
@@ -666,6 +704,24 @@ bool EditorVkContext::createOffscreenTarget(uint32_t w, uint32_t h)
     // resolved image, so it needs no depth attachment.
     if (!hdr_.createResources(pd, dev, w, h)) return false;
 
+    // Sized with the viewport, so binding 5 has to be rewritten after a resize.
+    // The prepass pipelines bake in that size and destroyResources() drops them,
+    // so they are rebuilt here rather than once at init.
+    if (ssao_.createResources(pd, dev, w, h) && sceneDescSet_ != VK_NULL_HANDLE) {
+        ssao_.createPipelines(dev, VULKAN_SHADER_DIR, sceneDescLayout_, VK_NULL_HANDLE);
+
+        VkDescriptorImageInfo ssaoInfo{};
+        ssaoInfo.sampler = ssao_.sampler();
+        ssaoInfo.imageView = ssao_.aoView();
+        ssaoInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+        VkWriteDescriptorSet write{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+        write.dstSet = sceneDescSet_; write.dstBinding = 5;
+        write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        write.descriptorCount = 1; write.pImageInfo = &ssaoInfo;
+        vkUpdateDescriptorSets(dev, 1, &write, 0, nullptr);
+    }
+
     std::array<VkImageView, 1> atts = {vpColorView_};
     VkFramebufferCreateInfo fci{VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO};
     fci.renderPass = vpRenderPass_;
@@ -700,6 +756,7 @@ void EditorVkContext::destroyOffscreenTarget()
         vpImGuiDesc_ = VK_NULL_HANDLE;
     }
     if (vpFramebuffer_) { vkDestroyFramebuffer(dev, vpFramebuffer_, nullptr); vpFramebuffer_ = VK_NULL_HANDLE; }
+    ssao_.destroyResources(dev);
     hdr_.destroyResources(dev);
     if (vpColorView_)   { vkDestroyImageView(dev, vpColorView_, nullptr);     vpColorView_ = VK_NULL_HANDLE; }
     if (vpColorImage_)  { vkDestroyImage(dev, vpColorImage_, nullptr);        vpColorImage_ = VK_NULL_HANDLE; }
@@ -773,18 +830,22 @@ void EditorVkContext::endFrame()
 // ─────────────────────────────────────────────────────────────────────────────
 // Offscreen viewport rendering
 // ─────────────────────────────────────────────────────────────────────────────
-void EditorVkContext::beginViewportRender(uint32_t width, uint32_t height)
+void EditorVkContext::ensureViewportSize(uint32_t width, uint32_t height)
 {
     // Resize only when dimensions change by more than 4 pixels (avoids
     // per-frame vkDeviceWaitIdle + reallocation from sub-pixel jitter)
-    if (width > 0 && height > 0) {
-        int dw = static_cast<int>(width) - static_cast<int>(vpWidth_);
-        int dh = static_cast<int>(height) - static_cast<int>(vpHeight_);
-        if (dw*dw + dh*dh > 16 || vpWidth_ == 0) { // >4px change or first time
-            destroyOffscreenTarget();
-            createOffscreenTarget(width, height);
-        }
+    if (width == 0 || height == 0) return;
+    const int dw = static_cast<int>(width) - static_cast<int>(vpWidth_);
+    const int dh = static_cast<int>(height) - static_cast<int>(vpHeight_);
+    if (dw * dw + dh * dh > 16 || vpWidth_ == 0) {
+        destroyOffscreenTarget();
+        createOffscreenTarget(width, height);
     }
+}
+
+void EditorVkContext::beginViewportRender(uint32_t width, uint32_t height)
+{
+    ensureViewportSize(width, height);
 
     VkCommandBuffer cmd = currentCmd();
 
@@ -983,6 +1044,69 @@ void EditorVkContext::recordShadowPass(const std::vector<RenderInstance>& instan
     }
 }
 
+void EditorVkContext::recordSsaoPass(const std::vector<RenderInstance>& instances,
+                                     const std::vector<InstanceResources>& resources,
+                                     const Mat4& viewProj, float aspect)
+{
+    if (!ssao_.valid()) return;
+
+    VkCommandBuffer cmd = currentCmd();
+
+    // Entered even with nothing to draw: the clear is what leaves the depth
+    // image in the layout the descriptor already promises.
+    ssao_.beginDepthPass(cmd);
+
+    const bool draws = ssao_.hasPipelines();
+
+    if (draws && ssao_.terrainPipeline() != VK_NULL_HANDLE && terrainMeshBuf_.indexCount() > 0) {
+        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, ssao_.terrainPipeline());
+        VkBuffer vb[] = { terrainMeshBuf_.vertexBuffer() };
+        VkDeviceSize offsets[] = { 0 };
+        vkCmdBindVertexBuffers(cmd, 0, 1, vb, offsets);
+        vkCmdBindIndexBuffer(cmd, terrainMeshBuf_.indexBuffer(), 0, VK_INDEX_TYPE_UINT32);
+
+        // Terrain vertices are already in world space.
+        float terrainPC[kShadowPushConstantFloats];
+        const Mat4 model = identity();
+        std::memcpy(terrainPC, model.m, sizeof(model.m));
+        std::memcpy(terrainPC + 16, viewProj.m, sizeof(viewProj.m));
+        vkCmdPushConstants(cmd, ssao_.terrainPipelineLayout(),
+                           VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(terrainPC), terrainPC);
+
+        vkCmdDrawIndexed(cmd, terrainMeshBuf_.indexCount(), 1, 0, 0, 0);
+    }
+
+    if (draws && cubeMeshBuf_.indexCount() > 0) {
+        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, ssao_.depthPipeline());
+        VkBuffer vb[] = { cubeMeshBuf_.vertexBuffer() };
+        VkDeviceSize offsets[] = { 0 };
+        vkCmdBindVertexBuffers(cmd, 0, 1, vb, offsets);
+        vkCmdBindIndexBuffer(cmd, cubeMeshBuf_.indexBuffer(), 0, cubeMeshBuf_.indexType());
+
+        SceneDrawParams params;
+        params.depthOnly         = true;
+        params.opaquePipeline    = ssao_.depthPipeline();
+        params.opaqueLayout      = ssao_.depthPipelineLayout();
+        params.billboardPipeline = ssao_.billboardPipeline();
+        params.billboardLayout   = ssao_.billboardPipelineLayout();
+        params.defaultSet        = sceneDescSet_;
+        params.fallbackMesh      = &cubeMeshBuf_;
+        params.viewProj          = viewProj;
+
+        drawSceneInstances(cmd, instances, resources, LightingParams{}, params);
+    }
+
+    ssao_.endDepthPass(cmd);
+
+    // Mirrors the projection the viewport camera builds, including the Y flip
+    // Vulkan's clip space needs.
+    constexpr float kFovY = 60.0f * 0.0174532925f;
+    constexpr float kNear = 0.1f;
+    constexpr float kFar = 500.0f;
+    const float focal = 1.0f / std::tan(kFovY * 0.5f);
+    ssao_.recordResolve(cmd, ssaoParams_, focal / aspect, -focal, kNear, kFar);
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Terrain mesh update
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1045,6 +1169,7 @@ void EditorVkContext::shutdown()
     if (vpRenderPass_) { vkDestroyRenderPass(dev, vpRenderPass_, nullptr); vpRenderPass_ = VK_NULL_HANDLE; }
 
     shadowMap_.shutdown(dev);
+    ssao_.shutdown(dev);
 
     // Terrain texture arrays
     destroyTerrainTextureSet(dev, terrainTextures_);

@@ -348,8 +348,8 @@ bool PipelineBuilder::createTerrainPipeline(
     depthStencil.depthWriteEnable = VK_TRUE;
     depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
 
-    // Push constants for eye position, time, fog params, lighting and the
-    // per-layer roughness table (see kTerrainPushConstantFloats).
+    // Push constants for eye position, time, fog params and lighting
+    // (see kTerrainPushConstantFloats).
     VkPushConstantRange terrainPushRange{};
     terrainPushRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
     terrainPushRange.offset = 0;
@@ -1212,6 +1212,24 @@ bool PipelineBuilder::createTonemapPipeline(
     VkPipeline& outPipeline,
     std::string& outError)
 {
+    return createFullscreenPipeline(device, renderPass, descriptorSetLayout,
+                                    vertSpvPath, fragSpvPath, "[HDR] Tonemap",
+                                    outPipelineLayout, outPipeline, outError);
+}
+
+bool PipelineBuilder::createFullscreenPipeline(
+    VkDevice device,
+    VkRenderPass renderPass,
+    VkDescriptorSetLayout descriptorSetLayout,
+    const std::string& vertSpvPath,
+    const std::string& fragSpvPath,
+    const char* label,
+    VkPipelineLayout& outPipelineLayout,
+    VkPipeline& outPipeline,
+    std::string& outError)
+{
+    const char* name = label != nullptr ? label : "[HDR] Fullscreen";
+
     std::vector<char> vertCode, fragCode;
     if (!readBinaryFile(vertSpvPath, vertCode)) {
         outError = "Could not read tonemap vertex shader: " + vertSpvPath;
@@ -1351,7 +1369,7 @@ bool PipelineBuilder::createTonemapPipeline(
     vkDestroyShaderModule(device, vertModule, nullptr);
     vkDestroyShaderModule(device, fragModule, nullptr);
 
-    std::fprintf(stdout, "[HDR] Tonemap pipeline created successfully.\n");
+    std::fprintf(stdout, "%s pipeline created successfully.\n", name);
     return true;
 }
 
@@ -1359,6 +1377,188 @@ void PipelineBuilder::destroy(VkDevice device, VkPipelineLayout pipelineLayout, 
 {
     if (pipeline != VK_NULL_HANDLE) vkDestroyPipeline(device, pipeline, nullptr);
     if (pipelineLayout != VK_NULL_HANDLE) vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
+}
+
+bool PipelineBuilder::createParticlePipeline(
+    VkDevice device,
+    VkRenderPass renderPass,
+    VkDescriptorSetLayout descriptorSetLayout,
+    const std::string& vertSpvPath,
+    const std::string& fragSpvPath,
+    bool additive,
+    VkPipelineLayout& outPipelineLayout,
+    VkPipeline& outPipeline,
+    std::string& outError)
+{
+    std::vector<char> vertCode, fragCode;
+    if (!readBinaryFile(vertSpvPath, vertCode)) {
+        outError = "Could not read particle vertex shader: " + vertSpvPath;
+        return false;
+    }
+    if (!readBinaryFile(fragSpvPath, fragCode)) {
+        outError = "Could not read particle fragment shader: " + fragSpvPath;
+        return false;
+    }
+
+    VkShaderModule vertModule = createShaderModule(device, vertCode);
+    VkShaderModule fragModule = createShaderModule(device, fragCode);
+    if (vertModule == VK_NULL_HANDLE || fragModule == VK_NULL_HANDLE) {
+        outError = "vkCreateShaderModule failed for particle shaders";
+        if (vertModule != VK_NULL_HANDLE) vkDestroyShaderModule(device, vertModule, nullptr);
+        if (fragModule != VK_NULL_HANDLE) vkDestroyShaderModule(device, fragModule, nullptr);
+        return false;
+    }
+
+    VkPipelineShaderStageCreateInfo vertStage{};
+    vertStage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    vertStage.stage = VK_SHADER_STAGE_VERTEX_BIT;
+    vertStage.module = vertModule;
+    vertStage.pName = "main";
+
+    VkPipelineShaderStageCreateInfo fragStage{};
+    fragStage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    fragStage.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+    fragStage.module = fragModule;
+    fragStage.pName = "main";
+
+    VkPipelineShaderStageCreateInfo shaderStages[] = { vertStage, fragStage };
+
+    // One buffer, one particle per instance. The four attributes below mirror
+    // locations 0..3 of particle.vert exactly.
+    VkVertexInputBindingDescription binding{};
+    binding.binding = 0;
+    binding.stride = static_cast<uint32_t>(sizeof(float) * kParticleInstanceFloats);
+    binding.inputRate = VK_VERTEX_INPUT_RATE_INSTANCE;
+
+    std::array<VkVertexInputAttributeDescription, 4> attrs{};
+    for (uint32_t i = 0; i < attrs.size(); ++i) {
+        attrs[i].location = i;
+        attrs[i].binding = 0;
+        attrs[i].format = VK_FORMAT_R32G32B32A32_SFLOAT;
+        attrs[i].offset = i * 16u;
+    }
+
+    VkPipelineVertexInputStateCreateInfo vertexInput{};
+    vertexInput.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+    vertexInput.vertexBindingDescriptionCount = 1;
+    vertexInput.pVertexBindingDescriptions = &binding;
+    vertexInput.vertexAttributeDescriptionCount = static_cast<uint32_t>(attrs.size());
+    vertexInput.pVertexAttributeDescriptions = attrs.data();
+
+    VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
+    inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+    inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+
+    // Placeholders: both are dynamic, so the record path supplies the real size.
+    VkViewport viewport{};
+    viewport.width = 1.0f;
+    viewport.height = 1.0f;
+    viewport.maxDepth = 1.0f;
+    VkRect2D scissor{{0, 0}, {1, 1}};
+
+    VkPipelineViewportStateCreateInfo viewportState{};
+    viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+    viewportState.viewportCount = 1;
+    viewportState.pViewports = &viewport;
+    viewportState.scissorCount = 1;
+    viewportState.pScissors = &scissor;
+
+    const VkDynamicState dynamicStates[] = {
+        VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR
+    };
+    VkPipelineDynamicStateCreateInfo dynamicState{};
+    dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+    dynamicState.dynamicStateCount = 2;
+    dynamicState.pDynamicStates = dynamicStates;
+
+    VkPipelineRasterizationStateCreateInfo rasterizer{};
+    rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+    rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
+    rasterizer.lineWidth = 1.0f;
+    rasterizer.cullMode = VK_CULL_MODE_NONE;
+    rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+
+    VkPipelineMultisampleStateCreateInfo multisampling{};
+    multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+    multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+
+    VkPipelineColorBlendAttachmentState colorBlendAttachment{};
+    colorBlendAttachment.colorWriteMask =
+        VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+        VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+    colorBlendAttachment.blendEnable = VK_TRUE;
+    colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+    colorBlendAttachment.dstColorBlendFactor = additive
+        ? VK_BLEND_FACTOR_ONE : VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+    colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD;
+    colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+    colorBlendAttachment.dstAlphaBlendFactor = additive
+        ? VK_BLEND_FACTOR_ONE : VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+    colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
+
+    VkPipelineColorBlendStateCreateInfo colorBlending{};
+    colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+    colorBlending.attachmentCount = 1;
+    colorBlending.pAttachments = &colorBlendAttachment;
+
+    // Occluded by the scene, but never an occluder: effects must not write
+    // depth or they would punch holes in each other and in the sprites behind.
+    VkPipelineDepthStencilStateCreateInfo depthStencil{};
+    depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+    depthStencil.depthTestEnable = VK_TRUE;
+    depthStencil.depthWriteEnable = VK_FALSE;
+    depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
+
+    VkPushConstantRange pushRange{};
+    pushRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+    pushRange.offset = 0;
+    pushRange.size = static_cast<uint32_t>(sizeof(float) * kParticlePushConstantFloats);
+
+    VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
+    pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    pipelineLayoutInfo.setLayoutCount = 1;
+    pipelineLayoutInfo.pSetLayouts = &descriptorSetLayout;
+    pipelineLayoutInfo.pushConstantRangeCount = 1;
+    pipelineLayoutInfo.pPushConstantRanges = &pushRange;
+
+    if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &outPipelineLayout) != VK_SUCCESS) {
+        outError = "vkCreatePipelineLayout failed for particles";
+        vkDestroyShaderModule(device, vertModule, nullptr);
+        vkDestroyShaderModule(device, fragModule, nullptr);
+        return false;
+    }
+
+    VkGraphicsPipelineCreateInfo pipelineInfo{};
+    pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+    pipelineInfo.stageCount = 2;
+    pipelineInfo.pStages = shaderStages;
+    pipelineInfo.pVertexInputState = &vertexInput;
+    pipelineInfo.pInputAssemblyState = &inputAssembly;
+    pipelineInfo.pViewportState = &viewportState;
+    pipelineInfo.pRasterizationState = &rasterizer;
+    pipelineInfo.pMultisampleState = &multisampling;
+    pipelineInfo.pDepthStencilState = &depthStencil;
+    pipelineInfo.pColorBlendState = &colorBlending;
+    pipelineInfo.pDynamicState = &dynamicState;
+    pipelineInfo.layout = outPipelineLayout;
+    pipelineInfo.renderPass = renderPass;
+    pipelineInfo.subpass = 0;
+
+    if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &outPipeline) != VK_SUCCESS) {
+        outError = "vkCreateGraphicsPipelines failed for particles";
+        vkDestroyPipelineLayout(device, outPipelineLayout, nullptr);
+        outPipelineLayout = VK_NULL_HANDLE;
+        vkDestroyShaderModule(device, vertModule, nullptr);
+        vkDestroyShaderModule(device, fragModule, nullptr);
+        return false;
+    }
+
+    vkDestroyShaderModule(device, vertModule, nullptr);
+    vkDestroyShaderModule(device, fragModule, nullptr);
+
+    std::fprintf(stdout, "[VFX] Particle %s pipeline created successfully.\n",
+                 additive ? "additive" : "alpha");
+    return true;
 }
 
 } // namespace dash::vkexp

@@ -777,19 +777,26 @@ void EditorApp::buildDefaultLayout(ImGuiID dockspaceId)
     ImGui::DockBuilderSplitNode(dockRight, ImGuiDir_Down, 0.45f,
                                 &dockFileBrowser, &dockProperties);
 
-    // Dock each window into its slot
+    // Dock each window into its slot. Every panel needs a home here: one that is
+    // missing opens floating at an arbitrary spot the first time it is toggled.
     ImGui::DockBuilderDockWindow("Toolbar",          dockToolbar);
     ImGui::DockBuilderDockWindow("Scene Hierarchy",  dockHierarchy);
     ImGui::DockBuilderDockWindow("Scene Selector",   dockHierarchy);
     ImGui::DockBuilderDockWindow("Tile Palette",     dockPalette);
     ImGui::DockBuilderDockWindow("Viewport",         dockViewport);
     ImGui::DockBuilderDockWindow("File Editor",      dockViewport);
+    ImGui::DockBuilderDockWindow("Entity Viewport",  dockViewport);
+    ImGui::DockBuilderDockWindow("Bone Structure",   dockViewport);
     ImGui::DockBuilderDockWindow("Properties",       dockProperties);
+    ImGui::DockBuilderDockWindow("Asset Inspector",  dockProperties);
+    ImGui::DockBuilderDockWindow("Lighting",         dockProperties);
+    ImGui::DockBuilderDockWindow("Audio",            dockProperties);
     ImGui::DockBuilderDockWindow("File Browser",     dockFileBrowser);
-    ImGui::DockBuilderDockWindow("Asset Browser",     dockBottom);
-    ImGui::DockBuilderDockWindow("Asset Inspector",   dockProperties);
+    ImGui::DockBuilderDockWindow("Asset Browser",    dockBottom);
     ImGui::DockBuilderDockWindow("Build Log",        dockBottom);
     ImGui::DockBuilderDockWindow("Performance",      dockBottom);
+    ImGui::DockBuilderDockWindow("Validation",       dockBottom);
+    ImGui::DockBuilderDockWindow("Runtime Inspector", dockBottom);
 
     ImGui::DockBuilderFinish(dockspaceId);
 }
@@ -1075,25 +1082,37 @@ void EditorApp::drawMenuBar()
             requestAction(PendingAction::Exit);
         ImGui::EndMenu();
     }
-    if (ImGui::BeginMenu("View")) {
-        ImGui::MenuItem("Toolbar", nullptr, &showToolbar_);
-        ImGui::MenuItem("Scene Hierarchy", nullptr, &showSceneHierarchy_);
-        ImGui::MenuItem("Properties", nullptr, &showPropertiesPanel_);
-        ImGui::MenuItem("Tile Palette", nullptr, &showTilePalette_);
+    if (ImGui::BeginMenu("Window")) {
+        ImGui::SeparatorText("Scene");
         ImGui::MenuItem("Viewport", nullptr, &showViewport_);
-        ImGui::MenuItem("Build Log", nullptr, &showBuildLog_);
-        ImGui::MenuItem("Performance", nullptr, &showPerformancePanel_);
-        ImGui::MenuItem("File Browser", nullptr, &showFileBrowser_);
-        ImGui::MenuItem("File Editor", nullptr, &showFileEditor_);
-        ImGui::MenuItem("Asset Browser", nullptr, &showAssetBrowser_);
-        ImGui::MenuItem("Asset Inspector", nullptr, &showAssetInspector_);
+        ImGui::MenuItem("Scene Hierarchy", nullptr, &showSceneHierarchy_);
+        ImGui::MenuItem("Scene Selector", nullptr, &showSceneSelector_);
+        ImGui::MenuItem("Tile Palette", nullptr, &showTilePalette_);
+        ImGui::MenuItem("Entity Viewport", nullptr, &showEntityViewport_);
+
+        ImGui::SeparatorText("Details");
+        ImGui::MenuItem("Properties", nullptr, &showPropertiesPanel_);
         ImGui::MenuItem("Lighting", nullptr, &showLightingPanel_);
         ImGui::MenuItem("Audio", nullptr, &showAudioPanel_);
-        ImGui::MenuItem("Entity Viewport", nullptr, &showEntityViewport_);
-        ImGui::MenuItem("Scene Selector", nullptr, &showSceneSelector_);
-        ImGui::MenuItem("Validation Panel", nullptr, &showValidationPanel_);
-        ImGui::MenuItem("Runtime Inspector", nullptr, &showRuntimeInspector_);
+
+        ImGui::SeparatorText("Content");
+        ImGui::MenuItem("Asset Browser", nullptr, &showAssetBrowser_);
+        ImGui::MenuItem("Asset Inspector", nullptr, &showAssetInspector_);
+        ImGui::MenuItem("File Browser", nullptr, &showFileBrowser_);
+        ImGui::MenuItem("File Editor", nullptr, &showFileEditor_);
         ImGui::MenuItem("Bone Structure", nullptr, &showBoneStructurePanel_);
+
+        ImGui::SeparatorText("Diagnostics");
+        ImGui::MenuItem("Build Log", nullptr, &showBuildLog_);
+        ImGui::MenuItem("Performance", nullptr, &showPerformancePanel_);
+        ImGui::MenuItem("Validation", nullptr, &showValidationPanel_);
+        ImGui::MenuItem("Runtime Inspector", nullptr, &showRuntimeInspector_);
+
+        ImGui::SeparatorText("Layout");
+        ImGui::MenuItem("Toolbar", nullptr, &showToolbar_);
+        // Cleared here, rebuilt by the dockspace host on the next frame.
+        if (ImGui::MenuItem("Reset Layout")) layoutInitialized_ = false;
+
         ImGui::Separator();
         ImGui::MenuItem("Auto-Reload Assets", nullptr, &autoReload_);
         ImGui::EndMenu();
@@ -2946,7 +2965,15 @@ void EditorApp::renderWorldToTexture()
     vkCtx_.updateSceneLights(lightUbo, lightCount);
 
     // ── Shadow depth pass (outside the viewport render pass) ────────────────
+    // Sized before both depth passes: the SSAO target follows the viewport, and
+    // resizing it once the render pass is open is not possible.
+    vkCtx_.ensureViewportSize(vpW, vpH);
     vkCtx_.recordShadowPass(instances, resources);
+
+    dash::vkexp::Mat4 ssaoViewProj{};
+    std::memcpy(ssaoViewProj.m, viewProj, sizeof(ssaoViewProj.m));
+    vkCtx_.recordSsaoPass(instances, resources, ssaoViewProj,
+                          static_cast<float>(vpW) / static_cast<float>(vpH));
 
     // ── Begin offscreen viewport render pass ────────────────────────────────
     vkCtx_.beginViewportRender(vpW, vpH);
@@ -2964,12 +2991,9 @@ void EditorApp::renderWorldToTexture()
         vkCmdBindVertexBuffers(cmd, 0, 1, vb, offsets);
         vkCmdBindIndexBuffer(cmd, vkCtx_.terrainMesh().indexBuffer(), 0, VK_INDEX_TYPE_UINT32);
 
-        // Push constants: eyePos(3) + time(1) + fogStart(1) + fogEnd(1) + lightDir(3) + intensity(1) + lightColor(3) + ambient(1) + 2 spare, then the per-layer roughness table
+        // Push constants: eyePos(3) + time(1) + fogStart(1) + fogEnd(1) + lightDir(3) + intensity(1) + lightColor(3) + ambient(1) + 2 spare
         static auto startTime = std::chrono::high_resolution_clock::now();
         float elapsed = std::chrono::duration<float>(std::chrono::high_resolution_clock::now() - startTime).count();
-
-        float layerRoughness[dash::vkexp::kTerrainRoughnessFloats];
-        dash::vkexp::packTerrainLayerRoughness(layerRoughness);
 
         float terrainPC[dash::vkexp::kTerrainPushConstantFloats] = {
             eyeX, eyeY, eyeZ, elapsed,
@@ -2977,7 +3001,6 @@ void EditorApp::renderWorldToTexture()
             viewport3D_.lightDirZ, viewport3D_.lightIntensity, viewport3D_.lightColorR, viewport3D_.lightColorG,
             viewport3D_.lightColorB, viewport3D_.ambientStrength, 0.0f, 0.0f
         };
-        std::copy(std::begin(layerRoughness), std::end(layerRoughness), terrainPC + 16);
         vkCmdPushConstants(cmd, vkCtx_.terrainPipelineLayout(),
                            VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
                            0, sizeof(terrainPC), terrainPC);

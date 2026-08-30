@@ -656,6 +656,15 @@ target_compile_options(migrate_project_data PRIVATE ${DASH_COMPILE_FLAGS})
 # ── Physics determinism baseline (D84) ─────────────────────────────────────
 dash_add_test(test_physics_determinism test_physics_determinism.cpp)
 
+# ── 3D runtime enemy AI, pure decision layer (T1) ───────────────────────────
+dash_add_test(test_runtime3d_agent_ai test_runtime3d_agent_ai.cpp)
+
+# ── 3D runtime navigation vs. terrain cliff tiers (T2) ──────────────────────
+dash_add_test(test_runtime3d_cliff_nav test_runtime3d_cliff_nav.cpp)
+
+# ── Combat VFX: particle pool, transient lights, camera feedback (T3) ───────
+dash_add_test(test_particle_system test_particle_system.cpp)
+
 # ── Audio smoke tests (D93) ──────────────────────────────────────────────────
 add_executable(test_audio_smoke
     test_audio_smoke.cpp

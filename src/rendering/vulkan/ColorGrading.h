@@ -31,9 +31,14 @@ struct GradingParams {
 // block in tonemap.frag.
 inline constexpr std::size_t kTonemapPushConstantFloats = 16;
 
+// `flashPremulRgb` is the combat hit tint already multiplied by its strength.
+// It travels in the three .w slots the grading vectors leave spare, which is
+// why the block never had to grow — and why the range shared with the SSAO
+// fullscreen pipelines is untouched.
 inline void packTonemapPushConstants(const GradingParams& g,
                                      bool encodeSrgb,
-                                     float (&out)[kTonemapPushConstantFloats])
+                                     float (&out)[kTonemapPushConstantFloats],
+                                     const float* flashPremulRgb = nullptr)
 {
     out[0] = g.exposure;
     out[1] = g.contrast;
@@ -45,9 +50,9 @@ inline void packTonemapPushConstants(const GradingParams& g,
         out[8 + i] = g.gamma[i];
         out[12 + i] = g.gain[i];
     }
-    out[7] = 0.0f;
-    out[11] = 0.0f;
-    out[15] = 0.0f;
+    out[7]  = flashPremulRgb ? flashPremulRgb[0] : 0.0f;
+    out[11] = flashPremulRgb ? flashPremulRgb[1] : 0.0f;
+    out[15] = flashPremulRgb ? flashPremulRgb[2] : 0.0f;
 }
 
 } // namespace dash::vkexp

@@ -32,6 +32,17 @@ public:
     // Build view-projection matrix for the current camera state
     Mat4 computeViewProjection(float aspectRatio) const;
 
+    // Transient displacement for combat feedback. It moves the eye and its
+    // target together, so the shake is a pure translation and the framing does
+    // not swing; it is deliberately kept out of x()/y()/z() so gameplay,
+    // culling volumes and the shadow cascades never see it.
+    void setShakeOffset(float dx, float dy, float dz)
+    {
+        shakeX_ = dx;
+        shakeY_ = dy;
+        shakeZ_ = dz;
+    }
+
     // Camera basis vectors, matching the view matrix built above.
     Vec3 forwardVector() const;
     Vec3 rightVector() const;
@@ -62,6 +73,10 @@ private:
 
     float followDistance_ = 8.0f;
     float followHeight_ = 2.5f;
+
+    float shakeX_ = 0.0f;
+    float shakeY_ = 0.0f;
+    float shakeZ_ = 0.0f;
 
     // Track editor state to detect changes
     float lastEditorTargetX_ = 0.0f;

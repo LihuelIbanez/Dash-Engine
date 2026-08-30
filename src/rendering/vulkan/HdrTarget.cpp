@@ -304,7 +304,7 @@ void HdrTarget::endPass(VkCommandBuffer cmd) const
 }
 
 void HdrTarget::drawTonemap(VkCommandBuffer cmd, const GradingParams& grading,
-                            bool encodeSrgb) const
+                            bool encodeSrgb, const float* flashPremulRgb) const
 {
     if (pipeline_ == VK_NULL_HANDLE) return;
 
@@ -322,7 +322,7 @@ void HdrTarget::drawTonemap(VkCommandBuffer cmd, const GradingParams& grading,
     vkCmdSetScissor(cmd, 0, 1, &scissor);
 
     float pc[kTonemapPushConstantFloats];
-    packTonemapPushConstants(grading, encodeSrgb, pc);
+    packTonemapPushConstants(grading, encodeSrgb, pc, flashPremulRgb);
     vkCmdPushConstants(cmd, pipelineLayout_, VK_SHADER_STAGE_FRAGMENT_BIT,
                        0, sizeof(pc), pc);
 

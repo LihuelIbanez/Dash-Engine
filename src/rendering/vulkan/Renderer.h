@@ -17,11 +17,16 @@
 #include "assets/AssetDatabase.h"
 #include "assets/MaterialAsset.h"
 #include "rendering/platform/WindowContext.h"
+#include "rendering/vfx/CameraFeedback.h"
+#include "rendering/vfx/CombatVfx.h"
+#include "rendering/vfx/ParticleSystem.h"
+#include "rendering/vfx/TransientLights.h"
 #include "rendering/vulkan/ColorGrading.h"
 #include "rendering/vulkan/DeviceContext.h"
 #include "rendering/vulkan/EditorBridge.h"
 #include "rendering/vulkan/FrameGraphLite.h"
 #include "rendering/vulkan/HdrTarget.h"
+#include "rendering/vulkan/ParticleRenderer.h"
 #include "rendering/vulkan/SwapchainContext.h"
 #include "rendering/vulkan/CameraController.h"
 #include "rendering/vulkan/PlayerController.h"
@@ -29,8 +34,10 @@
 #include "rendering/vulkan/SceneRenderer.h"
 #include "rendering/vulkan/ShadowMap.h"
 #include "rendering/vulkan/ShadowMath.h"
+#include "rendering/vulkan/SsaoPass.h"
 #include "game/physics/PhysicsWorld.h"
 #include "game/physics/TransformProxy.h"
+#include "game/runtime3d/EnemySimulation3D.h"
 #include "events/EventDispatcher.h"
 #include "events/GameEvents.h"
 #include "input/InputBindings3D.h"
@@ -72,6 +79,22 @@ private:
     // the same frame.
     void recordShadowPass(VkCommandBuffer cmd, uint32_t imageIndex,
                           const std::vector<InstanceResources>& res);
+
+    // Half-res depth prepass + SSAO + blur, between the shadow pass and the
+    // scene pass that samples the result.
+    void recordSsaoPass(VkCommandBuffer cmd, uint32_t imageIndex,
+                        const std::vector<InstanceResources>& res,
+                        const Mat4& viewProj, float aspect);
+
+    // Combat VFX. subscribeCombatVfx() runs once, after the scene is loaded;
+    // updateVfx() advances every pool and pushes the shake into the camera.
+    void subscribeCombatVfx();
+    void updateVfx(float dt);
+    // Ground height under a tile-space position, matching how the enemy
+    // simulation grounds its agents.
+    float vfxGroundHeight(float tileX, float tileZ) const;
+    // sceneLights_ plus whatever transient flashes fit in the remaining slots.
+    void buildActiveLights();
 
     // Resolves RenderComponent::mesh for every scene instance, uploading and
     // caching referenced models. Falls back to the builtin cube when missing.
@@ -176,6 +199,29 @@ private:
     float shadowDepthBias_[4]{};
     float shadowParams_[4]{};
 
+    // Contact occlusion. Falls back to a white texel at binding 5 when it fails
+    // to come up, which reads as "no occlusion" in every shader.
+    SsaoPass   ssao_;
+    SsaoParams ssaoParams_;
+
+    // Combat VFX: CPU pools plus the instanced quad pass that draws them.
+    // Effects are transparent, so they are neither scene instances nor shadow
+    // casters and never reach the depth prepass.
+    ParticleRenderer          particles_;
+    dash::vfx::ParticleSystem particleSim_{2048};
+    dash::vfx::TransientLights transientLights_;
+    dash::vfx::ScreenShake    shake_;
+    dash::vfx::HitFlash       hitFlash_;
+    std::vector<dash::vfx::ParticleInstance> particleAlphaBatch_;
+    std::vector<dash::vfx::ParticleInstance> particleAdditiveBatch_;
+    // sceneLights_ (authored, indices pinned for the shadow map) followed by
+    // the transient flashes that fit; this is what the shaders actually read.
+    std::vector<SceneLight> activeLights_;
+    std::vector<std::size_t> transientPick_;
+    uint32_t vfxDrawCalls_ = 0;
+    uint64_t vfxCombatEvents_ = 0;
+    uint32_t vfxLoggedFrames_ = 0;
+
     bool initialized_ = false;
 
     AssetCache3D assetCache_;
@@ -228,6 +274,7 @@ private:
 
     CameraController camera_;
     PlayerController player_;
+    dash::runtime3d::EnemySimulation3D enemySim_;
     EditorBridge editorBridge_;
 
     float elapsedSeconds_ = 0.0f;

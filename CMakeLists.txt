@@ -28,6 +28,10 @@ endif()
 find_package(Vulkan QUIET)
 find_package(glfw3 QUIET)
 find_package(assimp CONFIG QUIET)
+# Optional: the terrain photo sets ship their normal/roughness maps as DWAA
+# OpenEXR, a lossy DCT codec no single-header decoder implements. Without this
+# the terrain falls back to displacement-derived normals and scalar roughness.
+find_package(OpenEXR CONFIG QUIET)
 # Fix Homebrew assimp linking against wrong SDK path for zlib
 if(TARGET assimp::assimp AND APPLE)
     get_target_property(_assimp_libs assimp::assimp INTERFACE_LINK_LIBRARIES)
@@ -216,6 +220,7 @@ if(ENABLE_VULKAN_EXPERIMENTAL AND NOT IOS)
             ${CMAKE_SOURCE_DIR}/src/rendering/animation/AnimationPlayer.cpp
             ${CMAKE_SOURCE_DIR}/src/rendering/textures/TextureLoader.cpp
             ${CMAKE_SOURCE_DIR}/src/rendering/textures/TerrainTextureArray.cpp
+            ${CMAKE_SOURCE_DIR}/src/rendering/textures/ExrImage.cpp
             ${CMAKE_SOURCE_DIR}/src/rendering/textures/stb_image_vk_impl.cpp
             ${CMAKE_SOURCE_DIR}/src/assets/cache/AssetCache3D.cpp
             ${CMAKE_SOURCE_DIR}/src/assets/MaterialAsset.cpp
@@ -229,11 +234,14 @@ if(ENABLE_VULKAN_EXPERIMENTAL AND NOT IOS)
             ${CMAKE_SOURCE_DIR}/src/rendering/vulkan/SwapchainContext.cpp
             ${CMAKE_SOURCE_DIR}/src/rendering/vulkan/FrameGraphLite.cpp
             ${CMAKE_SOURCE_DIR}/src/rendering/vulkan/HdrTarget.cpp
+            ${CMAKE_SOURCE_DIR}/src/rendering/vulkan/ParticleRenderer.cpp
             ${CMAKE_SOURCE_DIR}/src/rendering/vulkan/Renderer.cpp
             ${CMAKE_SOURCE_DIR}/src/rendering/vulkan/SceneRenderer.cpp
             ${CMAKE_SOURCE_DIR}/src/rendering/vulkan/ShadowMap.cpp
+            ${CMAKE_SOURCE_DIR}/src/rendering/vulkan/SsaoPass.cpp
             ${CMAKE_SOURCE_DIR}/src/rendering/vulkan/PipelineBuilder.cpp
             ${CMAKE_SOURCE_DIR}/src/rendering/vulkan/SceneLoader.cpp
+            ${CMAKE_SOURCE_DIR}/src/game/runtime3d/EnemySimulation3D.cpp
         )
 
         add_library(vulkan_experimental STATIC ${VULKAN_EXPERIMENTAL_SOURCES})
@@ -242,6 +250,14 @@ if(ENABLE_VULKAN_EXPERIMENTAL AND NOT IOS)
         )
         target_link_libraries(vulkan_experimental PUBLIC Vulkan::Vulkan ${GLFW_VK_TARGET} game_core)
         target_compile_options(vulkan_experimental PRIVATE ${DASH_COMPILE_FLAGS})
+
+        if(TARGET OpenEXR::OpenEXR)
+            target_link_libraries(vulkan_experimental PRIVATE OpenEXR::OpenEXR)
+            target_compile_definitions(vulkan_experimental PRIVATE DASH_HAVE_OPENEXR=1)
+            message(STATUS "OpenEXR found: terrain normal/roughness maps will be decoded from EXR")
+        else()
+            message(STATUS "OpenEXR not found: terrain falls back to displacement-derived normals")
+        endif()
 
         set(VULKAN_SHADER_SRC_DIR "${CMAKE_SOURCE_DIR}/assets/shaders")
         set(VULKAN_SHADER_BIN_DIR "${CMAKE_BINARY_DIR}/generated/shaders")
@@ -261,9 +277,11 @@ if(ENABLE_VULKAN_EXPERIMENTAL AND NOT IOS)
                 terrain.vert terrain.frag
                 water.vert water.frag
                 billboard.vert billboard.frag
+                particle.vert particle.frag
                 skinned.vert skinned.frag
                 shadow_depth.vert shadow_depth_skinned.vert
                 shadow_billboard.vert shadow_billboard.frag
+                ssao.frag ssao_blur.frag
                 tonemap.vert tonemap.frag)
 
             # Fragment shaders compiled twice: the plain variant targets descriptor
@@ -301,6 +319,7 @@ if(ENABLE_VULKAN_EXPERIMENTAL AND NOT IOS)
                             -o "${VULKAN_SHADER_BIN_DIR}/${lit_name}.spv"
                     DEPENDS "${VULKAN_SHADER_SRC_DIR}/${shader}"
                             "${VULKAN_SHADER_SRC_DIR}/scene_lights.glsl"
+                            "${VULKAN_SHADER_SRC_DIR}/ssao_sample.glsl"
                     COMMENT "Compiling Vulkan shader ${lit_name} (GLSL -> SPIR-V)"
                     VERBATIM)
                 list(APPEND VULKAN_SHADER_OUTPUTS "${VULKAN_SHADER_BIN_DIR}/${lit_name}.spv")
@@ -319,6 +338,7 @@ if(ENABLE_VULKAN_EXPERIMENTAL AND NOT IOS)
                     DEPENDS "${VULKAN_SHADER_SRC_DIR}/${shader}"
                             "${VULKAN_SHADER_SRC_DIR}/scene_lights.glsl"
                             "${VULKAN_SHADER_SRC_DIR}/shadow_sample.glsl"
+                            "${VULKAN_SHADER_SRC_DIR}/ssao_sample.glsl"
                     COMMENT "Compiling Vulkan shader ${shadow_name} (GLSL -> SPIR-V)"
                     VERBATIM)
                 list(APPEND VULKAN_SHADER_OUTPUTS "${VULKAN_SHADER_BIN_DIR}/${shadow_name}.spv")

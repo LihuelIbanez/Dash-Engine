@@ -5,10 +5,12 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <fstream>
 #include <vector>
 
 #include "game/rendering/stb_image.h"
 #include "rendering/IsoRenderer.h"
+#include "rendering/textures/ExrImage.h"
 
 namespace dash::vkexp {
 namespace {
@@ -29,8 +31,8 @@ struct LayerSpec {
     uint8_t     colorB[3];   // procedural highlight
     int         basePeriod;  // procedural noise lattice
     float       bump;        // normal-map slope gain
-    // Scalar: the *_rough_4k maps that ship with these sets are OpenEXR, which
-    // stb_image cannot decode, so there is no per-texel source to sample.
+    // Flat value baked into the alpha channel when the layer has no roughness
+    // map, so the shader keeps a single per-texel code path.
     float       roughness;
 };
 
@@ -146,6 +148,7 @@ VkDeviceSize mipChainBytes(uint32_t extent, uint32_t mipLevels)
     return total;
 }
 
+// Writes RGB only: alpha carries roughness and is filled independently.
 void encodeNormal(float nx, float ny, float nz, uint8_t* dst)
 {
     const float len = std::sqrt(nx * nx + ny * ny + nz * nz);
@@ -153,7 +156,6 @@ void encodeNormal(float nx, float ny, float nz, uint8_t* dst)
     dst[0] = static_cast<uint8_t>(std::lround((nx * inv * 0.5f + 0.5f) * 255.0f));
     dst[1] = static_cast<uint8_t>(std::lround((ny * inv * 0.5f + 0.5f) * 255.0f));
     dst[2] = static_cast<uint8_t>(std::lround((nz * inv * 0.5f + 0.5f) * 255.0f));
-    dst[3] = 255;
 }
 
 // Mip 0 must already be filled; the rest of the chain follows contiguously.
@@ -182,6 +184,8 @@ void generateMips(uint8_t* layerBase, uint32_t extent, uint32_t mipLevels, bool 
                     encodeNormal(static_cast<float>(acc[0]) / 510.0f - 1.0f,
                                  static_cast<float>(acc[1]) / 510.0f - 1.0f,
                                  static_cast<float>(acc[2]) / 510.0f - 1.0f, d);
+                    // Roughness is a plain scalar, so it averages like colour.
+                    d[3] = static_cast<uint8_t>(acc[3] / 4);
                 } else {
                     for (int c = 0; c < 4; ++c) d[c] = static_cast<uint8_t>(acc[c] / 4);
                 }
@@ -239,8 +243,8 @@ bool loadPhotoAlbedo(const std::string& path, uint32_t extent, uint8_t* dst)
     return true;
 }
 
-// The published normal maps are OpenEXR, which stb_image cannot decode, so the
-// 16-bit displacement PNG is differentiated instead.
+// The published normal maps are OpenEXR, so this displacement-derived normal is
+// only the fallback when the EXR path is unavailable.
 bool loadPhotoHeight(const std::string& path, uint32_t extent, std::vector<float>& out)
 {
     int w = 0, h = 0, ch = 0;
@@ -255,6 +259,66 @@ bool loadPhotoHeight(const std::string& path, uint32_t extent, std::vector<float
     out.resize(small.size());
     for (size_t i = 0; i < small.size(); ++i) out[i] = static_cast<float>(small[i]) / 65535.0f;
     return true;
+}
+
+bool fileExists(const std::string& path)
+{
+    std::ifstream f(path, std::ios::binary);
+    return f.good();
+}
+
+// Poly Haven stores the tangent-space normal already mapped to [0,1]; the DWAA
+// codec is lossy so values overshoot slightly, which encodeNormal absorbs by
+// renormalising.
+bool loadNormalExr(const std::string& path, uint32_t extent, uint8_t* dst)
+{
+    if (!fileExists(path)) return false;
+    std::vector<float> rgb;
+    if (!loadExrDownsampled(path, 3, extent, rgb)) return false;
+
+    const size_t n = static_cast<size_t>(extent) * extent;
+    for (size_t i = 0; i < n; ++i) {
+        encodeNormal(rgb[i * 3 + 0] * 2.0f - 1.0f,
+                     rgb[i * 3 + 1] * 2.0f - 1.0f,
+                     rgb[i * 3 + 2] * 2.0f - 1.0f,
+                     dst + i * 4);
+    }
+    return true;
+}
+
+bool loadRoughnessLdr(const std::string& path, uint32_t extent, std::vector<float>& out)
+{
+    if (!fileExists(path)) return false;
+    int w = 0, h = 0, ch = 0;
+    stbi_set_flip_vertically_on_load(0);
+    unsigned char* raw = stbi_load(path.c_str(), &w, &h, &ch, 1);
+    if (!raw) return false;
+
+    std::vector<unsigned char> small(static_cast<size_t>(extent) * extent);
+    boxResize<unsigned char, 1>(raw, w, h, small.data(), extent, extent);
+    stbi_image_free(raw);
+
+    out.resize(small.size());
+    for (size_t i = 0; i < small.size(); ++i) out[i] = static_cast<float>(small[i]) / 255.0f;
+    return true;
+}
+
+// snow_02 is the one set published with a JPEG roughness instead of an EXR.
+bool loadRoughness(const std::string& base, uint32_t extent, std::vector<float>& out)
+{
+    const std::string exr = base + "_rough_4k.exr";
+    if (fileExists(exr) && loadExrDownsampled(exr, 1, extent, out)) return true;
+    return loadRoughnessLdr(base + "_rough_4k.jpg", extent, out);
+}
+
+void fillRoughnessAlpha(const std::vector<float>* rough, float fallback,
+                        uint32_t extent, uint8_t* dst)
+{
+    const size_t n = static_cast<size_t>(extent) * extent;
+    for (size_t i = 0; i < n; ++i) {
+        const float r = rough ? (*rough)[i] : fallback;
+        dst[i * 4 + 3] = static_cast<uint8_t>(std::lround(std::clamp(r, 0.0f, 1.0f) * 255.0f));
+    }
 }
 
 void heightToNormal(const std::vector<float>& height, uint32_t extent, float bump, uint8_t* dst)
@@ -456,12 +520,6 @@ std::string defaultTerrainTextureRoot()
 #endif
 }
 
-void packTerrainLayerRoughness(float (&out)[kTerrainRoughnessFloats])
-{
-    for (std::size_t i = 0; i < kTerrainRoughnessFloats; ++i)
-        out[i] = i < kLayerCount ? kLayers[i].roughness : 1.0f;
-}
-
 bool createTerrainTextureSet(VkPhysicalDevice physicalDevice,
                              VkDevice device,
                              VkQueue graphicsQueue,
@@ -478,7 +536,7 @@ bool createTerrainTextureSet(VkPhysicalDevice physicalDevice,
     const size_t albedoStride = static_cast<size_t>(mipChainBytes(kAlbedoExtent, albedoMips));
     const size_t normalStride = static_cast<size_t>(mipChainBytes(kNormalExtent, normalMips));
 
-    int photoLayers = 0, heightLayers = 0;
+    int photoLayers = 0, exrNormalLayers = 0, roughLayers = 0;
 
     for (uint32_t layer = 0; layer < kLayerCount; ++layer) {
         const LayerSpec& spec = kLayers[layer];
@@ -505,14 +563,23 @@ bool createTerrainTextureSet(VkPhysicalDevice physicalDevice,
         }
         generateMips(albedoDst, kAlbedoExtent, albedoMips, false);
 
-        std::vector<float> height;
-        bool heightLoaded = false;
+        bool normalLoaded = false;
         if (hasPhoto) {
-            heightLoaded = loadPhotoHeight(base + "_disp_4k.png", kNormalExtent, height);
-            if (heightLoaded) ++heightLayers;
+            normalLoaded = loadNormalExr(base + "_nor_gl_4k.exr", kNormalExtent, normalDst);
+            if (normalLoaded) ++exrNormalLayers;
         }
-        if (!heightLoaded) proceduralHeight(spec, kNormalExtent, layer, height);
-        heightToNormal(height, kNormalExtent, spec.bump, normalDst);
+        if (!normalLoaded) {
+            std::vector<float> height;
+            if (!hasPhoto || !loadPhotoHeight(base + "_disp_4k.png", kNormalExtent, height))
+                proceduralHeight(spec, kNormalExtent, layer, height);
+            heightToNormal(height, kNormalExtent, spec.bump, normalDst);
+        }
+
+        std::vector<float> rough;
+        const bool roughLoaded = hasPhoto && loadRoughness(base, kNormalExtent, rough);
+        if (roughLoaded) ++roughLayers;
+        fillRoughnessAlpha(roughLoaded ? &rough : nullptr, spec.roughness, kNormalExtent, normalDst);
+
         generateMips(normalDst, kNormalExtent, normalMips, true);
     }
 
@@ -532,10 +599,12 @@ bool createTerrainTextureSet(VkPhysicalDevice physicalDevice,
     }
 
     std::fprintf(stdout,
-                 "[TerrainTex] albedo %ux%u x%u (%u mips, %d photo) + normals %ux%u x%u "
-                 "(%u mips, %d from displacement) = %.1f MB\n",
+                 "[TerrainTex] albedo %ux%u x%u (%u mips, %d photo) + normal/rough %ux%u x%u "
+                 "(%u mips, %d EXR normals, %d roughness maps%s) = %.1f MB\n",
                  kAlbedoExtent, kAlbedoExtent, kLayerCount, albedoMips, photoLayers,
-                 kNormalExtent, kNormalExtent, kLayerCount, normalMips, heightLayers,
+                 kNormalExtent, kNormalExtent, kLayerCount, normalMips,
+                 exrNormalLayers, roughLayers,
+                 exrSupportAvailable() ? "" : ", no EXR support",
                  static_cast<double>(albedo.size() + normal.size()) / (1024.0 * 1024.0));
     return true;
 }

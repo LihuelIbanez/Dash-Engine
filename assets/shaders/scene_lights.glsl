@@ -31,6 +31,7 @@ layout(set = 0, binding = 2) uniform SceneLightsUBO {
 #endif
 
 #include "pbr.glsl"
+#include "ssao_sample.glsl"
 
 // Cook-Torrance accumulation over the first `count` scene lights. Returns the
 // final surface colour, not a multiplier: albedo enters inside the BRDF.
@@ -42,8 +43,10 @@ vec3 accumulateSceneLights(vec3 N, vec3 worldPos, int count, float ambient,
     roughness = clamp(roughness, 0.045, 1.0);
     metallic  = clamp(metallic, 0.0, 1.0);
 
+    // Contact occlusion darkens the ambient term only: the direct lobes below
+    // already have the cascades, and dimming them would double-shadow.
     vec3 acc = dashPbrAmbient(N, V, albedo, metallic, roughness, ambient,
-                              kDashSkyAmbient, kDashGroundAmbient);
+                              kDashSkyAmbient, kDashGroundAmbient) * dashSsaoFactor();
 
     for (int i = 0; i < min(count, kMaxSceneLights); ++i) {
         const SceneLight l = scene.lights[i];

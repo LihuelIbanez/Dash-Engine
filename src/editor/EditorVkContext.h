@@ -11,6 +11,7 @@
 #include "rendering/vulkan/HdrTarget.h"
 #include "rendering/vulkan/SceneRenderer.h"
 #include "rendering/vulkan/ShadowMap.h"
+#include "rendering/vulkan/SsaoPass.h"
 #include "rendering/mesh/MeshBuffers.h"
 #include "rendering/textures/TerrainTextureArray.h"
 #include "world/TerrainMesh.h"
@@ -32,6 +33,10 @@ public:
     void endFrame();              // submit + present
 
     // ── Offscreen viewport ──────────────────────────────────────────────────
+    // Reallocates the viewport-sized targets when the panel changed size. Called
+    // by beginViewportRender(), and separately by callers that need the targets
+    // final before recording the depth passes that precede it.
+    void ensureViewportSize(uint32_t width, uint32_t height);
     void beginViewportRender(uint32_t width, uint32_t height);
     void endViewportRender();
     ImTextureID viewportTexture() const;
@@ -70,6 +75,15 @@ public:
     // Must be recorded before beginViewportRender(): render passes cannot nest.
     void recordShadowPass(const std::vector<dash::vkexp::RenderInstance>& instances,
                           const std::vector<dash::vkexp::InstanceResources>& resources);
+
+    // ── Screen-space ambient occlusion ──────────────────────────────────────
+    // Depth prepass + resolve, same as the runtime. Also has to be recorded
+    // before beginViewportRender().
+    void recordSsaoPass(const std::vector<dash::vkexp::RenderInstance>& instances,
+                        const std::vector<dash::vkexp::InstanceResources>& resources,
+                        const dash::vkexp::Mat4& viewProj, float aspect);
+
+    dash::vkexp::SsaoParams& ssaoParams() { return ssaoParams_; }
 
     // ── Pipeline access ─────────────────────────────────────────────────────
     VkPipeline          terrainPipeline()       const { return terrainPipeline_; }
@@ -128,8 +142,7 @@ private:
     // Scene target plus the tonemap that resolves it into vpColorImage_. ImGui
     // samples that image raw onto a _UNORM swapchain, so the resolve is the one
     // that has to encode sRGB by hand.
-    dash::vkexp::HdrTarget      hdr_;
-    dash::vkexp::GradingParams  grading_;
+    dash::vkexp::HdrTarget      hdr_;    dash::vkexp::GradingParams  grading_;
 
     // Scene descriptor (UBO binding 0)
     VkDescriptorSetLayout sceneDescLayout_ = VK_NULL_HANDLE;
@@ -169,6 +182,9 @@ private:
     dash::vkexp::Vec3      shadowLightDir_{0.0f, -1.0f, 0.0f};
     int                    shadowLightIndex_ = -1;
     bool                   shadowLogged_ = false;
+
+    dash::vkexp::SsaoPass   ssao_;
+    dash::vkexp::SsaoParams ssaoParams_;
 
     // Terrain texture arrays (shared with the runtime renderer)
     dash::vkexp::TerrainTextureSet terrainTextures_;

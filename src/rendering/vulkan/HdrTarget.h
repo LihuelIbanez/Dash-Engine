@@ -54,8 +54,10 @@ public:
 
     // Must be recorded inside `outputRenderPass`. Sets its own viewport and
     // scissor, so the pipeline is not tied to one target size.
+    // `flashPremulRgb` is the combat hit tint premultiplied by its strength;
+    // null (the editor) means no tint at all.
     void drawTonemap(VkCommandBuffer cmd, const GradingParams& grading,
-                     bool encodeSrgb) const;
+                     bool encodeSrgb, const float* flashPremulRgb = nullptr) const;
 
     bool valid() const { return framebuffer_ != VK_NULL_HANDLE && pipeline_ != VK_NULL_HANDLE; }
     VkRenderPass renderPass() const { return renderPass_; }

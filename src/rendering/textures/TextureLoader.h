@@ -29,9 +29,8 @@ public:
                                     VkCommandPool commandPool,
                                     TextureResource& out);
 
-    static void destroy(VkDevice device, TextureResource& tex);
-
-private:
+    // Tight RGBA8 pixels straight to a sampled texture. Public because the VFX
+    // atlas is generated in memory and never touches disk.
     static bool createTextureFromPixels(VkPhysicalDevice physicalDevice,
                                          VkDevice device,
                                          VkQueue graphicsQueue,
@@ -41,6 +40,9 @@ private:
                                          uint32_t height,
                                          TextureResource& out);
 
+    static void destroy(VkDevice device, TextureResource& tex);
+
+private:
     static uint32_t findMemoryType(VkPhysicalDevice physicalDevice,
                                    uint32_t typeFilter,
                                    VkMemoryPropertyFlags properties);

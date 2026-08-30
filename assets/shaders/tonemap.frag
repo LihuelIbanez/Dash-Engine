@@ -55,6 +55,22 @@ vec3 grade(vec3 c)
 void main()
 {
     vec3 hdr = texture(uHdr, vUV).rgb;
+
+    // Combat hit flash. The tint rides in the three .w slots the grading
+    // vectors leave spare, already multiplied by its strength — which is why
+    // the strength can be read back as the max component.
+    vec3 flash = vec3(pc.lift.w, pc.gammaC.w, pc.gain.w);
+    float hit = clamp(max(flash.r, max(flash.g, flash.b)), 0.0, 1.0);
+    if (hit > 0.0) {
+        // Weighted toward the edges so the centre of the screen stays readable
+        // while the player is being hit.
+        float vig = smoothstep(0.10, 0.80, length(vUV - vec2(0.5)) * 1.42);
+        float w = hit * mix(0.45, 1.0, vig);
+        // Mixed before ACES so the tint saturates on the curve instead of
+        // flat-topping, and so the grade treats it like any other light.
+        hdr = mix(hdr, flash * 2.5 + hdr * 0.35, w);
+    }
+
     vec3 color = grade(acesFilmic(hdr * pc.tuning.x));
 
     outColor = vec4(pc.tuning.w > 0.5 ? linearToSrgb(color) : color, 1.0);

@@ -8,7 +8,7 @@
 namespace dash::vkexp {
 
 // One layer per TerrainTextureId, sampled by terrain.frag at set 0 binding 4
-// (albedo) and binding 5 (tangent-space normals).
+// (albedo) and binding 6 (tangent-space normal in RGB, roughness in A).
 struct TerrainTextureArray {
     VkImage        image     = VK_NULL_HANDLE;
     VkDeviceMemory memory    = VK_NULL_HANDLE;
@@ -38,11 +38,6 @@ bool createTerrainTextureSet(VkPhysicalDevice physicalDevice,
                              TerrainTextureSet& out);
 
 void destroyTerrainTextureSet(VkDevice device, TerrainTextureSet& set);
-
-// Scalar roughness per TerrainTextureId, laid out as the three trailing vec4 of
-// the terrain push constant block (9 layers used, the rest padding).
-inline constexpr std::size_t kTerrainRoughnessFloats = 12;
-void packTerrainLayerRoughness(float (&out)[kTerrainRoughnessFloats]);
 
 // Build-time assets directory + "/models/terrain/".
 std::string defaultTerrainTextureRoot();

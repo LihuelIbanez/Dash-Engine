@@ -56,7 +56,8 @@ void GridNav::tileToCentre(int tx, int ty, float& wx, float& wy)
 std::vector<NavPoint> GridNav::findPath(int sx, int sy,
                                         int gx, int gy,
                                         const World& world,
-                                        int maxSteps)
+                                        int maxSteps,
+                                        const StepFilter& stepFilter)
 {
     // Clamp to grid bounds
     sx = std::clamp(sx, 0, WORLD_W - 1);
@@ -111,6 +112,16 @@ std::vector<NavPoint> GridNav::findPath(int sx, int sy,
                 if (!world.grid[cur.y][nx].walkable ||
                     !world.grid[ny][cur.x].walkable)
                     continue;
+            }
+
+            if (stepFilter) {
+                if (!stepFilter(cur.x, cur.y, nx, ny)) continue;
+                // A diagonal that only works by clipping a blocked corner is not
+                // a real move, so both cardinal legs have to pass too.
+                if (DX[d] != 0 && DY[d] != 0) {
+                    if (!stepFilter(cur.x, cur.y, nx, cur.y)) continue;
+                    if (!stepFilter(cur.x, cur.y, cur.x, ny)) continue;
+                }
             }
 
             // Movement cost: cardinal = terrain cost, diagonal = terrain cost * sqrt(2)

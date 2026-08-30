@@ -106,6 +106,20 @@ public:
         VkPipeline& outPipeline,
         std::string& outError);
 
+    // The shape behind createTonemapPipeline, exposed for the other fullscreen
+    // passes (SSAO, blur). `label` only names the success log line; the push
+    // constant range is always kTonemapPushConstantFloats of fragment stage.
+    static bool createFullscreenPipeline(
+        VkDevice device,
+        VkRenderPass renderPass,
+        VkDescriptorSetLayout descriptorSetLayout,
+        const std::string& vertSpvPath,
+        const std::string& fragSpvPath,
+        const char* label,
+        VkPipelineLayout& outPipelineLayout,
+        VkPipeline& outPipeline,
+        std::string& outError);
+
     // Depth-only billboard pass: the same procedural quad as
     // createBillboardPipeline, but with a fragment stage that discards on the
     // sprite alpha so the caster is the silhouette and not a solid rectangle.
@@ -117,6 +131,22 @@ public:
         VkDescriptorSetLayout descriptorSetLayout,
         const std::string& vertSpvPath,
         const std::string& fragSpvPath,
+        VkPipelineLayout& outPipelineLayout,
+        VkPipeline& outPipeline,
+        std::string& outError);
+
+    // Instanced particle quads. One vertex binding at INSTANCE rate carrying
+    // four vec4s (centre+size, colour, uv rect, params) — every one of them has
+    // a matching location in assets/shaders/particle.vert. `additive` swaps the
+    // premultiplied-alpha blend for ONE/ONE; the shader is the same either way.
+    // Viewport and scissor are dynamic so one pipeline outlives every resize.
+    static bool createParticlePipeline(
+        VkDevice device,
+        VkRenderPass renderPass,
+        VkDescriptorSetLayout descriptorSetLayout,
+        const std::string& vertSpvPath,
+        const std::string& fragSpvPath,
+        bool additive,
         VkPipelineLayout& outPipelineLayout,
         VkPipeline& outPipeline,
         std::string& outError);

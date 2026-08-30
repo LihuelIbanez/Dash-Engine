@@ -21,6 +21,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="${SCRIPT_DIR}/build"
 JOBS="$(sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/null || echo 4)"
 
+# Vulkan reports API misuse only when the validation layers are on the path, and
+# several classes of bug here are otherwise silent: a pipeline that fails to
+# build just makes its geometry disappear. Opt out with DASH_NO_VALIDATION=1.
+VK_VALIDATION_DIR="/opt/homebrew/opt/vulkan-validationlayers/share/vulkan/explicit_layer.d"
+if [[ -d "${VK_VALIDATION_DIR}" && -z "${DASH_NO_VALIDATION:-}" ]]; then
+    export VK_LAYER_PATH="${VK_VALIDATION_DIR}"
+fi
+
 # ── Colores ───────────────────────────────────────────────────────────────────
 RED='\033[0;31m'
 GREEN='\033[0;32m'

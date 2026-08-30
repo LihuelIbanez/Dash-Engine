@@ -152,8 +152,9 @@ Mat4 CameraController::computeViewProjection(float aspectRatio) const
         std::sin(yaw) * std::cos(pitch)
     });
 
-    const Vec3 target{x_ + forward.x, y_ + forward.y, z_ + forward.z};
-    Mat4 view = lookAt({x_, y_, z_}, target, {0.0f, 1.0f, 0.0f});
+    const Vec3 eye{x_ + shakeX_, y_ + shakeY_, z_ + shakeZ_};
+    const Vec3 target{eye.x + forward.x, eye.y + forward.y, eye.z + forward.z};
+    Mat4 view = lookAt(eye, target, {0.0f, 1.0f, 0.0f});
     Mat4 proj = perspective(60.0f * 0.0174532925f, aspectRatio, 0.1f, 500.0f);
     proj.m[5] *= -1.0f;
 
