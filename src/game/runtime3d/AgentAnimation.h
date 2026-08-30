@@ -26,6 +26,13 @@ inline constexpr float kAnimMoveThreshold = 0.15f;
 // actually sampling a clip (enemies are drawn as cubes today, see report).
 inline constexpr float kAnimNominalClipSeconds = 0.8f;
 
+// The wolf's walk/run clips were authored facing its local +Z; headingYawDeg()
+// measures 0 as facing +X. Applied only at the render sync (see
+// EnemySimulation3D::syncToInstances), not on agent.yawDeg itself, so the AI's
+// own notion of facing (used for flanking/attacks) stays in movement space.
+// If the model still looks like it struts sideways after this, nudge by ±90.
+inline constexpr float kWolfFacingCorrectionDeg = -90.0f;
+
 // Fallback locomotion graph so the FSM always has something to drive even when
 // the scene ships no .animsm.json. Clip names follow the import convention.
 inline dash::anim::AnimationStateMachine defaultEnemyStateMachine()

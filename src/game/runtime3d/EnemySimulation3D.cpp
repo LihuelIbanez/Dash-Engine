@@ -681,7 +681,9 @@ void EnemySimulation3D::syncToInstances(std::vector<RenderInstance>& instances) 
             inst.position.x = agent.x;
             inst.position.y = agent.y;
             inst.position.z = agent.z;
-            inst.yawDeg = agent.yawDeg;
+            // Cosmetic only: keeps agent.yawDeg in true movement space for the
+            // AI, and only rotates what gets drawn.
+            inst.yawDeg = agent.yawDeg + kWolfFacingCorrectionDeg;
 
             // The FSM owns which clip plays; the renderer's player has no graph
             // installed, so it honours whatever the component says.

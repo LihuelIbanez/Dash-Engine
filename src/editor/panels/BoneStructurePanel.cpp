@@ -3,7 +3,10 @@
 #include "IconsFontAwesome6.h"
 #include "imgui.h"
 
+#include <algorithm>
 #include <cfloat>
+#include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <system_error>
@@ -95,6 +98,16 @@ bool BoneStructurePanel::load(const std::string& path, std::string& outError)
     selectBone(doc_.bones.empty() ? -1 : 0);
     copyToBuffer(pathBuf_, sizeof(pathBuf_), path);
     refreshIssues();
+
+    boneUndo_.clear();
+    previewPose_          = PreviewPose::Bind;
+    previewAnimScanned_   = false;
+    previewClips_.clear();
+    previewClipIndex_     = -1;
+    previewClipTimeTicks_ = 0.f;
+    previewPlaying_       = false;
+    previewDragMode_      = PreviewDragMode::None;
+    resetPreviewCamera();
     return true;
 }
 
@@ -392,8 +405,10 @@ void BoneStructurePanel::drawDetails(LogCallback& logCb)
     ImGui::InputText("##bs_name", nameBuf_, sizeof(nameBuf_));
     ImGui::SameLine();
     if (ImGui::Button(ICON_FA_PEN " Rename")) {
+        const PanelSnapshot   before = {doc_, origToCurrent_};
         const bs::EditResult result = bs::renameBone(doc_.bones, selected_, nameBuf_);
         if (result.ok) {
+            boneUndo_.push(before);
             dirty_         = true;
             statusIsError_ = false;
             status_        = "renamed bone #" + std::to_string(selected_);
@@ -425,8 +440,10 @@ void BoneStructurePanel::drawDetails(LogCallback& logCb)
     }
     ImGui::SameLine();
     if (ImGui::Button(ICON_FA_SITEMAP " Reparent")) {
+        const PanelSnapshot     before = {doc_, origToCurrent_};
         const bs::ReorderResult result = bs::reparent(doc_.bones, selected_, reparentTarget_);
         if (result.ok) {
+            boneUndo_.push(before);
             const bool reordered = result.reordered;
             applyReorder(result);
             statusIsError_ = false;
@@ -444,7 +461,9 @@ void BoneStructurePanel::drawDetails(LogCallback& logCb)
 
     float t[3] = {bone.localBind.m[12], bone.localBind.m[13], bone.localBind.m[14]};
     ImGui::SetNextItemWidth(-FLT_MIN);
-    if (ImGui::DragFloat3("##bs_translation", t, 0.01f)) {
+    const bool translationEdited = ImGui::DragFloat3("##bs_translation", t, 0.01f);
+    if (ImGui::IsItemActivated()) pushUndoSnapshot();
+    if (translationEdited) {
         bs::setTranslation(bone.localBind, dash::anim::Vec3{t[0], t[1], t[2]});
         if (autoRecomputeOffsets_) bs::recomputeOffsetsFromBindPose(doc_);
         dirty_ = true;
@@ -494,8 +513,10 @@ void BoneStructurePanel::drawIssues()
     const bool sortable = errors > 0;
     ImGui::BeginDisabled(!sortable);
     if (ImGui::Button(ICON_FA_SITEMAP " Sort topologically")) {
+        const PanelSnapshot     before = {doc_, origToCurrent_};
         const bs::ReorderResult result = bs::topologicalSort(doc_.bones);
         if (result.ok) {
+            boneUndo_.push(before);
             applyReorder(result);
             statusIsError_ = false;
             status_        = "re-sorted so every parent comes before its children";
@@ -579,6 +600,423 @@ void BoneStructurePanel::drawSaveSection(LogCallback& logCb)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Undo/redo — local to this panel; never touches the scene's command stack.
+// ─────────────────────────────────────────────────────────────────────────────
+void BoneStructurePanel::pushUndoSnapshot()
+{
+    boneUndo_.push(PanelSnapshot{doc_, origToCurrent_});
+}
+
+bool BoneStructurePanel::undo()
+{
+    PanelSnapshot current{doc_, origToCurrent_};
+    if (!boneUndo_.undoTo(current)) return false;
+    doc_           = std::move(current.doc);
+    origToCurrent_ = std::move(current.origToCurrent);
+    dirty_         = true;
+    refreshIssues();
+    selectBone(std::min(selected_, static_cast<int>(doc_.bones.size()) - 1));
+    return true;
+}
+
+bool BoneStructurePanel::redo()
+{
+    PanelSnapshot current{doc_, origToCurrent_};
+    if (!boneUndo_.redoTo(current)) return false;
+    doc_           = std::move(current.doc);
+    origToCurrent_ = std::move(current.origToCurrent);
+    dirty_         = true;
+    refreshIssues();
+    selectBone(std::min(selected_, static_cast<int>(doc_.bones.size()) - 1));
+    return true;
+}
+
+void BoneStructurePanel::handleUndoRedoShortcuts(LogCallback& logCb)
+{
+    if (!ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows)) return;
+    ImGuiIO& io = ImGui::GetIO();
+    if (io.WantTextInput || !io.KeyCtrl) return;
+
+    if (io.KeyShift) {
+        if (ImGui::IsKeyPressed(ImGuiKey_Z, false) && redo()) {
+            status_        = "redo";
+            statusIsError_ = false;
+            if (logCb) logCb("[BoneStructure] " + status_);
+        }
+    } else if (ImGui::IsKeyPressed(ImGuiKey_Z, false) && undo()) {
+        status_        = "undo";
+        statusIsError_ = false;
+        if (logCb) logCb("[BoneStructure] " + status_);
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 3D preview
+// ─────────────────────────────────────────────────────────────────────────────
+void BoneStructurePanel::resetPreviewCamera()
+{
+    previewCam_ = bs::OrbitCamera{};
+    if (doc_.bones.empty()) {
+        previewGridSpacing_ = 1.f;
+        previewGridY_       = 0.f;
+        return;
+    }
+
+    const std::vector<dash::anim::Mat4> globals = bs::bindGlobals(doc_);
+    dash::anim::Vec3                    mn{globals[0].m[12], globals[0].m[13], globals[0].m[14]};
+    dash::anim::Vec3                    mx = mn;
+    for (const dash::anim::Mat4& g : globals) {
+        mn.x = std::min(mn.x, g.m[12]); mx.x = std::max(mx.x, g.m[12]);
+        mn.y = std::min(mn.y, g.m[13]); mx.y = std::max(mx.y, g.m[13]);
+        mn.z = std::min(mn.z, g.m[14]); mx.z = std::max(mx.z, g.m[14]);
+    }
+
+    const dash::anim::Vec3 center{(mn.x + mx.x) * 0.5f, (mn.y + mx.y) * 0.5f, (mn.z + mx.z) * 0.5f};
+    const float extent = std::max({mx.x - mn.x, mx.y - mn.y, mx.z - mn.z});
+    const float radius = extent > 1e-4f ? extent * 0.5f : 1.f;
+
+    previewCam_.focus   = center;
+    previewCam_.distance = radius * 2.6f;
+    previewCam_.nearZ   = std::max(0.01f, radius * 0.01f);
+    previewCam_.farZ    = radius * 50.f;
+    previewGridSpacing_ = radius / 5.f;
+    previewGridY_       = mn.y;
+}
+
+void BoneStructurePanel::ensurePreviewAnimLoaded()
+{
+    if (previewAnimScanned_) return;
+    previewAnimScanned_ = true;
+    previewClips_.clear();
+    previewClipIndex_ = -1;
+
+    const std::string animPath = siblingPath(".dashanim");
+    std::error_code   ec;
+    if (animPath.empty() || !fs::is_regular_file(animPath, ec)) return;
+
+    std::string                            error;
+    std::vector<dash::anim::AnimationClip> clips;
+    if (dash::anim::readAnimationClips(animPath, clips, error)) {
+        previewClips_ = std::move(clips);
+        if (!previewClips_.empty()) previewClipIndex_ = 0;
+    }
+}
+
+void BoneStructurePanel::drawPreviewToolbar()
+{
+    ensurePreviewAnimLoaded();
+
+    if (ImGui::Button(ICON_FA_LOCATION_CROSSHAIRS " Reset camera")) resetPreviewCamera();
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(110.f);
+    ImGui::SliderFloat("##bs_preview_h", &previewHeight_, 220.f, 800.f, "size %.0f");
+
+    ImGui::SameLine();
+    ImGui::BeginDisabled(!boneUndo_.canUndo());
+    if (ImGui::Button(ICON_FA_ROTATE_LEFT " Undo")) undo();
+    ImGui::EndDisabled();
+    ImGui::SameLine();
+    ImGui::BeginDisabled(!boneUndo_.canRedo());
+    if (ImGui::Button(ICON_FA_ROTATE_RIGHT " Redo")) redo();
+    ImGui::EndDisabled();
+    ImGui::SameLine();
+    ImGui::TextDisabled("(Ctrl+Z / Ctrl+Shift+Z)");
+
+    const bool hasClips     = !previewClips_.empty();
+    const bool bindSelected = previewPose_ == PreviewPose::Bind;
+    if (ImGui::RadioButton("Bind pose", bindSelected)) previewPose_ = PreviewPose::Bind;
+    ImGui::SameLine();
+    ImGui::BeginDisabled(!hasClips);
+    if (ImGui::RadioButton("Animated", !bindSelected)) previewPose_ = PreviewPose::Animated;
+    ImGui::EndDisabled();
+    if (!hasClips) {
+        ImGui::SameLine();
+        ImGui::TextDisabled("(no sibling .dashanim clips)");
+    }
+
+    if (previewPose_ == PreviewPose::Animated && hasClips) {
+        if (previewClipIndex_ < 0 || previewClipIndex_ >= static_cast<int>(previewClips_.size()))
+            previewClipIndex_ = 0;
+        const dash::anim::AnimationClip& clip =
+            previewClips_[static_cast<std::size_t>(previewClipIndex_)];
+
+        ImGui::SetNextItemWidth(180.f);
+        if (ImGui::BeginCombo("##bs_preview_clip", clip.name.c_str())) {
+            for (int i = 0; i < static_cast<int>(previewClips_.size()); ++i) {
+                const bool isSel = i == previewClipIndex_;
+                if (ImGui::Selectable(previewClips_[static_cast<std::size_t>(i)].name.c_str(), isSel)) {
+                    previewClipIndex_     = i;
+                    previewClipTimeTicks_ = 0.f;
+                }
+            }
+            ImGui::EndCombo();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button(previewPlaying_ ? ICON_FA_PAUSE : ICON_FA_PLAY))
+            previewPlaying_ = !previewPlaying_;
+
+        const float durationSeconds = std::max(clip.durationSeconds(), 0.001f);
+        float       timeSeconds     = clip.ticksPerSecond > 0.f
+                                         ? previewClipTimeTicks_ / clip.ticksPerSecond
+                                         : previewClipTimeTicks_;
+        ImGui::SetNextItemWidth(220.f);
+        if (ImGui::SliderFloat("##bs_preview_scrub", &timeSeconds, 0.f, durationSeconds, "%.2f s")) {
+            previewClipTimeTicks_ = timeSeconds * clip.ticksPerSecond;
+            previewPlaying_       = false;
+        }
+
+        if (previewPlaying_) {
+            previewClipTimeTicks_ += ImGui::GetIO().DeltaTime * clip.ticksPerSecond;
+            previewClipTimeTicks_ = clip.normalizeTime(previewClipTimeTicks_, true);
+        }
+
+        ImGui::TextDisabled("Bone edits apply to the bind pose; switch back to move the gizmo.");
+    }
+}
+
+void BoneStructurePanel::drawPreviewCanvas(LogCallback& logCb)
+{
+    ImGui::BeginChild("##bs_preview3d", ImVec2(0.f, previewHeight_), ImGuiChildFlags_Borders);
+
+    const ImVec2 canvasPos  = ImGui::GetCursorScreenPos();
+    const ImVec2 canvasSize = ImGui::GetContentRegionAvail();
+
+    if (canvasSize.x < 4.f || canvasSize.y < 4.f || doc_.bones.empty()) {
+        ImGui::Dummy(canvasSize);
+        ImGui::EndChild();
+        return;
+    }
+
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    dl->AddRectFilled(canvasPos, ImVec2(canvasPos.x + canvasSize.x, canvasPos.y + canvasSize.y),
+                      IM_COL32(28, 28, 34, 255));
+
+    const bs::Mat4 viewOnly = bs::lookAtMatrix(bs::orbitEye(previewCam_), previewCam_.focus,
+                                               dash::anim::Vec3{0.f, 1.f, 0.f});
+    const bs::Mat4 viewProj = bs::viewProjection(previewCam_, canvasSize.x, canvasSize.y);
+
+    const std::vector<bs::Mat4> globals =
+        (previewPose_ == PreviewPose::Animated && previewClipIndex_ >= 0 &&
+         previewClipIndex_ < static_cast<int>(previewClips_.size()))
+            ? bs::animatedGlobals(doc_, previewClips_[static_cast<std::size_t>(previewClipIndex_)],
+                                  previewClipTimeTicks_)
+            : bs::bindGlobals(doc_);
+
+    std::vector<dash::anim::Vec3> jointWorld(globals.size());
+    std::vector<bs::ScreenPoint>  jointScreen(globals.size());
+    for (std::size_t i = 0; i < globals.size(); ++i) {
+        jointWorld[i]  = {globals[i].m[12], globals[i].m[13], globals[i].m[14]};
+        jointScreen[i] = bs::project(viewProj, canvasSize.x, canvasSize.y, jointWorld[i]);
+    }
+
+    auto toScreen = [&](const bs::ScreenPoint& p) {
+        return ImVec2(canvasPos.x + p.x, canvasPos.y + p.y);
+    };
+
+    // ── Floor grid ───────────────────────────────────────────────────────────
+    const float spacing = previewGridSpacing_ > 1e-4f ? previewGridSpacing_ : 1.f;
+    constexpr int kGridLines = 10;
+    for (int i = -kGridLines; i <= kGridLines; ++i) {
+        const float offset = static_cast<float>(i) * spacing;
+        const float extent = static_cast<float>(kGridLines) * spacing;
+        const ImU32 col    = (i == 0) ? IM_COL32(150, 150, 165, 170) : IM_COL32(80, 80, 92, 110);
+
+        const bs::ScreenPoint za = bs::project(viewProj, canvasSize.x, canvasSize.y,
+                                               {previewCam_.focus.x + offset, previewGridY_,
+                                                previewCam_.focus.z - extent});
+        const bs::ScreenPoint zb = bs::project(viewProj, canvasSize.x, canvasSize.y,
+                                               {previewCam_.focus.x + offset, previewGridY_,
+                                                previewCam_.focus.z + extent});
+        if (za.visible && zb.visible) dl->AddLine(toScreen(za), toScreen(zb), col);
+
+        const bs::ScreenPoint xa = bs::project(viewProj, canvasSize.x, canvasSize.y,
+                                               {previewCam_.focus.x - extent, previewGridY_,
+                                                previewCam_.focus.z + offset});
+        const bs::ScreenPoint xb = bs::project(viewProj, canvasSize.x, canvasSize.y,
+                                               {previewCam_.focus.x + extent, previewGridY_,
+                                                previewCam_.focus.z + offset});
+        if (xa.visible && xb.visible) dl->AddLine(toScreen(xa), toScreen(xb), col);
+    }
+
+    // ── Bones: a segment per parent/child pair, a circle per joint ──────────
+    int drawnSegments = 0;
+    for (int i = 0; i < static_cast<int>(doc_.bones.size()); ++i) {
+        const int parent = bs::parentOf(doc_.bones, i);
+        if (parent < 0) continue;
+        const bs::ScreenPoint& pa = jointScreen[static_cast<std::size_t>(parent)];
+        const bs::ScreenPoint& pb = jointScreen[static_cast<std::size_t>(i)];
+        if (!pa.visible || !pb.visible) continue;
+
+        ImU32 col = IM_COL32(205, 205, 215, 220);
+        if (i == selected_) col = IM_COL32(255, 200, 60, 255);
+        else if (parent == selected_) col = IM_COL32(255, 230, 150, 200);
+        dl->AddLine(toScreen(pa), toScreen(pb), col, i == selected_ ? 2.6f : 1.6f);
+        ++drawnSegments;
+    }
+
+    int drawnJoints = 0;
+    for (int i = 0; i < static_cast<int>(doc_.bones.size()); ++i) {
+        const bs::ScreenPoint& p = jointScreen[static_cast<std::size_t>(i)];
+        if (!p.visible) continue;
+        ++drawnJoints;
+
+        ImU32 col = IM_COL32(230, 230, 238, 255);
+        float r   = 3.2f;
+        if (i == selected_) { col = IM_COL32(255, 200, 60, 255); r = 5.f; }
+        else if (bs::parentOf(doc_.bones, i) == selected_) { col = IM_COL32(255, 230, 150, 255); r = 4.f; }
+        dl->AddCircleFilled(toScreen(p), r, col);
+    }
+
+    if (const char* trace = std::getenv("DASH_BONE_PREVIEW_TRACE")) {
+        (void)trace;
+        static float accum = 0.f;
+        accum += ImGui::GetIO().DeltaTime;
+        if (accum > 1.0f) {
+            accum = 0.f;
+            std::fprintf(stdout,
+                         "[BoneStructurePreview] %d/%zu joint(s) visible, %d bone segment(s) drawn, "
+                         "selected=%d, pose=%s\n",
+                         drawnJoints, doc_.bones.size(), drawnSegments, selected_,
+                         previewPose_ == PreviewPose::Animated ? "animated" : "bind");
+        }
+    }
+
+    // ── Interaction: gizmo first (left button), then orbit/pick/zoom ────────
+    ImGui::SetCursorScreenPos(canvasPos);
+    ImGui::InvisibleButton("##bs_preview3d_canvas", canvasSize,
+                           ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonRight);
+    const bool   hovered  = ImGui::IsItemHovered();
+    const ImVec2 mousePos = ImGui::GetIO().MousePos;
+
+    const bool gizmoEligible = previewPose_ == PreviewPose::Bind && selected_ >= 0 &&
+                               selected_ < static_cast<int>(doc_.bones.size());
+
+    dash::gizmo::GizmoInput  gizmoIn;
+    dash::gizmo::GizmoOutput gizmoOut;
+    if (gizmoEligible) {
+        const dash::anim::Vec3& pivot = jointWorld[static_cast<std::size_t>(selected_)];
+        gizmoIn.viewProj      = viewProj.m;
+        gizmoIn.rect          = {canvasPos.x, canvasPos.y, canvasSize.x, canvasSize.y};
+        gizmoIn.pivot         = {pivot.x, pivot.y, pivot.z};
+        gizmoIn.mouseX        = mousePos.x;
+        gizmoIn.mouseY        = mousePos.y;
+        gizmoIn.hovered       = hovered;
+        gizmoIn.mouseClicked  = hovered && previewDragMode_ == PreviewDragMode::None &&
+                               ImGui::IsMouseClicked(ImGuiMouseButton_Left);
+        gizmoIn.mouseDown     = ImGui::IsMouseDown(ImGuiMouseButton_Left);
+        gizmoIn.mouseReleased = ImGui::IsMouseReleased(ImGuiMouseButton_Left);
+        gizmoIn.snap          = ImGui::GetIO().KeyShift;
+
+        previewGizmo_.setMode(dash::gizmo::Mode::Translate);
+        gizmoOut = previewGizmo_.update(gizmoIn);
+
+        if (gizmoOut.dragStarted) {
+            previewDragMode_        = PreviewDragMode::Gizmo;
+            previewGizmoUndoPushed_ = false;
+            const bs::Bone& bone    = doc_.bones[static_cast<std::size_t>(selected_)];
+            previewGizmoStartLocalT_ = {bone.localBind.m[12], bone.localBind.m[13],
+                                        bone.localBind.m[14]};
+            const int parent          = bs::parentOf(doc_.bones, selected_);
+            previewGizmoParentGlobal_ = parent >= 0 ? globals[static_cast<std::size_t>(parent)]
+                                                     : dash::anim::identity();
+        }
+
+        if (gizmoOut.dragging) {
+            const dash::anim::Vec3 worldDelta{gizmoOut.translation.x, gizmoOut.translation.y,
+                                              gizmoOut.translation.z};
+            const dash::anim::Vec3 localDelta =
+                bs::worldDeltaToLocal(previewGizmoParentGlobal_, worldDelta);
+            if (!previewGizmoUndoPushed_ &&
+                (localDelta.x != 0.f || localDelta.y != 0.f || localDelta.z != 0.f)) {
+                pushUndoSnapshot();
+                previewGizmoUndoPushed_ = true;
+            }
+            bs::Bone& bone = doc_.bones[static_cast<std::size_t>(selected_)];
+            bs::setTranslation(bone.localBind,
+                               dash::anim::Vec3{previewGizmoStartLocalT_.x + localDelta.x,
+                                                previewGizmoStartLocalT_.y + localDelta.y,
+                                                previewGizmoStartLocalT_.z + localDelta.z});
+        }
+
+        if (gizmoOut.dragEnded) {
+            if (previewGizmoUndoPushed_) {
+                bs::recomputeOffsetsFromBindPose(doc_);
+                dirty_ = true;
+                refreshIssues();
+                status_        = "moved '" + doc_.bones[static_cast<std::size_t>(selected_)].name +
+                          "' with the gizmo";
+                statusIsError_ = false;
+                if (logCb) logCb("[BoneStructure] " + status_);
+            }
+            previewDragMode_ = PreviewDragMode::None;
+        }
+    } else {
+        previewGizmo_.cancel();
+    }
+
+    if (previewDragMode_ == PreviewDragMode::None && hovered &&
+        ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
+        previewDragMode_ = PreviewDragMode::Orbit;
+    }
+    if (previewDragMode_ == PreviewDragMode::Orbit) {
+        if (ImGui::IsMouseDown(ImGuiMouseButton_Right)) {
+            const ImVec2 d = ImGui::GetIO().MouseDelta;
+            previewCam_.yawDeg += d.x * 0.4f;
+            previewCam_.pitchDeg =
+                std::clamp(previewCam_.pitchDeg - d.y * 0.4f, -85.f, 85.f);
+        } else {
+            previewDragMode_ = PreviewDragMode::None;
+        }
+    }
+
+    if (previewDragMode_ == PreviewDragMode::None && hovered && !gizmoOut.handleHovered &&
+        ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+        const int picked = bs::pickJoint(jointScreen, mousePos.x - canvasPos.x,
+                                         mousePos.y - canvasPos.y, 10.f);
+        if (picked >= 0) selectBone(picked);
+    }
+
+    if (hovered && ImGui::GetIO().MouseWheel != 0.f) {
+        previewCam_.distance *= std::pow(0.9f, ImGui::GetIO().MouseWheel);
+        previewCam_.distance =
+            std::clamp(previewCam_.distance, spacing * 0.1f, spacing * 500.f);
+    }
+
+    if (gizmoEligible) previewGizmo_.draw(dl, gizmoIn, gizmoOut);
+
+    // ── Corner axis gizmo: screen-space rotation only, no perspective ───────
+    {
+        const dash::anim::Vec3 rgt{bs::matAt(viewOnly, 0, 0), bs::matAt(viewOnly, 0, 1),
+                                   bs::matAt(viewOnly, 0, 2)};
+        const dash::anim::Vec3 up{bs::matAt(viewOnly, 1, 0), bs::matAt(viewOnly, 1, 1),
+                                  bs::matAt(viewOnly, 1, 2)};
+        const ImVec2 center(canvasPos.x + 28.f, canvasPos.y + 28.f);
+        auto         axisTip = [&](const dash::anim::Vec3& axis, ImU32 col, const char* label) {
+            const float sx = rgt.x * axis.x + rgt.y * axis.y + rgt.z * axis.z;
+            const float sy = up.x * axis.x + up.y * axis.y + up.z * axis.z;
+            const ImVec2 tip(center.x + sx * 20.f, center.y - sy * 20.f);
+            dl->AddLine(center, tip, col, 2.f);
+            dl->AddCircleFilled(tip, 3.f, col);
+            dl->AddText(ImVec2(tip.x + 4.f, tip.y - 6.f), col, label);
+        };
+        axisTip({1.f, 0.f, 0.f}, IM_COL32(226, 74, 74, 255), "X");
+        axisTip({0.f, 1.f, 0.f}, IM_COL32(112, 209, 96, 255), "Y");
+        axisTip({0.f, 0.f, 1.f}, IM_COL32(72, 140, 236, 255), "Z");
+    }
+
+    ImGui::EndChild();
+    ImGui::TextDisabled("Right-drag: orbit   Wheel: zoom   Left-click: select joint   "
+                        "Drag an arrow: move the selected bone (bind pose)");
+}
+
+void BoneStructurePanel::drawPreview3D(LogCallback& logCb)
+{
+    ImGui::SeparatorText(ICON_FA_CUBE "  3D Preview");
+    drawPreviewToolbar();
+    drawPreviewCanvas(logCb);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 void BoneStructurePanel::draw(const std::string& assetsRoot, const std::string& libraryRoot,
                               LogCallback logCb)
 {
@@ -596,8 +1034,12 @@ void BoneStructurePanel::draw(const std::string& assetsRoot, const std::string& 
         return;
     }
 
+    handleUndoRedoShortcuts(logCb);
+
     ImGui::Separator();
     ImGui::Text("%zu bone(s)%s", doc_.bones.size(), dirty_ ? "  *modified*" : "");
+
+    drawPreview3D(logCb);
 
     if (ImGui::BeginTable("##bs_layout", 2,
                           ImGuiTableFlags_Resizable | ImGuiTableFlags_BordersInnerV)) {

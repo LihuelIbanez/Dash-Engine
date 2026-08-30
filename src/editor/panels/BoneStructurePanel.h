@@ -10,10 +10,12 @@
 // exercise it headless.
 // ─────────────────────────────────────────────────────────────────────────────
 
+#include "gizmos/TransformGizmo.h"
 #include "rendering/animation/AnimationFile.h"
 #include "rendering/animation/DashMeshFile.h"
 #include "rendering/animation/Skeleton.h"
 
+#include <algorithm>
 #include <cctype>
 #include <cmath>
 #include <cstddef>
@@ -586,6 +588,230 @@ inline int renameAnimChannels(const std::string& animPath,
     return touched;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// 3D preview: software orbit camera, projection and gizmo-delta math
+//
+// No ImGui here, and no dependency on dash::gizmo either: this is the same
+// kind of hand-rolled camera EntityViewportPanel uses (yaw/pitch/distance
+// orbit, lookAt + perspective, project() -> screen space), just built on the
+// dash::anim column-major Mat4 already used by bindGlobals() above and its
+// already-correct multiply(), instead of a second float[16] convention.
+// ─────────────────────────────────────────────────────────────────────────────
+
+inline Vec3 vecAdd(const Vec3& a, const Vec3& b) { return {a.x + b.x, a.y + b.y, a.z + b.z}; }
+inline Vec3 vecSub(const Vec3& a, const Vec3& b) { return {a.x - b.x, a.y - b.y, a.z - b.z}; }
+inline Vec3 vecScale(const Vec3& a, float s)     { return {a.x * s, a.y * s, a.z * s}; }
+inline float vecDot(const Vec3& a, const Vec3& b) { return a.x * b.x + a.y * b.y + a.z * b.z; }
+inline Vec3 vecCross(const Vec3& a, const Vec3& b)
+{
+    return {a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x};
+}
+inline float vecLength(const Vec3& a) { return std::sqrt(vecDot(a, a)); }
+inline Vec3 vecNormalize(const Vec3& a)
+{
+    const float len = vecLength(a);
+    return len > 1e-8f ? vecScale(a, 1.f / len) : Vec3{0.f, 0.f, 0.f};
+}
+
+/// Applies only the 3x3 part of `m` to `v`: a direction, not a point.
+inline Vec3 rotateVector(const Mat4& m, const Vec3& v)
+{
+    return {matAt(m, 0, 0) * v.x + matAt(m, 0, 1) * v.y + matAt(m, 0, 2) * v.z,
+            matAt(m, 1, 0) * v.x + matAt(m, 1, 1) * v.y + matAt(m, 1, 2) * v.z,
+            matAt(m, 2, 0) * v.x + matAt(m, 2, 1) * v.y + matAt(m, 2, 2) * v.z};
+}
+
+/// localBind lives in the parent's frame, so a translate gizmo (which reports
+/// its delta in world/model space) needs the parent's rotation/scale undone
+/// before the delta can be added to it.
+inline Vec3 worldDeltaToLocal(const Mat4& parentGlobal, const Vec3& worldDelta)
+{
+    return rotateVector(dash::anim::inverse(parentGlobal), worldDelta);
+}
+
+inline constexpr float kBonePreviewPi       = 3.14159265358979323846f;
+inline constexpr float kBonePreviewDegToRad = kBonePreviewPi / 180.0f;
+
+/// Standard right-handed lookAt, column-major to match dash::anim::multiply().
+inline Mat4 lookAtMatrix(const Vec3& eye, const Vec3& target, const Vec3& up)
+{
+    const Vec3 f = vecNormalize(vecSub(target, eye));
+    Vec3       r = vecNormalize(vecCross(f, up));
+    if (vecLength(r) < 1e-6f) r = Vec3{1.f, 0.f, 0.f};  // target straight above/below eye
+    const Vec3 u = vecCross(r, f);
+
+    Mat4 out = dash::anim::identity();
+    out.m[0] = r.x;  out.m[1] = u.x;  out.m[2]  = -f.x; out.m[3]  = 0.f;
+    out.m[4] = r.y;  out.m[5] = u.y;  out.m[6]  = -f.y; out.m[7]  = 0.f;
+    out.m[8] = r.z;  out.m[9] = u.z;  out.m[10] = -f.z; out.m[11] = 0.f;
+    out.m[12] = -vecDot(r, eye);
+    out.m[13] = -vecDot(u, eye);
+    out.m[14] =  vecDot(f, eye);
+    out.m[15] = 1.f;
+    return out;
+}
+
+/// Standard OpenGL-style perspective, same column-major layout.
+inline Mat4 perspectiveMatrix(float fovYDeg, float aspect, float zNear, float zFar)
+{
+    Mat4        out{};
+    const float f = 1.f / std::tan(fovYDeg * kBonePreviewDegToRad * 0.5f);
+    out.m[0]  = aspect > 1e-6f ? f / aspect : f;
+    out.m[5]  = f;
+    out.m[10] = (zFar + zNear) / (zNear - zFar);
+    out.m[11] = -1.f;
+    out.m[14] = (2.f * zFar * zNear) / (zNear - zFar);
+    return out;
+}
+
+/// Yaw/pitch/distance orbit around a focus point, Y up. Mirrors the camera in
+/// EntityViewportPanel, just producing a dash::anim::Mat4.
+struct OrbitCamera {
+    float yawDeg   = 35.f;
+    float pitchDeg = -20.f;
+    float distance = 5.f;
+    Vec3  focus{0.f, 0.f, 0.f};
+    float fovYDeg  = 45.f;
+    float nearZ    = 0.02f;
+    float farZ     = 500.f;
+};
+
+inline Vec3 orbitEye(const OrbitCamera& cam)
+{
+    const float yaw   = cam.yawDeg * kBonePreviewDegToRad;
+    const float pitch = std::max(-89.f, std::min(89.f, cam.pitchDeg)) * kBonePreviewDegToRad;
+    const float cp    = std::cos(pitch);
+    return {cam.focus.x + cam.distance * cp * std::sin(yaw),
+            cam.focus.y + cam.distance * std::sin(pitch),
+            cam.focus.z + cam.distance * cp * std::cos(yaw)};
+}
+
+inline Mat4 viewProjection(const OrbitCamera& cam, float viewportW, float viewportH)
+{
+    const Mat4  view   = lookAtMatrix(orbitEye(cam), cam.focus, Vec3{0.f, 1.f, 0.f});
+    const float aspect = viewportH > 1e-3f ? viewportW / viewportH : 1.f;
+    const Mat4  proj   = perspectiveMatrix(cam.fovYDeg, aspect, cam.nearZ, cam.farZ);
+    return dash::anim::multiply(proj, view);
+}
+
+struct ScreenPoint {
+    float x = 0.f, y = 0.f, depth = 0.f;
+    bool  visible = false;
+};
+
+/// World point -> screen space; `visible` is false behind the camera.
+inline ScreenPoint project(const Mat4& viewProj, float viewportW, float viewportH, const Vec3& world)
+{
+    const float x = matAt(viewProj, 0, 0) * world.x + matAt(viewProj, 0, 1) * world.y +
+                    matAt(viewProj, 0, 2) * world.z + matAt(viewProj, 0, 3);
+    const float y = matAt(viewProj, 1, 0) * world.x + matAt(viewProj, 1, 1) * world.y +
+                    matAt(viewProj, 1, 2) * world.z + matAt(viewProj, 1, 3);
+    const float w = matAt(viewProj, 3, 0) * world.x + matAt(viewProj, 3, 1) * world.y +
+                    matAt(viewProj, 3, 2) * world.z + matAt(viewProj, 3, 3);
+
+    ScreenPoint out;
+    if (w <= 1e-4f) return out;
+
+    const float ndcX = x / w;
+    const float ndcY = y / w;
+    out.x       = (ndcX * 0.5f + 0.5f) * viewportW;
+    out.y       = (1.f - (ndcY * 0.5f + 0.5f)) * viewportH;
+    out.depth   = w;
+    out.visible = true;
+    return out;
+}
+
+/// Nearest projected joint within `radiusPx` of (mx, my), or -1.
+inline int pickJoint(const std::vector<ScreenPoint>& joints, float mx, float my, float radiusPx)
+{
+    int   best     = -1;
+    float bestDist = radiusPx;
+    for (int i = 0; i < static_cast<int>(joints.size()); ++i) {
+        const ScreenPoint& p = joints[static_cast<std::size_t>(i)];
+        if (!p.visible) continue;
+        const float dx = p.x - mx;
+        const float dy = p.y - my;
+        const float d  = std::sqrt(dx * dx + dy * dy);
+        if (d < bestDist) {
+            bestDist = d;
+            best     = i;
+        }
+    }
+    return best;
+}
+
+/// Model-space transform of every bone at one instant of a clip, parents
+/// first. A bone the clip has no channel for keeps its bind-pose localBind,
+/// the same fallback AnimationClip::samplePose() documents.
+inline std::vector<Mat4> animatedGlobals(const SkeletonDoc& doc,
+                                         const dash::anim::AnimationClip& clip, float timeTicks)
+{
+    dash::anim::Skeleton skeleton;
+    for (const Bone& b : doc.bones) skeleton.addBone(b.name, b.parent, b.offsetMatrix, b.localBind);
+
+    std::vector<dash::anim::BonePose> poses;
+    clip.samplePose(skeleton, timeTicks, poses);
+
+    std::vector<Mat4> globals(doc.bones.size(), dash::anim::identity());
+    for (std::size_t i = 0; i < doc.bones.size(); ++i) {
+        const Mat4 local = (i < poses.size() && poses[i].animated)
+                               ? dash::anim::composeTRS(poses[i].translation, poses[i].rotation,
+                                                        poses[i].scale)
+                               : doc.bones[i].localBind;
+        const int p = parentOf(doc.bones, static_cast<int>(i));
+        globals[i] = (p >= 0 && p < static_cast<int>(i))
+                        ? dash::anim::multiply(globals[static_cast<std::size_t>(p)], local)
+                        : local;
+    }
+    return globals;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Undo/redo: a plain stack of snapshots, capped so a long edit session cannot
+// grow it without bound.
+// ─────────────────────────────────────────────────────────────────────────────
+
+template <typename T>
+class UndoStack {
+public:
+    void push(const T& snapshot)
+    {
+        undo_.push_back(snapshot);
+        if (undo_.size() > kMaxDepth) undo_.erase(undo_.begin());
+        redo_.clear();
+    }
+
+    bool canUndo() const { return !undo_.empty(); }
+    bool canRedo() const { return !redo_.empty(); }
+
+    /// Restores the last pushed snapshot into `current`, moving `current`'s old
+    /// value to the redo side.
+    bool undoTo(T& current)
+    {
+        if (undo_.empty()) return false;
+        redo_.push_back(current);
+        current = undo_.back();
+        undo_.pop_back();
+        return true;
+    }
+
+    bool redoTo(T& current)
+    {
+        if (redo_.empty()) return false;
+        undo_.push_back(current);
+        current = redo_.back();
+        redo_.pop_back();
+        return true;
+    }
+
+    void clear() { undo_.clear(); redo_.clear(); }
+
+private:
+    static constexpr std::size_t kMaxDepth = 50;
+    std::vector<T> undo_;
+    std::vector<T> redo_;
+};
+
 } // namespace dash::editor::bonestruct
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -613,6 +839,17 @@ private:
         std::string message;
     };
 
+    // Undo/redo restores origToCurrent_ alongside the doc: otherwise undoing a
+    // reparent/sort would leave the save-time permutation pointing at bones
+    // that are no longer where it says they are.
+    struct PanelSnapshot {
+        dash::editor::bonestruct::SkeletonDoc doc;
+        std::vector<int>                      origToCurrent;
+    };
+
+    enum class PreviewPose { Bind, Animated };
+    enum class PreviewDragMode { None, Orbit, Gizmo };
+
     void       refreshIssues();
     void       applyReorder(const dash::editor::bonestruct::ReorderResult& result);
     void       selectBone(int index);
@@ -628,6 +865,17 @@ private:
     void drawDetails(LogCallback& logCb);
     void drawIssues();
     void drawSaveSection(LogCallback& logCb);
+
+    // ── 3D preview (software, ImDrawList only) ──────────────────────────────
+    void pushUndoSnapshot();
+    bool undo();
+    bool redo();
+    void handleUndoRedoShortcuts(LogCallback& logCb);
+    void resetPreviewCamera();
+    void ensurePreviewAnimLoaded();
+    void drawPreview3D(LogCallback& logCb);
+    void drawPreviewToolbar();
+    void drawPreviewCanvas(LogCallback& logCb);
 
     dash::editor::bonestruct::SkeletonDoc doc_;
     std::string                           path_;
@@ -654,4 +902,27 @@ private:
 
     std::string status_;
     bool        statusIsError_ = false;
+
+    // ── Preview camera + gizmo ───────────────────────────────────────────────
+    dash::editor::bonestruct::OrbitCamera previewCam_;
+    dash::gizmo::TransformGizmo           previewGizmo_;
+    float                                 previewHeight_      = 360.f;
+    float                                 previewGridSpacing_ = 1.f;
+    float                                 previewGridY_       = 0.f;
+    PreviewDragMode                       previewDragMode_   = PreviewDragMode::None;
+    bool                                  previewGizmoUndoPushed_ = false;
+    dash::anim::Vec3                      previewGizmoStartLocalT_{0.f, 0.f, 0.f};
+    dash::anim::Mat4                      previewGizmoParentGlobal_ = dash::anim::identity();
+
+    // ── Bind vs animated pose ────────────────────────────────────────────────
+    PreviewPose                            previewPose_ = PreviewPose::Bind;
+    bool                                    previewAnimScanned_ = false;
+    std::vector<dash::anim::AnimationClip> previewClips_;
+    int                                     previewClipIndex_ = -1;
+    float                                   previewClipTimeTicks_ = 0.f;
+    bool                                    previewPlaying_ = false;
+
+    // ── Undo/redo (local to this panel, never touches the scene stack) ──────
+    dash::editor::bonestruct::UndoStack<PanelSnapshot> boneUndo_;
 };
+

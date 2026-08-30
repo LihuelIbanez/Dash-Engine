@@ -3090,7 +3090,13 @@ void EditorApp::renderWorldToTexture()
     std::vector<dash::vkexp::InstanceResources> resources(instances.size());
     for (size_t i = 0; i < instances.size(); ++i) {
         auto& inst = instances[i];
-        inst.position.y += world_.terrain().sampleHeight(inst.position.x, inst.position.z);
+        // The placeholder cube's pivot sits at its centre and needs the lift; a
+        // custom mesh is base-anchored (matches the same rule in
+        // Renderer::snapInstancesToTerrain, so the editor doesn't show enemies
+        // floating or sinking relative to the runtime).
+        const bool isCubePlaceholder = inst.meshId.empty() || inst.meshId == "cube";
+        inst.position.y += world_.terrain().sampleHeight(inst.position.x, inst.position.z)
+                         + (isCubePlaceholder ? inst.scale.y : 0.0f);
         resources[i].mesh = vkCtx_.resolveMesh(inst.meshId);
     }
 

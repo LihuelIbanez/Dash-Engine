@@ -1,48 +1,6 @@
 {
   "sessions": [
     {
-      "endedAt": "2026-04-24T12:05:30",
-      "logs": [
-        "[AUDIT] Play session started at 2026-04-24T12:05:29",
-        "[VSTEP] enterPlayMode begin",
-        "[VSTEP] Current scene name: Default Scene",
-        "[VSTEP] Current scene entities: 28",
-        "[VSTEP]   Entity[0]: Hero (type=Player)",
-        "[VSTEP]   Entity[1]: Skeleton (type=Enemy)",
-        "[VSTEP]   Entity[2]: Zombie (type=Enemy)",
-        "[VSTEP]   Entity[3]: Fallen (type=Enemy)",
-        "[VSTEP]   Entity[4]: Zombie (type=Enemy)",
-        "[VSTEP]   Entity[5]: Skeleton (type=Enemy)",
-        "[VSTEP]   Entity[6]: Enemy (type=Enemy)",
-        "[VSTEP]   Entity[7]: Enemy (type=Enemy)",
-        "[VSTEP]   Entity[8]: Enemy (type=Enemy)",
-        "[VSTEP]   Entity[9]: Enemy (type=Enemy)",
-        "[VSTEP]   Entity[10]: Enemy (type=Enemy)",
-        "[VSTEP]   Entity[11]: Enemy (type=Enemy)",
-        "[VSTEP]   Entity[12]: Enemy (type=Enemy)",
-        "[VSTEP]   Entity[13]: Enemy (type=Enemy)",
-        "[VSTEP]   Entity[14]: Enemy (type=Enemy)",
-        "[VSTEP]   Entity[15]: Enemy (type=Enemy)",
-        "[VSTEP]   Entity[16]: Enemy (type=Enemy)",
-        "[VSTEP]   Entity[17]: Enemy (type=Enemy)",
-        "[VSTEP]   Entity[18]: Enemy (type=Enemy)",
-        "[VSTEP]   Entity[19]: Enemy (type=Enemy)",
-        "[VSTEP]   Entity[20]: Enemy (type=Enemy)",
-        "[VSTEP]   Entity[21]: Enemy (type=Enemy)",
-        "[VSTEP]   Entity[22]: Enemy (type=Enemy)",
-        "[VSTEP]   Entity[23]: Enemy (type=Enemy)",
-        "[VSTEP]   Entity[24]: Enemy (type=Enemy)",
-        "[VSTEP]   Entity[25]: Enemy (type=Enemy)",
-        "[VSTEP]   Entity[26]: Enemy (type=Enemy)",
-        "[VSTEP]   Entity[27]: Enemy (type=Enemy)",
-        "[Play] Scene exported: ok",
-        "Entered Play mode.",
-        "[AUDIT] Session end reason: play_stopped"
-      ],
-      "reason": "play_stopped",
-      "startedAt": "2026-04-24T12:05:29"
-    },
-    {
       "endedAt": "2026-08-28T23:27:15",
       "logs": [
         "[AUDIT] Play session started at 2026-08-28T23:27:10",
@@ -83,6 +41,27 @@
       ],
       "reason": "play_stopped",
       "startedAt": "2026-08-28T23:27:10"
+    },
+    {
+      "endedAt": "2026-08-30T12:23:31",
+      "logs": [
+        "[AUDIT] Play session started at 2026-08-30T12:23:28",
+        "[VSTEP] enterPlayMode begin",
+        "[VSTEP] Current scene name: Default Scene",
+        "[VSTEP] Current scene entities: 7",
+        "[VSTEP]   Entity[0]: Sun (type=Enemy)",
+        "[VSTEP]   Entity[1]: Hero (type=Player)",
+        "[VSTEP]   Entity[2]: Skeleton (type=Enemy)",
+        "[VSTEP]   Entity[3]: Zombie (type=Enemy)",
+        "[VSTEP]   Entity[4]: Fallen (type=Enemy)",
+        "[VSTEP]   Entity[5]: Zombie (type=Enemy)",
+        "[VSTEP]   Entity[6]: Skeleton (type=Enemy)",
+        "[Play] Scene exported: ok",
+        "Entered Play mode.",
+        "[AUDIT] Session end reason: play_stopped"
+      ],
+      "reason": "play_stopped",
+      "startedAt": "2026-08-30T12:23:28"
     }
   ]
 }

@@ -88,6 +88,10 @@ std::vector<RenderInstance> SceneLoader::buildInstances(const SceneData& data)
         RenderInstance inst;
         inst.isPlayer = isPlayer;
         inst.entityId = e.id;
+        // No dedicated player model yet; the old placeholder box reads as a
+        // stray platform once real enemy meshes are around it, so it stays
+        // hidden until the entity authors its own RenderComponent.
+        inst.visible = !isPlayer;
         inst.color = isPlayer ? dash::physics::Vec3{0.30f, 0.58f, 0.95f}
                               : dash::physics::Vec3{0.82f, 0.34f, 0.34f};
         const dash::physics::Vec3 baseScale = isPlayer
@@ -116,6 +120,15 @@ std::vector<RenderInstance> SceneLoader::buildInstances(const SceneData& data)
                 inst.hasAnimation = true;
                 inst.animation = *ac;
             }
+        }
+
+        // baseHeight assumes the placeholder cube's pivot sits at its centre; a
+        // custom mesh is exported base-anchored (feet at the origin), so that
+        // bias would otherwise leave it floating a full unit above the ground.
+        // Any authored TransformComponent::z survives as the height still baked
+        // into inst.position.y once baseHeight is backed out.
+        if (!inst.meshId.empty() && inst.meshId != "cube") {
+            inst.position.y -= baseHeight;
         }
 
         out.push_back(std::move(inst));

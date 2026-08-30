@@ -1687,7 +1687,11 @@ void Renderer::snapInstancesToTerrain()
         if (inst.isPlayer) continue;
         // Same sampler the player walks on, so nothing ends up on a different surface.
         const float ground = terrainMesh_.sampleHeight(inst.position.x, inst.position.z);
-        inst.position.y += ground + inst.scale.y;
+        // The placeholder cube's pivot sits at its centre and needs the lift;
+        // a custom mesh is base-anchored, so adding it would float the model a
+        // full unit above the ground it should be standing on.
+        const bool isCubePlaceholder = inst.meshId.empty() || inst.meshId == "cube";
+        inst.position.y += ground + (isCubePlaceholder ? inst.scale.y : 0.0f);
     }
 }
 
