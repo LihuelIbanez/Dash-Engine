@@ -1,0 +1,1013 @@
+{
+  "name": "Procedural Showcase",
+  "worldSeed": 12345,
+  "tileOverrides": [],
+  "entities": [
+    {
+      "type": "Enemy",
+      "name": "Sun",
+      "x": 32.0,
+      "y": 32.0,
+      "components": [
+        {
+          "type": "Transform",
+          "x": 32.0,
+          "y": 32.0,
+          "z": 40.0,
+          "yawDeg": 35.0,
+          "pitchDeg": -52.0,
+          "rollDeg": 0.0,
+          "scale": 1.0
+        },
+        {
+          "type": "Render",
+          "renderMode": 0,
+          "mesh": "cube",
+          "material": "",
+          "sprite": "",
+          "layer": 0,
+          "visible": false
+        },
+        {
+          "type": "Light",
+          "lightType": 0,
+          "colorR": 1.0,
+          "colorG": 0.94,
+          "colorB": 0.82,
+          "intensity": 1.45,
+          "range": 10.0,
+          "innerConeDeg": 20.0,
+          "outerConeDeg": 35.0,
+          "castsShadows": true,
+          "enabled": true
+        }
+      ]
+    },
+    {
+      "type": "Player",
+      "name": "Hero",
+      "x": 32.0,
+      "y": 32.0,
+      "class": "Warrior"
+    },
+
+    {
+      "type": "Enemy",
+      "name": "Conifer A trunk",
+      "x": 27.0,
+      "y": 27.0,
+      "components": [
+        {
+          "type": "Transform",
+          "x": 27.0,
+          "y": 27.0,
+          "z": -1.6,
+          "yawDeg": 0.0,
+          "pitchDeg": 0.0,
+          "rollDeg": 0.0,
+          "scale": 2.5
+        },
+        {
+          "type": "Render",
+          "renderMode": 0,
+          "mesh": "proc:conifer?seed=101&part=trunk",
+          "material": "materials/proc_bark.mat.json",
+          "sprite": "",
+          "layer": 0,
+          "visible": true
+        },
+        { "type": "Light", "enabled": false }
+      ]
+    },
+    {
+      "type": "Enemy",
+      "name": "Conifer A foliage",
+      "x": 27.0,
+      "y": 27.0,
+      "components": [
+        {
+          "type": "Transform",
+          "x": 27.0,
+          "y": 27.0,
+          "z": -1.6,
+          "yawDeg": 0.0,
+          "pitchDeg": 0.0,
+          "rollDeg": 0.0,
+          "scale": 2.5
+        },
+        {
+          "type": "Render",
+          "renderMode": 0,
+          "mesh": "proc:conifer?seed=101&part=foliage",
+          "material": "materials/proc_conifer_needles.mat.json",
+          "sprite": "",
+          "layer": 0,
+          "visible": true
+        },
+        { "type": "Light", "enabled": false }
+      ]
+    },
+    {
+      "type": "Enemy",
+      "name": "Conifer B trunk",
+      "x": 30.0,
+      "y": 25.5,
+      "components": [
+        {
+          "type": "Transform",
+          "x": 30.0,
+          "y": 25.5,
+          "z": -1.6,
+          "yawDeg": 40.0,
+          "pitchDeg": 0.0,
+          "rollDeg": 0.0,
+          "scale": 2.5
+        },
+        {
+          "type": "Render",
+          "renderMode": 0,
+          "mesh": "proc:conifer?seed=202&part=trunk",
+          "material": "materials/proc_bark.mat.json",
+          "sprite": "",
+          "layer": 0,
+          "visible": true
+        },
+        { "type": "Light", "enabled": false }
+      ]
+    },
+    {
+      "type": "Enemy",
+      "name": "Conifer B foliage",
+      "x": 30.0,
+      "y": 25.5,
+      "components": [
+        {
+          "type": "Transform",
+          "x": 30.0,
+          "y": 25.5,
+          "z": -1.6,
+          "yawDeg": 40.0,
+          "pitchDeg": 0.0,
+          "rollDeg": 0.0,
+          "scale": 2.5
+        },
+        {
+          "type": "Render",
+          "renderMode": 0,
+          "mesh": "proc:conifer?seed=202&part=foliage",
+          "material": "materials/proc_conifer_needles.mat.json",
+          "sprite": "",
+          "layer": 0,
+          "visible": true
+        },
+        { "type": "Light", "enabled": false }
+      ]
+    },
+    {
+      "type": "Enemy",
+      "name": "Conifer C trunk",
+      "x": 35.0,
+      "y": 26.0,
+      "components": [
+        {
+          "type": "Transform",
+          "x": 35.0,
+          "y": 26.0,
+          "z": -1.6,
+          "yawDeg": 110.0,
+          "pitchDeg": 0.0,
+          "rollDeg": 0.0,
+          "scale": 2.5
+        },
+        {
+          "type": "Render",
+          "renderMode": 0,
+          "mesh": "proc:conifer?seed=303&part=trunk",
+          "material": "materials/proc_bark.mat.json",
+          "sprite": "",
+          "layer": 0,
+          "visible": true
+        },
+        { "type": "Light", "enabled": false }
+      ]
+    },
+    {
+      "type": "Enemy",
+      "name": "Conifer C foliage",
+      "x": 35.0,
+      "y": 26.0,
+      "components": [
+        {
+          "type": "Transform",
+          "x": 35.0,
+          "y": 26.0,
+          "z": -1.6,
+          "yawDeg": 110.0,
+          "pitchDeg": 0.0,
+          "rollDeg": 0.0,
+          "scale": 2.5
+        },
+        {
+          "type": "Render",
+          "renderMode": 0,
+          "mesh": "proc:conifer?seed=303&part=foliage",
+          "material": "materials/proc_conifer_needles.mat.json",
+          "sprite": "",
+          "layer": 0,
+          "visible": true
+        },
+        { "type": "Light", "enabled": false }
+      ]
+    },
+    {
+      "type": "Enemy",
+      "name": "Conifer D trunk",
+      "x": 38.0,
+      "y": 29.0,
+      "components": [
+        {
+          "type": "Transform",
+          "x": 38.0,
+          "y": 29.0,
+          "z": -1.6,
+          "yawDeg": 205.0,
+          "pitchDeg": 0.0,
+          "rollDeg": 0.0,
+          "scale": 2.5
+        },
+        {
+          "type": "Render",
+          "renderMode": 0,
+          "mesh": "proc:conifer?seed=404&part=trunk",
+          "material": "materials/proc_bark.mat.json",
+          "sprite": "",
+          "layer": 0,
+          "visible": true
+        },
+        { "type": "Light", "enabled": false }
+      ]
+    },
+    {
+      "type": "Enemy",
+      "name": "Conifer D foliage",
+      "x": 38.0,
+      "y": 29.0,
+      "components": [
+        {
+          "type": "Transform",
+          "x": 38.0,
+          "y": 29.0,
+          "z": -1.6,
+          "yawDeg": 205.0,
+          "pitchDeg": 0.0,
+          "rollDeg": 0.0,
+          "scale": 2.5
+        },
+        {
+          "type": "Render",
+          "renderMode": 0,
+          "mesh": "proc:conifer?seed=404&part=foliage",
+          "material": "materials/proc_conifer_needles.mat.json",
+          "sprite": "",
+          "layer": 0,
+          "visible": true
+        },
+        { "type": "Light", "enabled": false }
+      ]
+    },
+    {
+      "type": "Enemy",
+      "name": "Conifer E trunk",
+      "x": 26.0,
+      "y": 33.0,
+      "components": [
+        {
+          "type": "Transform",
+          "x": 26.0,
+          "y": 33.0,
+          "z": -1.6,
+          "yawDeg": 300.0,
+          "pitchDeg": 0.0,
+          "rollDeg": 0.0,
+          "scale": 2.5
+        },
+        {
+          "type": "Render",
+          "renderMode": 0,
+          "mesh": "proc:conifer?seed=505&part=trunk",
+          "material": "materials/proc_bark.mat.json",
+          "sprite": "",
+          "layer": 0,
+          "visible": true
+        },
+        { "type": "Light", "enabled": false }
+      ]
+    },
+    {
+      "type": "Enemy",
+      "name": "Conifer E foliage",
+      "x": 26.0,
+      "y": 33.0,
+      "components": [
+        {
+          "type": "Transform",
+          "x": 26.0,
+          "y": 33.0,
+          "z": -1.6,
+          "yawDeg": 300.0,
+          "pitchDeg": 0.0,
+          "rollDeg": 0.0,
+          "scale": 2.5
+        },
+        {
+          "type": "Render",
+          "renderMode": 0,
+          "mesh": "proc:conifer?seed=505&part=foliage",
+          "material": "materials/proc_conifer_needles.mat.json",
+          "sprite": "",
+          "layer": 0,
+          "visible": true
+        },
+        { "type": "Light", "enabled": false }
+      ]
+    },
+
+    {
+      "type": "Enemy",
+      "name": "Broadleaf A trunk",
+      "x": 38.0,
+      "y": 35.0,
+      "components": [
+        {
+          "type": "Transform",
+          "x": 38.0,
+          "y": 35.0,
+          "z": -1.6,
+          "yawDeg": 15.0,
+          "pitchDeg": 0.0,
+          "rollDeg": 0.0,
+          "scale": 2.5
+        },
+        {
+          "type": "Render",
+          "renderMode": 0,
+          "mesh": "proc:broadleaf?seed=11&part=trunk",
+          "material": "materials/proc_bark.mat.json",
+          "sprite": "",
+          "layer": 0,
+          "visible": true
+        },
+        { "type": "Light", "enabled": false }
+      ]
+    },
+    {
+      "type": "Enemy",
+      "name": "Broadleaf A canopy",
+      "x": 38.0,
+      "y": 35.0,
+      "components": [
+        {
+          "type": "Transform",
+          "x": 38.0,
+          "y": 35.0,
+          "z": -1.6,
+          "yawDeg": 15.0,
+          "pitchDeg": 0.0,
+          "rollDeg": 0.0,
+          "scale": 2.5
+        },
+        {
+          "type": "Render",
+          "renderMode": 0,
+          "mesh": "proc:broadleaf?seed=11&part=foliage",
+          "material": "materials/proc_broadleaf_canopy.mat.json",
+          "sprite": "",
+          "layer": 0,
+          "visible": true
+        },
+        { "type": "Light", "enabled": false }
+      ]
+    },
+    {
+      "type": "Enemy",
+      "name": "Broadleaf B trunk",
+      "x": 34.0,
+      "y": 39.0,
+      "components": [
+        {
+          "type": "Transform",
+          "x": 34.0,
+          "y": 39.0,
+          "z": -1.6,
+          "yawDeg": 250.0,
+          "pitchDeg": 0.0,
+          "rollDeg": 0.0,
+          "scale": 2.5
+        },
+        {
+          "type": "Render",
+          "renderMode": 0,
+          "mesh": "proc:broadleaf?seed=22&part=trunk",
+          "material": "materials/proc_bark.mat.json",
+          "sprite": "",
+          "layer": 0,
+          "visible": true
+        },
+        { "type": "Light", "enabled": false }
+      ]
+    },
+    {
+      "type": "Enemy",
+      "name": "Broadleaf B canopy",
+      "x": 34.0,
+      "y": 39.0,
+      "components": [
+        {
+          "type": "Transform",
+          "x": 34.0,
+          "y": 39.0,
+          "z": -1.6,
+          "yawDeg": 250.0,
+          "pitchDeg": 0.0,
+          "rollDeg": 0.0,
+          "scale": 2.5
+        },
+        {
+          "type": "Render",
+          "renderMode": 0,
+          "mesh": "proc:broadleaf?seed=22&part=foliage",
+          "material": "materials/proc_broadleaf_canopy.mat.json",
+          "sprite": "",
+          "layer": 0,
+          "visible": true
+        },
+        { "type": "Light", "enabled": false }
+      ]
+    },
+    {
+      "type": "Enemy",
+      "name": "Broadleaf C trunk",
+      "x": 29.0,
+      "y": 38.0,
+      "components": [
+        {
+          "type": "Transform",
+          "x": 29.0,
+          "y": 38.0,
+          "z": -1.6,
+          "yawDeg": 80.0,
+          "pitchDeg": 0.0,
+          "rollDeg": 0.0,
+          "scale": 2.5
+        },
+        {
+          "type": "Render",
+          "renderMode": 0,
+          "mesh": "proc:broadleaf?seed=33&height=7.5&part=trunk",
+          "material": "materials/proc_bark.mat.json",
+          "sprite": "",
+          "layer": 0,
+          "visible": true
+        },
+        { "type": "Light", "enabled": false }
+      ]
+    },
+    {
+      "type": "Enemy",
+      "name": "Broadleaf C canopy",
+      "x": 29.0,
+      "y": 38.0,
+      "components": [
+        {
+          "type": "Transform",
+          "x": 29.0,
+          "y": 38.0,
+          "z": -1.6,
+          "yawDeg": 80.0,
+          "pitchDeg": 0.0,
+          "rollDeg": 0.0,
+          "scale": 2.5
+        },
+        {
+          "type": "Render",
+          "renderMode": 0,
+          "mesh": "proc:broadleaf?seed=33&height=7.5&part=foliage",
+          "material": "materials/proc_broadleaf_canopy.mat.json",
+          "sprite": "",
+          "layer": 0,
+          "visible": true
+        },
+        { "type": "Light", "enabled": false }
+      ]
+    },
+
+    {
+      "type": "Enemy",
+      "name": "Rock A",
+      "x": 32.0,
+      "y": 27.0,
+      "components": [
+        {
+          "type": "Transform",
+          "x": 32.0,
+          "y": 27.0,
+          "z": -1.4,
+          "yawDeg": 0.0,
+          "pitchDeg": 0.0,
+          "rollDeg": 0.0,
+          "scale": 2.0
+        },
+        {
+          "type": "Render",
+          "renderMode": 0,
+          "mesh": "proc:rock?seed=7",
+          "material": "materials/proc_rock.mat.json",
+          "sprite": "",
+          "layer": 0,
+          "visible": true
+        },
+        { "type": "Light", "enabled": false }
+      ]
+    },
+    {
+      "type": "Enemy",
+      "name": "Rock B",
+      "x": 36.0,
+      "y": 32.0,
+      "components": [
+        {
+          "type": "Transform",
+          "x": 36.0,
+          "y": 32.0,
+          "z": -1.4,
+          "yawDeg": 120.0,
+          "pitchDeg": 0.0,
+          "rollDeg": 0.0,
+          "scale": 2.0
+        },
+        {
+          "type": "Render",
+          "renderMode": 0,
+          "mesh": "proc:rock?seed=8",
+          "material": "materials/proc_rock.mat.json",
+          "sprite": "",
+          "layer": 0,
+          "visible": true
+        },
+        { "type": "Light", "enabled": false }
+      ]
+    },
+    {
+      "type": "Enemy",
+      "name": "Rock C",
+      "x": 28.0,
+      "y": 31.0,
+      "components": [
+        {
+          "type": "Transform",
+          "x": 28.0,
+          "y": 31.0,
+          "z": -1.4,
+          "yawDeg": 200.0,
+          "pitchDeg": 0.0,
+          "rollDeg": 0.0,
+          "scale": 2.0
+        },
+        {
+          "type": "Render",
+          "renderMode": 0,
+          "mesh": "proc:rock?seed=9",
+          "material": "materials/proc_rock.mat.json",
+          "sprite": "",
+          "layer": 0,
+          "visible": true
+        },
+        { "type": "Light", "enabled": false }
+      ]
+    },
+    {
+      "type": "Enemy",
+      "name": "Rock D",
+      "x": 33.0,
+      "y": 36.5,
+      "components": [
+        {
+          "type": "Transform",
+          "x": 33.0,
+          "y": 36.5,
+          "z": -1.4,
+          "yawDeg": 310.0,
+          "pitchDeg": 0.0,
+          "rollDeg": 0.0,
+          "scale": 2.0
+        },
+        {
+          "type": "Render",
+          "renderMode": 0,
+          "mesh": "proc:rock?seed=10&height=1.6",
+          "material": "materials/proc_rock.mat.json",
+          "sprite": "",
+          "layer": 0,
+          "visible": true
+        },
+        { "type": "Light", "enabled": false }
+      ]
+    },
+
+    {
+      "type": "Enemy",
+      "name": "Bush A stems",
+      "x": 31.0,
+      "y": 30.0,
+      "components": [
+        {
+          "type": "Transform",
+          "x": 31.0,
+          "y": 30.0,
+          "z": -1.4,
+          "yawDeg": 0.0,
+          "pitchDeg": 0.0,
+          "rollDeg": 0.0,
+          "scale": 2.0
+        },
+        {
+          "type": "Render",
+          "renderMode": 0,
+          "mesh": "proc:bush?seed=1&part=trunk",
+          "material": "materials/proc_dead_wood.mat.json",
+          "sprite": "",
+          "layer": 0,
+          "visible": true
+        },
+        { "type": "Light", "enabled": false }
+      ]
+    },
+    {
+      "type": "Enemy",
+      "name": "Bush A leaves",
+      "x": 31.0,
+      "y": 30.0,
+      "components": [
+        {
+          "type": "Transform",
+          "x": 31.0,
+          "y": 30.0,
+          "z": -1.4,
+          "yawDeg": 0.0,
+          "pitchDeg": 0.0,
+          "rollDeg": 0.0,
+          "scale": 2.0
+        },
+        {
+          "type": "Render",
+          "renderMode": 0,
+          "mesh": "proc:bush?seed=1&part=foliage",
+          "material": "materials/proc_bush_leaves.mat.json",
+          "sprite": "",
+          "layer": 0,
+          "visible": true
+        },
+        { "type": "Light", "enabled": false }
+      ]
+    },
+    {
+      "type": "Enemy",
+      "name": "Bush B stems",
+      "x": 34.5,
+      "y": 30.0,
+      "components": [
+        {
+          "type": "Transform",
+          "x": 34.5,
+          "y": 30.0,
+          "z": -1.4,
+          "yawDeg": 60.0,
+          "pitchDeg": 0.0,
+          "rollDeg": 0.0,
+          "scale": 2.0
+        },
+        {
+          "type": "Render",
+          "renderMode": 0,
+          "mesh": "proc:bush?seed=2&part=trunk",
+          "material": "materials/proc_dead_wood.mat.json",
+          "sprite": "",
+          "layer": 0,
+          "visible": true
+        },
+        { "type": "Light", "enabled": false }
+      ]
+    },
+    {
+      "type": "Enemy",
+      "name": "Bush B leaves",
+      "x": 34.5,
+      "y": 30.0,
+      "components": [
+        {
+          "type": "Transform",
+          "x": 34.5,
+          "y": 30.0,
+          "z": -1.4,
+          "yawDeg": 60.0,
+          "pitchDeg": 0.0,
+          "rollDeg": 0.0,
+          "scale": 2.0
+        },
+        {
+          "type": "Render",
+          "renderMode": 0,
+          "mesh": "proc:bush?seed=2&part=foliage",
+          "material": "materials/proc_bush_leaves.mat.json",
+          "sprite": "",
+          "layer": 0,
+          "visible": true
+        },
+        { "type": "Light", "enabled": false }
+      ]
+    },
+    {
+      "type": "Enemy",
+      "name": "Bush C stems",
+      "x": 30.0,
+      "y": 35.0,
+      "components": [
+        {
+          "type": "Transform",
+          "x": 30.0,
+          "y": 35.0,
+          "z": -1.4,
+          "yawDeg": 140.0,
+          "pitchDeg": 0.0,
+          "rollDeg": 0.0,
+          "scale": 2.0
+        },
+        {
+          "type": "Render",
+          "renderMode": 0,
+          "mesh": "proc:bush?seed=3&part=trunk",
+          "material": "materials/proc_dead_wood.mat.json",
+          "sprite": "",
+          "layer": 0,
+          "visible": true
+        },
+        { "type": "Light", "enabled": false }
+      ]
+    },
+    {
+      "type": "Enemy",
+      "name": "Bush C leaves",
+      "x": 30.0,
+      "y": 35.0,
+      "components": [
+        {
+          "type": "Transform",
+          "x": 30.0,
+          "y": 35.0,
+          "z": -1.4,
+          "yawDeg": 140.0,
+          "pitchDeg": 0.0,
+          "rollDeg": 0.0,
+          "scale": 2.0
+        },
+        {
+          "type": "Render",
+          "renderMode": 0,
+          "mesh": "proc:bush?seed=3&part=foliage",
+          "material": "materials/proc_bush_leaves.mat.json",
+          "sprite": "",
+          "layer": 0,
+          "visible": true
+        },
+        { "type": "Light", "enabled": false }
+      ]
+    },
+
+    {
+      "type": "Enemy",
+      "name": "Grass A",
+      "x": 32.0,
+      "y": 30.0,
+      "components": [
+        {
+          "type": "Transform",
+          "x": 32.0,
+          "y": 30.0,
+          "z": -1.4,
+          "yawDeg": 0.0,
+          "pitchDeg": 0.0,
+          "rollDeg": 0.0,
+          "scale": 2.0
+        },
+        {
+          "type": "Render",
+          "renderMode": 0,
+          "mesh": "proc:grass?seed=1",
+          "material": "materials/proc_grass_tuft.mat.json",
+          "sprite": "",
+          "layer": 0,
+          "visible": true
+        },
+        { "type": "Light", "enabled": false }
+      ]
+    },
+    {
+      "type": "Enemy",
+      "name": "Grass B",
+      "x": 33.5,
+      "y": 31.5,
+      "components": [
+        {
+          "type": "Transform",
+          "x": 33.5,
+          "y": 31.5,
+          "z": -1.4,
+          "yawDeg": 45.0,
+          "pitchDeg": 0.0,
+          "rollDeg": 0.0,
+          "scale": 2.0
+        },
+        {
+          "type": "Render",
+          "renderMode": 0,
+          "mesh": "proc:grass?seed=2",
+          "material": "materials/proc_grass_tuft.mat.json",
+          "sprite": "",
+          "layer": 0,
+          "visible": true
+        },
+        { "type": "Light", "enabled": false }
+      ]
+    },
+    {
+      "type": "Enemy",
+      "name": "Grass C",
+      "x": 30.5,
+      "y": 33.0,
+      "components": [
+        {
+          "type": "Transform",
+          "x": 30.5,
+          "y": 33.0,
+          "z": -1.4,
+          "yawDeg": 200.0,
+          "pitchDeg": 0.0,
+          "rollDeg": 0.0,
+          "scale": 2.0
+        },
+        {
+          "type": "Render",
+          "renderMode": 0,
+          "mesh": "proc:grass?seed=3",
+          "material": "materials/proc_grass_tuft.mat.json",
+          "sprite": "",
+          "layer": 0,
+          "visible": true
+        },
+        { "type": "Light", "enabled": false }
+      ]
+    },
+    {
+      "type": "Enemy",
+      "name": "Grass D",
+      "x": 34.0,
+      "y": 34.0,
+      "components": [
+        {
+          "type": "Transform",
+          "x": 34.0,
+          "y": 34.0,
+          "z": -1.4,
+          "yawDeg": 330.0,
+          "pitchDeg": 0.0,
+          "rollDeg": 0.0,
+          "scale": 2.0
+        },
+        {
+          "type": "Render",
+          "renderMode": 0,
+          "mesh": "proc:grass?seed=4",
+          "material": "materials/proc_grass_tuft.mat.json",
+          "sprite": "",
+          "layer": 0,
+          "visible": true
+        },
+        { "type": "Light", "enabled": false }
+      ]
+    },
+
+    {
+      "type": "Enemy",
+      "name": "Stump A",
+      "x": 36.5,
+      "y": 28.0,
+      "components": [
+        {
+          "type": "Transform",
+          "x": 36.5,
+          "y": 28.0,
+          "z": -1.4,
+          "yawDeg": 0.0,
+          "pitchDeg": 0.0,
+          "rollDeg": 0.0,
+          "scale": 2.0
+        },
+        {
+          "type": "Render",
+          "renderMode": 0,
+          "mesh": "proc:stump?seed=5",
+          "material": "materials/proc_dead_wood.mat.json",
+          "sprite": "",
+          "layer": 0,
+          "visible": true
+        },
+        { "type": "Light", "enabled": false }
+      ]
+    },
+    {
+      "type": "Enemy",
+      "name": "Stump B",
+      "x": 28.0,
+      "y": 36.0,
+      "components": [
+        {
+          "type": "Transform",
+          "x": 28.0,
+          "y": 36.0,
+          "z": -1.4,
+          "yawDeg": 90.0,
+          "pitchDeg": 0.0,
+          "rollDeg": 0.0,
+          "scale": 2.0
+        },
+        {
+          "type": "Render",
+          "renderMode": 0,
+          "mesh": "proc:stump?seed=6",
+          "material": "materials/proc_dead_wood.mat.json",
+          "sprite": "",
+          "layer": 0,
+          "visible": true
+        },
+        { "type": "Light", "enabled": false }
+      ]
+    },
+
+    {
+      "type": "Enemy",
+      "name": "Log A",
+      "x": 37.0,
+      "y": 37.5,
+      "components": [
+        {
+          "type": "Transform",
+          "x": 37.0,
+          "y": 37.5,
+          "z": -1.4,
+          "yawDeg": 0.0,
+          "pitchDeg": 0.0,
+          "rollDeg": 0.0,
+          "scale": 2.0
+        },
+        {
+          "type": "Render",
+          "renderMode": 0,
+          "mesh": "proc:log?seed=4",
+          "material": "materials/proc_dead_wood.mat.json",
+          "sprite": "",
+          "layer": 0,
+          "visible": true
+        },
+        { "type": "Light", "enabled": false }
+      ]
+    },
+    {
+      "type": "Enemy",
+      "name": "Log B",
+      "x": 26.0,
+      "y": 30.0,
+      "components": [
+        {
+          "type": "Transform",
+          "x": 26.0,
+          "y": 30.0,
+          "z": -1.4,
+          "yawDeg": 0.0,
+          "pitchDeg": 0.0,
+          "rollDeg": 0.0,
+          "scale": 2.0
+        },
+        {
+          "type": "Render",
+          "renderMode": 0,
+          "mesh": "proc:log?seed=12",
+          "material": "materials/proc_dead_wood.mat.json",
+          "sprite": "",
+          "layer": 0,
+          "visible": true
+        },
+        { "type": "Light", "enabled": false }
+      ]
+    }
+  ]
+}

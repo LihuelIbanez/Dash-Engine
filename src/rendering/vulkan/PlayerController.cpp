@@ -45,6 +45,9 @@ void PlayerController::update(GLFWwindow* window, const InputBindings3D& binding
 {
     if (!loaded_) return;
 
+    attackHeld_ = glfwGetKey(window, bindings.keyAttack) == GLFW_PRESS
+               || glfwGetMouseButton(window, bindings.mouseButtonAttack) == GLFW_PRESS;
+
     float inputX = 0.0f;
     float inputZ = 0.0f;
     if (glfwGetKey(window, bindings.keyForward) == GLFW_PRESS) {

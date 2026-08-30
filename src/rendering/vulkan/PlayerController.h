@@ -34,6 +34,9 @@ public:
     float x() const { return x_; }
     float y() const { return y_; }
     float z() const { return z_; }
+    // Attack binding state as of the last update(). Held rather than edge
+    // triggered: the combat cooldown is what paces the swings.
+    bool attackHeld() const { return attackHeld_; }
 
 private:
     float x_ = 32.0f;
@@ -41,6 +44,7 @@ private:
     float z_ = 32.0f;
     float velY_ = 0.0f;
     bool loaded_ = false;
+    bool attackHeld_ = false;
 };
 
 } // namespace dash::vkexp

@@ -128,8 +128,10 @@ private:
     // skinned draw in a frame.
     bool createBoneResources();
     void destroyBoneResources();
-    // Advances every animated instance and fills its palette slot.
-    void updateSkinnedInstances(float dt, std::vector<InstanceResources>& res);
+    // Advances every animated instance and fills its palette slot inside the
+    // region that belongs to `frameIndex` (the swapchain image being recorded).
+    void updateSkinnedInstances(float dt, uint32_t frameIndex,
+                                std::vector<InstanceResources>& res);
 
     // Prints min/avg/p95/max for the samples collected during runSmoke().
     void reportFrameStats(uint32_t renderedFrames) const;
@@ -226,8 +228,7 @@ private:
 
     AssetCache3D assetCache_;
 
-    dash::physics::PhysicsWorld physicsWorld_;
-    dash::physics::TransformProxy transformProxy_;
+    dash::physics::PhysicsWorld physicsWorld_;    dash::physics::TransformProxy transformProxy_;
     dash::physics::Transform3 cubeTransform_{};
     std::vector<RenderInstance> sceneInstances_;
     // Resolved mesh per scene instance, aligned by index with sceneInstances_.
@@ -275,6 +276,10 @@ private:
     CameraController camera_;
     PlayerController player_;
     dash::runtime3d::EnemySimulation3D enemySim_;
+
+    // Shared by the rendered terrain and the navigation grid: if only one of
+    // them used it, walkability would stop matching the ground you can see.
+    dash::world::BiomeTable biomeTable_;
     EditorBridge editorBridge_;
 
     float elapsedSeconds_ = 0.0f;

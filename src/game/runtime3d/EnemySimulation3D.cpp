@@ -1,15 +1,21 @@
 #include "game/runtime3d/EnemySimulation3D.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstdio>
+#include <memory>
+#include <random>
+#include <string>
 #include <variant>
 
 #include "events/EventDispatcher.h"
 #include "events/GameEvents.h"
 #include "game/runtime3d/CliffNav.h"
+#include "rendering/animation/AnimationStateMachineFile.h"
 #include "scene/SceneData.h"
 #include "world/TerrainMesh.h"
+#include "world/World.h"
 #include "world/World.h"
 
 namespace dash::runtime3d {
@@ -27,6 +33,30 @@ constexpr float kSlotCreepScale     = 0.55f;
 constexpr float kFleeSpeedScale     = 1.15f;
 // Any per-frame vertical delta above this would mean the cliff guard leaked.
 constexpr float kCliffJumpThreshold = 1.0f;
+
+std::string animGraphPathFor(const EntityData& e)
+{
+    for (const auto& c : e.components) {
+        if (const auto* ac = std::get_if<AnimationComponent>(&c)) return ac->stateMachine;
+    }
+    return {};
+}
+
+// Falls back to the built-in graph when the entity names none, or when the file
+// is missing or malformed: an enemy without an animation graph would freeze.
+std::shared_ptr<const dash::anim::AnimationStateMachine> loadAgentMachine(const std::string& path)
+{
+    if (path.empty()) return sharedEnemyStateMachine();
+
+    dash::anim::AnimationStateMachine machine;
+    std::string error;
+    if (!dash::anim::readStateMachine(path, machine, error)) {
+        std::fprintf(stderr, "[Sim3D] Animation graph '%s' unusable (%s); using the built-in one.\n",
+                     path.c_str(), error.c_str());
+        return sharedEnemyStateMachine();
+    }
+    return std::make_shared<const dash::anim::AnimationStateMachine>(std::move(machine));
+}
 
 // scenes/default.json ships its enemies without components, so the archetype is
 // picked from the entity name and everything else falls back to these numbers.
@@ -67,13 +97,51 @@ const char* stateName(AgentState s)
     return "?";
 }
 
+std::string lowercaseId(const std::string& name)
+{
+    std::string id = name;
+    for (char& c : id) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    return id;
+}
+
+// Uniform [0,1) straight off the engine's raw output: std::uniform_real_-
+// distribution is implementation defined, and the drops have to replay the same
+// way for a given scene seed.
+float roll01(std::mt19937& rng)
+{
+    return static_cast<float>(rng() >> 8) * (1.0f / 16777216.0f);
+}
+
+// Used when the gameplay database has no table for this enemy (or failed to
+// load at all). Deliberately minimal: gold only.
+const LootTableData& fallbackLootTable()
+{
+    static const LootTableData table = [] {
+        LootTableData t;
+        t.id = "runtime3d_default";
+        t.drops.push_back(LootDrop{"gold", 1.0f, 3, 12});
+        return t;
+    }();
+    return table;
+}
+
+std::string gameplayAssetsDir()
+{
+#ifdef VULKAN_ASSETS_DIR
+    return VULKAN_ASSETS_DIR;
+#else
+    return "assets";
+#endif
+}
+
 } // namespace
 
 EnemySimulation3D::EnemySimulation3D() = default;
 EnemySimulation3D::~EnemySimulation3D() = default;
 
 void EnemySimulation3D::build(const SceneData& scene,
-                              const std::vector<RenderInstance>& instances)
+                              const std::vector<RenderInstance>& instances,
+                              const dash::world::BiomeTable* biomes)
 {
     agents_.clear();
     groundResolved_ = false;
@@ -118,17 +186,26 @@ void EnemySimulation3D::build(const SceneData& scene,
 
         agent.spawnX = agent.x;
         agent.spawnZ = agent.z;
-        agent.anim.setMachine(sharedEnemyStateMachine());
+        // A model's own graph names the clips it actually ships; the built-in
+        // fallback names generic ones that only match by convention.
+        agent.anim.setMachine(loadAgentMachine(animGraphPathFor(e)));
 
         agents_.push_back(std::move(agent));
     }
 
     playerHealth_ = playerMaxHealth_;
     playerAttackCooldown_ = 0.0f;
+    playerAttackInput_ = false;
     slotTimer_ = 0.0f;
     cliffBlockedSteps_ = 0;
     cliffJumpEvents_ = 0;
     maxHeightJump_ = 0.0f;
+
+    // Deliberately NOT the world seed: tying loot to it makes every playthrough
+    // of a scene drop the same items in the same order, which is the opposite of
+    // what an ARPG wants. Tests pin it through setLootSeed().
+    lootRng_.seed(lootSeedFixed_ ? lootSeed_ : std::random_device{}());
+    lootFallbackLogged_ = false;
 
     if (agents_.empty()) {
         navWorld_.reset();
@@ -136,9 +213,14 @@ void EnemySimulation3D::build(const SceneData& scene,
         return;
     }
 
+    lootDbReady_ = lootDb_.load(gameplayAssetsDir());
+    if (!lootDbReady_) {
+        std::fprintf(stderr, "[Loot] Gameplay database unavailable; drops use the built-in table.\n");
+    }
+
     // Same seed as the rendered terrain, so A* walkability matches the ground.
     navWorld_ = std::make_unique<World>();
-    navWorld_->generate(scene.worldSeed);
+    navWorld_->generate(scene.worldSeed, biomes);
     for (const auto& ov : scene.tileOverrides) {
         if (ov.x < 0 || ov.x >= WORLD_W || ov.y < 0 || ov.y >= WORLD_H) continue;
         navWorld_->grid[static_cast<size_t>(ov.y)][static_cast<size_t>(ov.x)].walkable = ov.walkable;
@@ -238,10 +320,20 @@ void EnemySimulation3D::moveAgent(EnemyAgent& agent, float stepX, float stepZ,
 }
 
 void EnemySimulation3D::update(float dt, float playerX, float playerZ,
+                               bool playerAttackInput,
                                const TerrainMesh* terrainMesh, bool terrainMeshReady,
                                EventDispatcher& events)
 {
     if (agents_.empty() || dt <= 0.0f) return;
+
+    // The automatic swing exists only for runs with nobody at the keyboard.
+    // Once a real attack arrives it would double the player's output and hide
+    // whether the binding works at all, so it is retired for the session.
+    if (playerAttackInput && autoAttack_) {
+        autoAttack_ = false;
+        std::printf("[Combat] Player attack input received; auto-attack fallback retired.\n");
+    }
+    playerAttackInput_ = playerAttackInput;
 
     const TerrainMesh* ground = terrainMeshReady ? terrainMesh : nullptr;
     lastPlayerX_ = playerX;
@@ -480,6 +572,9 @@ void EnemySimulation3D::resolveCombat(float dt, float playerX, float playerZ,
 
     // ── Player striking back at the closest enemy in reach ───────────────────
     if (playerHealth_ <= 0 || playerAttackCooldown_ > 0.0f) return;
+    // One swing path for both sources: the binding and the headless fallback
+    // land on the same damage, the same cooldown and the same events.
+    if (!playerAttackInput_ && !autoAttack_) return;
 
     EnemyAgent* victim = nullptr;
     float bestDist = playerAttackRadius_;
@@ -528,7 +623,48 @@ void EnemySimulation3D::resolveCombat(float dt, float playerX, float playerZ,
         dead.entityName = victim->name;
         dead.expReward = victim->stats.expReward;
         events.emit(dead);
+
+        emitLootDrop(*victim, events);
     }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Loot. The drop is resolved by lowercase enemy name against the gameplay
+// database (assets/gameplay/loot_tables.json, or the SQLite mirror of it), the
+// same key the 2D SpawnRewardSystem used. Only the event is produced: nothing
+// is spawned, drawn or picked up yet.
+// ─────────────────────────────────────────────────────────────────────────────
+void EnemySimulation3D::emitLootDrop(const EnemyAgent& agent, EventDispatcher& events)
+{
+    const std::string id = lowercaseId(agent.name);
+
+    const LootTableData* table = lootDbReady_ ? lootDb_.findLootTableForEnemy(id) : nullptr;
+    if (table == nullptr) {
+        table = &fallbackLootTable();
+        if (!lootFallbackLogged_) {
+            lootFallbackLogged_ = true;
+            std::printf("[Loot] No loot table for '%s'; using the built-in default (gold only).\n",
+                        id.c_str());
+        }
+    }
+
+    LootDropEvent ev;
+    ev.enemyId = id;
+    ev.x = agent.x;
+    ev.y = agent.z;   // LootDropEvent is 2D: (x, z) is the tile-space pair, as in DeathEvent
+
+    for (const LootDrop& drop : table->drops) {
+        if (roll01(lootRng_) > drop.chance) continue;
+        int qty = drop.minQty;
+        if (drop.maxQty > drop.minQty) {
+            const uint32_t span = static_cast<uint32_t>(drop.maxQty - drop.minQty) + 1u;
+            qty += static_cast<int>(lootRng_() % span);
+        }
+        ev.items.push_back({drop.item, qty});
+    }
+
+    if (ev.items.empty()) return;   // rolled nothing: there is no drop to announce
+    events.emit(ev);
 }
 
 void EnemySimulation3D::syncToInstances(std::vector<RenderInstance>& instances) const
@@ -546,6 +682,19 @@ void EnemySimulation3D::syncToInstances(std::vector<RenderInstance>& instances) 
             inst.position.y = agent.y;
             inst.position.z = agent.z;
             inst.yawDeg = agent.yawDeg;
+
+            // The FSM owns which clip plays; the renderer's player has no graph
+            // installed, so it honours whatever the component says.
+            if (inst.hasAnimation) {
+                if (const dash::anim::AnimationState* st = agent.anim.currentStateDef()) {
+                    if (inst.animation.clip != st->clip) {
+                        inst.animation.clip = st->clip;
+                        inst.animation.speed = st->speed;
+                        inst.animation.loop = st->loop;
+                        inst.animation.playing = true;
+                    }
+                }
+            }
             break;
         }
     }

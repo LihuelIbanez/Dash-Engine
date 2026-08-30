@@ -1,0 +1,94 @@
+{
+  "version": 1,
+  "name": "EnemyWolfLocomotion",
+  "initialState": "Idle",
+  "parameters": [
+    { "name": "speed", "type": "float", "default": 0.0 },
+    { "name": "attack", "type": "trigger" },
+    { "name": "die", "type": "trigger" }
+  ],
+  "states": [
+    {
+      "name": "Idle",
+      "clip": "04_Idle_Armature_0",
+      "speed": 1.0,
+      "loop": true
+    },
+    { "name": "Walk", "clip": "01_Run_Armature_0", "speed": 1.0, "loop": true },
+    {
+      "name": "Attack",
+      "clip": "03_creep_Armature_0",
+      "speed": 1.6,
+      "loop": false
+    },
+    {
+      "name": "Death",
+      "clip": "05_site_Armature_0",
+      "speed": 1.0,
+      "loop": false
+    }
+  ],
+  "transitions": [
+    {
+      "from": "Idle",
+      "to": "Death",
+      "blendSeconds": 0.1,
+      "conditions": [{ "parameter": "die", "op": "triggered" }]
+    },
+    {
+      "from": "Walk",
+      "to": "Death",
+      "blendSeconds": 0.1,
+      "conditions": [{ "parameter": "die", "op": "triggered" }]
+    },
+    {
+      "from": "Attack",
+      "to": "Death",
+      "blendSeconds": 0.1,
+      "conditions": [{ "parameter": "die", "op": "triggered" }]
+    },
+
+    {
+      "from": "Idle",
+      "to": "Attack",
+      "blendSeconds": 0.08,
+      "conditions": [{ "parameter": "attack", "op": "triggered" }]
+    },
+    {
+      "from": "Walk",
+      "to": "Attack",
+      "blendSeconds": 0.08,
+      "conditions": [{ "parameter": "attack", "op": "triggered" }]
+    },
+
+    {
+      "from": "Attack",
+      "to": "Walk",
+      "blendSeconds": 0.15,
+      "hasExitTime": true,
+      "exitTime": 1.0,
+      "conditions": [{ "parameter": "speed", "op": "greater", "value": 0.15 }]
+    },
+    {
+      "from": "Attack",
+      "to": "Idle",
+      "blendSeconds": 0.15,
+      "hasExitTime": true,
+      "exitTime": 1.0,
+      "conditions": [{ "parameter": "speed", "op": "less", "value": 0.15 }]
+    },
+
+    {
+      "from": "Idle",
+      "to": "Walk",
+      "blendSeconds": 0.2,
+      "conditions": [{ "parameter": "speed", "op": "greater", "value": 0.15 }]
+    },
+    {
+      "from": "Walk",
+      "to": "Idle",
+      "blendSeconds": 0.2,
+      "conditions": [{ "parameter": "speed", "op": "less", "value": 0.15 }]
+    }
+  ]
+}

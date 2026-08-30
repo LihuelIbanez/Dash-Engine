@@ -6,6 +6,7 @@
 #include "imgui_internal.h"
 #include "IsoRenderer.h"
 #include "VersionInfo.h"
+#include "world/BiomeTableFile.h"
 #include "PaintTileCommand.h"
 #include "FloodFillCommand.h"
 #include "HeightBrushCommand.h"
@@ -408,6 +409,20 @@ bool EditorApp::init(const std::string& projectPath)
     }
     refreshProjectPaths();   // sets scenesDir_, assetsRoot_, libraryRoot_
 
+    // Biome table before any world generation: an empty table makes the terrain
+    // fall back to its built-in thresholds, and the viewport would then disagree
+    // with what the runtime draws.
+    {
+        const std::string biomePath = (fs::path(assetsRoot_) / "world" / "biomes.json").string();
+        std::string biomeError;
+        if (dash::world::loadBiomeTableFile(biomePath, biomeTable_, &biomeError)) {
+            addLog("Biome table loaded (" + std::to_string(biomeTable_.biomes.size()) + " biomes).");
+        } else {
+            biomeTable_ = {};
+            addLog("[Biomes] " + biomePath + ": " + biomeError + " (using built-in thresholds)");
+        }
+    }
+
     // ── File browser root ────────────────────────────────────────────────────
     fileEditorPanel_.init(AppPaths::getResourcesDir());
 
@@ -672,6 +687,14 @@ bool EditorApp::openProject(const std::string& manifestPath)
             addLog("[MIGRATION] " + line);
     }
 
+    const auto& sceneSync = projectManager_.lastSceneSyncStatus();
+    if (sceneSync.attempted) {
+        for (const auto& line : sceneSync.log)
+            addLog(line);
+        if (!sceneSync.success)
+            addLog("[SceneSync] Failed - SQLite scene rows may be stale.");
+    }
+
     refreshSceneFiles();
     addLog("[PROJ] Available scenes after refresh: " + std::to_string(sceneFiles_.size()));
     for (const auto& f : sceneFiles_) {
@@ -757,14 +780,10 @@ void EditorApp::buildDefaultLayout(ImGuiID dockspaceId)
     ImGui::DockBuilderSplitNode(dockRemainder, ImGuiDir_Right, 0.22f,
                                 &dockRight, &dockCentre);
 
-    // Split centre: top (toolbar) | middle+bottom
-    ImGuiID dockToolbar, dockMiddle;
-    ImGui::DockBuilderSplitNode(dockCentre, ImGuiDir_Up, 0.06f,
-                                &dockToolbar, &dockMiddle);
-
-    // Split middle: viewport (top ~75%) | build log (bottom ~25%)
+    // Split centre: viewport (top) | bottom drawer (~22%). The toolbar is not a
+    // dock node any more, so the centre column starts at the viewport.
     ImGuiID dockViewport, dockBottom;
-    ImGui::DockBuilderSplitNode(dockMiddle, ImGuiDir_Down, 0.22f,
+    ImGui::DockBuilderSplitNode(dockCentre, ImGuiDir_Down, 0.22f,
                                 &dockBottom, &dockViewport);
 
     // Split left panel: scene hierarchy (top 55%) | tile palette (bottom 45%)
@@ -779,7 +798,6 @@ void EditorApp::buildDefaultLayout(ImGuiID dockspaceId)
 
     // Dock each window into its slot. Every panel needs a home here: one that is
     // missing opens floating at an arbitrary spot the first time it is toggled.
-    ImGui::DockBuilderDockWindow("Toolbar",          dockToolbar);
     ImGui::DockBuilderDockWindow("Scene Hierarchy",  dockHierarchy);
     ImGui::DockBuilderDockWindow("Scene Selector",   dockHierarchy);
     ImGui::DockBuilderDockWindow("Tile Palette",     dockPalette);
@@ -787,6 +805,9 @@ void EditorApp::buildDefaultLayout(ImGuiID dockspaceId)
     ImGui::DockBuilderDockWindow("File Editor",      dockViewport);
     ImGui::DockBuilderDockWindow("Entity Viewport",  dockViewport);
     ImGui::DockBuilderDockWindow("Bone Structure",   dockViewport);
+    ImGui::DockBuilderDockWindow("Biome Designer",   dockViewport);
+    ImGui::DockBuilderDockWindow("Animation",        dockViewport);
+    ImGui::DockBuilderDockWindow("State Machine",    dockViewport);
     ImGui::DockBuilderDockWindow("Properties",       dockProperties);
     ImGui::DockBuilderDockWindow("Asset Inspector",  dockProperties);
     ImGui::DockBuilderDockWindow("Lighting",         dockProperties);
@@ -890,6 +911,7 @@ void EditorApp::run()
             buildDefaultLayout(dockspaceId);
         }
 
+        if (showToolbar_) drawToolbar();
         ImGui::DockSpace(dockspaceId, {0, 0});
         drawMenuBar();
             // Welcome panel must be drawn inside a window so OpenPopup is owned
@@ -903,7 +925,6 @@ void EditorApp::run()
         ImGui::End();
 
         // Panels — always drawn so they can be docked
-        if (showToolbar_) drawToolbar();
         if (showSceneHierarchy_) drawSceneHierarchy();
         if (showPropertiesPanel_) drawPropertiesPanel();
         if (showTilePalette_) drawTilePalette();
@@ -938,6 +959,17 @@ void EditorApp::run()
         if (showBoneStructurePanel_)
             boneStructurePanel_.draw(assetsRoot_, libraryRoot_,
                                      [this](const std::string& m){ addLog(m); });
+        if (showBiomeDesignerPanel_)
+            biomeDesignerPanel_.draw(biomeTable_, world_.terrain(), assetsRoot_,
+                                     scene_.worldSeed,
+                                     [this](unsigned int){ regenerateWorld(); },
+                                     [this](const std::string& m){ addLog(m); });
+        if (showAnimationPanel_)
+            animationPanel_.draw(scene_, selectedEntityId_, animationSets_, animators_,
+                                 [this](const std::string& meshId){ return vkCtx_.resolveModelPath(meshId); },
+                                 [this](const std::string& m){ addLog(m); });
+        if (showStateMachinePanel_)
+            stateMachinePanel_.draw(assetsRoot_, [this](const std::string& m){ addLog(m); });
         if (spriteEditor_.isOpen)
             spriteEditor_.draw();
         if (showAudioPanel_)
@@ -1088,6 +1120,7 @@ void EditorApp::drawMenuBar()
         ImGui::MenuItem("Scene Hierarchy", nullptr, &showSceneHierarchy_);
         ImGui::MenuItem("Scene Selector", nullptr, &showSceneSelector_);
         ImGui::MenuItem("Tile Palette", nullptr, &showTilePalette_);
+        ImGui::MenuItem("Biome Designer", nullptr, &showBiomeDesignerPanel_);
         ImGui::MenuItem("Entity Viewport", nullptr, &showEntityViewport_);
 
         ImGui::SeparatorText("Details");
@@ -1101,6 +1134,8 @@ void EditorApp::drawMenuBar()
         ImGui::MenuItem("File Browser", nullptr, &showFileBrowser_);
         ImGui::MenuItem("File Editor", nullptr, &showFileEditor_);
         ImGui::MenuItem("Bone Structure", nullptr, &showBoneStructurePanel_);
+        ImGui::MenuItem("Animation", nullptr, &showAnimationPanel_);
+        ImGui::MenuItem("State Machine", nullptr, &showStateMachinePanel_);
 
         ImGui::SeparatorText("Diagnostics");
         ImGui::MenuItem("Build Log", nullptr, &showBuildLog_);
@@ -1265,7 +1300,13 @@ void EditorApp::drawMigrationLogModal()
 // ═════════════════════════════════════════════════════════════════════════════
 void EditorApp::drawToolbar()
 {
-    ImGui::Begin("Toolbar", nullptr, ImGuiWindowFlags_NoScrollbar);
+    // A fixed strip under the menu bar rather than a dockable panel: the Play
+    // and Stop buttons must not be something the user can drag away or lose.
+    constexpr float kToolbarHeight = 46.0f;
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {6.0f, 6.0f});
+    ImGui::BeginChild("##MainToolbar", {0.0f, kToolbarHeight},
+                      ImGuiChildFlags_None, ImGuiWindowFlags_NoScrollbar);
+    ImGui::PopStyleVar();
 
     // ▶ Build & Run (green)
     ImGui::PushStyleColor(ImGuiCol_Button,        {0.220f, 0.541f, 0.204f, 1.f}); // #388A34
@@ -1332,7 +1373,7 @@ void EditorApp::drawToolbar()
     }
     ImGui::PopStyleColor(3);
 
-    ImGui::End();
+    ImGui::EndChild();
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -1590,7 +1631,7 @@ void EditorApp::drawPropertiesPanel()
         int seed = static_cast<int>(scene_.worldSeed);
         if (ImGui::InputInt("Seed", &seed)) {
             scene_.worldSeed = static_cast<unsigned int>(seed);
-            world_.generate(scene_.worldSeed);
+            regenerateWorld();
             applySceneToWorld();
             scene_.modified = true;
         }
@@ -2218,10 +2259,65 @@ void EditorApp::drawTilePalette()
 // ═════════════════════════════════════════════════════════════════════════════
 // Viewport
 // ═════════════════════════════════════════════════════════════════════════════
+void EditorApp::drawViewportToolbar()
+{
+    // Transform mode and snapping belong over the image they act on, not in a
+    // menu: this is where the eye already is while manipulating an entity.
+    constexpr float kBarHeight = 32.0f;
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {6.0f, 4.0f});
+    ImGui::BeginChild("##ViewportToolbar", {0.0f, kBarHeight},
+                      ImGuiChildFlags_None, ImGuiWindowFlags_NoScrollbar);
+    ImGui::PopStyleVar();
+
+    const auto modeBtn = [&](const char* label, dash::gizmo::Mode m, const char* tip) {
+        const bool selected = (gizmo_.mode() == m);
+        if (selected) ImGui::PushStyleColor(ImGuiCol_Button, {0.035f, 0.278f, 0.443f, 1.f});
+        if (ImGui::Button(label, {36, 24})) gizmo_.setMode(m);
+        if (selected) ImGui::PopStyleColor();
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", tip);
+        ImGui::SameLine();
+    };
+
+    modeBtn(ICON_FA_UP_DOWN_LEFT_RIGHT, dash::gizmo::Mode::Translate, "Move (W)");
+    modeBtn(ICON_FA_ROTATE,             dash::gizmo::Mode::Rotate,    "Rotate (E)");
+    modeBtn(ICON_FA_MAXIMIZE,           dash::gizmo::Mode::Scale,     "Scale (R)");
+
+    ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+    ImGui::SameLine();
+
+    ImGui::Checkbox("Snap", &gizmoAlwaysSnap_);
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("Always snap; hold Shift to snap while it is off");
+    ImGui::SameLine();
+
+    ImGui::SetNextItemWidth(80);
+    switch (gizmo_.mode()) {
+        case dash::gizmo::Mode::Rotate:
+            ImGui::DragFloat("##snaprot", &gizmoRotateSnapDeg_, 1.0f, 1.0f, 90.0f, "%.0f°");
+            break;
+        case dash::gizmo::Mode::Scale:
+            ImGui::DragFloat("##snapscale", &gizmoScaleSnap_, 0.01f, 0.01f, 1.0f, "%.2f");
+            break;
+        default:
+            ImGui::DragFloat("##snapmove", &gizmoTranslateSnapTiles_, 0.05f, 0.05f, 4.0f, "%.2f t");
+            break;
+    }
+
+    ImGui::SameLine();
+    ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+    ImGui::SameLine();
+
+    ImGui::TextDisabled("%zu selected", selection_.size());
+
+    ImGui::EndChild();
+}
+
 void EditorApp::drawViewport()
 {
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0, 0});
     ImGui::Begin("Viewport");
+
+    drawViewportToolbar();
 
     // Get viewport coordinates and size BEFORE rendering
     ImVec2 avail = ImGui::GetContentRegionAvail();
@@ -2862,6 +2958,109 @@ void EditorApp::buildViewProjMatrix(float vpW, float vpH, float viewProj[16],
 // ═════════════════════════════════════════════════════════════════════════════
 // Viewport rendering (Vulkan pipeline)
 // ═════════════════════════════════════════════════════════════════════════════
+// ─────────────────────────────────────────────────────────────────────────────
+// Skeletal animation preview
+//
+// Runs in Edit mode as well as Play: the point of the viewport is to preview
+// clips without launching the game. Players are keyed by entity id because the
+// instance vector is rebuilt from the scene every frame.
+// ─────────────────────────────────────────────────────────────────────────────
+void EditorApp::updateViewportAnimators(float dt,
+                                        const std::vector<dash::vkexp::RenderInstance>& instances,
+                                        std::vector<dash::vkexp::InstanceResources>& resources)
+{
+    dash::anim::BonePalette& palette = vkCtx_.bonePalette();
+    if (!palette.usable()) return;
+    palette.beginFrame(vkCtx_.currentFrameIndex());
+
+    for (size_t i = 0; i < instances.size() && i < resources.size(); ++i) {
+        const dash::vkexp::RenderInstance& inst = instances[i];
+        if (!inst.hasAnimation || inst.entityId == 0) continue;
+
+        auto it = animators_.find(inst.entityId);
+        if (it == animators_.end()) {
+            const std::string meshPath = vkCtx_.resolveModelPath(inst.meshId);
+            if (meshPath.empty()) continue;
+
+            const dash::anim::AnimationSet& set = animationSets_.load(meshPath);
+            if (!set.valid()) continue;
+
+            dash::anim::AnimationPlayer player;
+            player.setSkeleton(set.skeleton);
+            for (const auto& clip : set.clips) player.addClip(clip);
+            it = animators_.emplace(inst.entityId, std::move(player)).first;
+        }
+
+        dash::anim::AnimationPlayer& player = it->second;
+        // Re-reading the component keeps Inspector edits (clip, pause, speed) live.
+        player.syncWithComponent(inst.animation);
+        player.update(dt);
+
+        const std::vector<dash::anim::Mat4>& mats = player.boneMatrices();
+        if (mats.empty()) continue;
+
+        const int64_t offset = palette.writeSlot(mats.front().m,
+                                                 static_cast<uint32_t>(mats.size()));
+        if (offset < 0) break;  // frame ran out of slots
+
+        resources[i].boneMatrices = mats.front().m;
+        resources[i].boneCount    = static_cast<uint32_t>(mats.size());
+        resources[i].boneOffset   = static_cast<uint32_t>(offset);
+    }
+
+    // Drop players whose entity left the scene. Their bone matrices are not
+    // referenced by `resources`, precisely because the entity is gone.
+    for (auto it = animators_.begin(); it != animators_.end(); ) {
+        const bool present = std::any_of(
+            instances.begin(), instances.end(),
+            [&](const dash::vkexp::RenderInstance& in) {
+                return in.hasAnimation && in.entityId == it->first;
+            });
+        it = present ? std::next(it) : animators_.erase(it);
+    }
+
+    if (animators_.size() != loggedAnimatorCount_) {
+        loggedAnimatorCount_ = animators_.size();
+        std::printf("[Anim] Viewport: %zu animated instance(s) over %zu model(s).\n",
+                    animators_.size(), animationSets_.size());
+        for (const auto& [entityId, player] : animators_) {
+            std::printf("[Anim]   entity %llu clip='%s' bones=%zu\n",
+                        static_cast<unsigned long long>(entityId),
+                        player.currentClipName().c_str(),
+                        player.boneMatrices().size());
+        }
+        std::fflush(stdout);
+    }
+
+    // Proof-of-motion trace: prints the same pose digest at intervals, so two
+    // samples that match mean nothing is animating.
+    static const bool trace = std::getenv("DASH_ANIM_TRACE") != nullptr;
+    if (!trace) return;
+    static float traceAccum = 0.0f;
+    traceAccum += dt;
+    if (traceAccum < 3.0f) return;
+    traceAccum = 0.0f;
+
+    for (const auto& [entityId, player] : animators_) {
+        const std::vector<dash::anim::Mat4>& mats = player.boneMatrices();
+        if (mats.empty()) continue;
+        uint64_t hash = 1469598103934665603ull;
+        for (const dash::anim::Mat4& m : mats) {
+            for (float v : m.m) {
+                uint32_t bits = 0;
+                std::memcpy(&bits, &v, sizeof(bits));
+                hash = (hash ^ bits) * 1099511628211ull;
+            }
+        }
+        std::printf("[AnimTrace] entity=%llu clip='%s' bone0.col3=(%.4f, %.4f, %.4f) paletteHash=%016llx\n",
+                    static_cast<unsigned long long>(entityId),
+                    player.currentClipName().c_str(),
+                    mats.front().m[12], mats.front().m[13], mats.front().m[14],
+                    static_cast<unsigned long long>(hash));
+    }
+    std::fflush(stdout);
+}
+
 void EditorApp::renderWorldToTexture()
 {
     // Determine viewport size from the ImGui panel
@@ -2893,9 +3092,6 @@ void EditorApp::renderWorldToTexture()
         auto& inst = instances[i];
         inst.position.y += world_.terrain().sampleHeight(inst.position.x, inst.position.z);
         resources[i].mesh = vkCtx_.resolveMesh(inst.meshId);
-        // Enemies fall back to the wolf model, as before, when no mesh is set.
-        if (!resources[i].mesh && !inst.isPlayer && vkCtx_.wolfMesh().indexCount() > 0)
-            resources[i].mesh = &vkCtx_.wolfMesh();
     }
 
     dash::vkexp::LightingParams lighting;
@@ -2968,6 +3164,10 @@ void EditorApp::renderWorldToTexture()
     // Sized before both depth passes: the SSAO target follows the viewport, and
     // resizing it once the render pass is open is not possible.
     vkCtx_.ensureViewportSize(vpW, vpH);
+
+    // Before every pass that draws the instances: all three read the same slots.
+    updateViewportAnimators(std::min(ImGui::GetIO().DeltaTime, 0.1f), instances, resources);
+
     vkCtx_.recordShadowPass(instances, resources);
 
     dash::vkexp::Mat4 ssaoViewProj{};
@@ -3057,8 +3257,12 @@ void EditorApp::renderWorldToTexture()
         params.opaqueLayout      = opaqueLayout;
         params.billboardPipeline = vkCtx_.billboardPipeline();
         params.billboardLayout   = vkCtx_.billboardPipelineLayout();
+        params.skinnedPipeline   = vkCtx_.skinnedPipeline();
+        params.skinnedLayout     = vkCtx_.skinnedPipelineLayout();
         params.defaultSet        = ds;
         params.fallbackMesh      = &vkCtx_.cubeMesh();
+        params.boneSet           = vkCtx_.boneDescriptorSet();
+        params.bonePalette       = &vkCtx_.bonePalette();
         params.lights            = useSceneLights ? &sceneLights : nullptr;
         params.cameraRight       = camRight;
         params.cameraUp          = camUp;
@@ -3482,11 +3686,20 @@ void EditorApp::focusCameraOnEntities()
     camY_ = WORLD_H / 2.f;
 }
 
+void EditorApp::regenerateWorld()
+{
+    world_.generate(scene_.worldSeed, biomeTable_.empty() ? nullptr : &biomeTable_);
+    applySceneToWorld();
+    // The viewport draws an uploaded copy of the mesh, so it has to be refreshed
+    // or the panel keeps showing the previous world.
+    vkCtx_.updateTerrainMesh(world_.terrain());
+}
+
 void EditorApp::newScene()
 {
     scene_.createDefault();
     syncUIRender3DSettingsFromScene();
-    world_.generate(scene_.worldSeed);
+    regenerateWorld();
     clearSelection();
     commandStack_.clear();
     camX_ = WORLD_W / 2.f;
@@ -3638,28 +3851,27 @@ void EditorApp::saveScene(const std::string& path)
     const std::string fileName = fs::path(path).filename().string();
     const bool sqliteScenes = projectManager_.hasActiveProject() && sqliteModeEnabled();
 
+    // Disk first: the .json is the versioned artifact the runtime loads, SQLite
+    // is only a cache. Writing it before the row keeps `updated_at` >= mtime, so
+    // the next project open does not mistake this save for an external edit.
+    if (!scene_.saveToFile(path)) {
+        addLog("ERROR: Could not write scene file: " + path);
+        return;
+    }
+    addLog("Saved: " + path + " (v" + std::to_string(SceneData::kCurrentVersion) + ")");
+
     if (sqliteScenes) {
         const fs::path dbPath = projectSqlitePath(projectManager_.manifest());
         SceneRepositorySqlite repo(dbPath.string());
         std::string error;
-        if (repo.saveScene(fileName, scene_, &error)) {
-            scene_.filePath = (fs::path(scenesDir_) / fileName).string();
-            scene_.modified = false;
-            addLog("Saved (SQLite): " + fileName + " (v" + std::to_string(SceneData::kCurrentVersion) + ")");
-            refreshSceneFiles();
-            selectedSceneFile_ = fileName;
-            return;
-        }
-        addLog("[SCENE] SQLite save failed, fallback to JSON: " + error);
+        if (repo.saveScene(fileName, scene_, &error))
+            addLog("Cached (SQLite): " + fileName);
+        else
+            addLog("[SCENE] SQLite cache update failed: " + error);
     }
 
-    if (scene_.saveToFile(path)) {
-        addLog("Saved: " + path + " (v" + std::to_string(SceneData::kCurrentVersion) + ")");
-        refreshSceneFiles();
-        selectedSceneFile_ = fileName;
-    } else {
-        addLog("ERROR: Could not write scene file: " + path);
-    }
+    refreshSceneFiles();
+    selectedSceneFile_ = fileName;
 }
 
 void EditorApp::openScene(const std::string& path)
@@ -3679,7 +3891,7 @@ void EditorApp::openScene(const std::string& path)
                 for (auto& err : scene_.loadErrors)
                     addLog("  [load] " + err);
 
-                world_.generate(scene_.worldSeed);
+                world_.generate(scene_.worldSeed, biomeTable_.empty() ? nullptr : &biomeTable_);
                 applySceneToWorld();
                 clearSelection();
                 commandStack_.clear();
@@ -3698,7 +3910,7 @@ void EditorApp::openScene(const std::string& path)
         for (auto& err : scene_.loadErrors)
             addLog("  [load] " + err);
 
-        world_.generate(scene_.worldSeed);
+        world_.generate(scene_.worldSeed, biomeTable_.empty() ? nullptr : &biomeTable_);
         applySceneToWorld();
         clearSelection();
         commandStack_.clear();

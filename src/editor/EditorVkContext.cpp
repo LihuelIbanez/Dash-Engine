@@ -1,5 +1,6 @@
 #include "EditorVkContext.h"
 #include "rendering/vulkan/PipelineBuilder.h"
+#include "rendering/mesh/ProceduralMeshUpload.h"
 #include "rendering/mesh/TerrainVertex.h"
 #include "imgui_impl_vulkan.h"
 #include "imgui_impl_sdl2.h"
@@ -248,6 +249,13 @@ bool EditorVkContext::init(SDL_Window* window)
     // ── Scene descriptors (UBO for camera) ──────────────────────────────────
     if (!createSceneDescriptors()) return false;
 
+    // Before every pipeline: the skinned scene pipeline and both depth passes
+    // take boneSetLayout_ as their set 1.
+    if (!createBoneResources()) {
+        std::fprintf(stderr, "[EditorVk] Bone palette unavailable; skinned meshes draw in bind pose.\n");
+        destroyBoneResources();
+    }
+
     // ── HDR scene target: every viewport pipeline targets this pass ─────────
     if (!hdr_.init(deviceCtx_.device())) {
         std::fprintf(stderr, "[EditorVk] HDR target init failed.\n");
@@ -305,27 +313,17 @@ bool EditorVkContext::init(SDL_Window* window)
         return false;
     }
 
-    // Depth-only casters. The viewport has no bone palette, so skinned meshes
-    // cast their bind-pose silhouette.
+    // Depth-only casters. Skinned casters follow the animated pose when the bone
+    // palette came up; otherwise they fall back to their bind-pose silhouette.
     if (shadowMap_.valid()) {
         shadowMap_.createPipelines(deviceCtx_.device(), VULKAN_SHADER_DIR,
-                                   sceneDescLayout_, VK_NULL_HANDLE);
+                                   sceneDescLayout_, boneSetLayout_);
     }
 
     ssao_.init(deviceCtx_.device(), VULKAN_SHADER_DIR);
 
     // ── Cube mesh (for entity rendering) ────────────────────────────────────
     cubeMeshBuf_.initCube(deviceCtx_.physicalDevice(), deviceCtx_.device());
-
-    // ── Wolf GLTF mesh (for enemy entities) ────────────────────────────────
-#ifdef VULKAN_MODEL_DIR
-    {
-        std::string wolfPath = std::string(VULKAN_MODEL_DIR) + "/Wolf-Blender-2.82a.gltf";
-        if (!wolfMeshBuf_.initFromGLTF(deviceCtx_.physicalDevice(), deviceCtx_.device(), wolfPath)) {
-            std::fprintf(stderr, "[EditorVkContext] Warning: could not load wolf model, enemies will use cube fallback\n");
-        }
-    }
-#endif
 
     // ── ImGui Vulkan backend init ───────────────────────────────────────────
     {
@@ -635,20 +633,145 @@ bool EditorVkContext::createPipelines()
         billboardPipelineLayout_ = VK_NULL_HANDLE;
     }
 
+    // Skinning is optional: without it animated meshes just draw in bind pose.
+    if (boneSetLayout_ != VK_NULL_HANDLE) {
+        if (!PipelineBuilder::createSkinnedPipeline(dev, ext, scenePass,
+                sceneDescLayout_, boneSetLayout_,
+                shaderDir + "/skinned.vert.spv",
+                shaderDir + (shadows ? "/skinned_shadow.frag.spv" : "/skinned_lit.frag.spv"),
+                skinnedPipelineLayout_, skinnedPipeline_, err)) {
+            std::fprintf(stderr, "[EditorVk] Skinned pipeline: %s (bind pose only)\n", err.c_str());
+            skinnedPipeline_ = VK_NULL_HANDLE;
+            skinnedPipelineLayout_ = VK_NULL_HANDLE;
+        }
+    }
+
     return true;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Bone palette — one dynamic-offset UBO shared by every skinned draw. Slots are
+// padded to the device alignment, and the buffer carries one disjoint region per
+// frame in flight so a frame being recorded never overwrites poses the GPU is
+// still reading. Mirrors Renderer::createBoneResources so both paths bind the
+// same set 1 and partition the same way.
+// ─────────────────────────────────────────────────────────────────────────────
+bool EditorVkContext::createBoneResources()
+{
+    VkDevice dev = deviceCtx_.device();
+
+    VkPhysicalDeviceProperties props{};
+    vkGetPhysicalDeviceProperties(deviceCtx_.physicalDevice(), &props);
+    const VkDeviceSize align = std::max<VkDeviceSize>(
+        props.limits.minUniformBufferOffsetAlignment, 1);
+
+    constexpr uint32_t kSlotsPerFrame = 64;
+    const uint32_t regions = std::max<uint32_t>(swapchain_.imageCount(), 1);
+    const uint32_t stride = static_cast<uint32_t>(
+        ((dash::anim::kBonePaletteBytes + align - 1) / align) * align);
+
+    if (!createBuffer(deviceCtx_.physicalDevice(), dev,
+                      static_cast<VkDeviceSize>(stride) * kSlotsPerFrame * regions,
+                      VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                      boneBuffer_, boneMemory_)) {
+        std::fprintf(stderr, "[EditorVk] Failed to create bone palette buffer.\n");
+        return false;
+    }
+
+    void* mapped = nullptr;
+    if (vkMapMemory(dev, boneMemory_, 0, VK_WHOLE_SIZE, 0, &mapped) != VK_SUCCESS) {
+        std::fprintf(stderr, "[EditorVk] Failed to map bone palette buffer.\n");
+        return false;
+    }
+    bonePalette_.mapped = static_cast<unsigned char*>(mapped);
+    bonePalette_.slotStride = stride;
+    bonePalette_.regionSlots = kSlotsPerFrame;
+    bonePalette_.regionCount = regions;
+
+    VkDescriptorSetLayoutBinding binding{};
+    binding.binding = 0;
+    binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+    binding.descriptorCount = 1;
+    binding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+
+    VkDescriptorSetLayoutCreateInfo lci{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
+    lci.bindingCount = 1; lci.pBindings = &binding;
+    if (vkCreateDescriptorSetLayout(dev, &lci, nullptr, &boneSetLayout_) != VK_SUCCESS)
+        return false;
+
+    VkDescriptorPoolSize poolSize{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1};
+    VkDescriptorPoolCreateInfo pci{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
+    pci.maxSets = 1; pci.poolSizeCount = 1; pci.pPoolSizes = &poolSize;
+    if (vkCreateDescriptorPool(dev, &pci, nullptr, &boneDescPool_) != VK_SUCCESS)
+        return false;
+
+    VkDescriptorSetAllocateInfo dsai{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
+    dsai.descriptorPool = boneDescPool_; dsai.descriptorSetCount = 1;
+    dsai.pSetLayouts = &boneSetLayout_;
+    if (vkAllocateDescriptorSets(dev, &dsai, &boneSet_) != VK_SUCCESS)
+        return false;
+
+    VkDescriptorBufferInfo bufInfo{};
+    bufInfo.buffer = boneBuffer_;
+    bufInfo.offset = 0;
+    bufInfo.range = dash::anim::kBonePaletteBytes;
+
+    VkWriteDescriptorSet write{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+    write.dstSet = boneSet_;
+    write.dstBinding = 0;
+    write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+    write.descriptorCount = 1;
+    write.pBufferInfo = &bufInfo;
+    vkUpdateDescriptorSets(dev, 1, &write, 0, nullptr);
+
+    std::fprintf(stdout, "[EditorVk][Skin] Bone palette ready: %u frame region(s) x %u slots"
+                 " of %u bytes (%u bones max, %llu bytes total).\n",
+                 regions, kSlotsPerFrame, stride, dash::anim::kBonePaletteMatrixCount,
+                 static_cast<unsigned long long>(bonePalette_.bufferBytes()));
+    for (uint32_t r = 0; r < regions; ++r) {
+        std::fprintf(stdout, "[EditorVk][Skin]   frame region %u: bytes [%u, %u)\n",
+                     r, r * bonePalette_.regionStride(),
+                     (r + 1) * bonePalette_.regionStride());
+    }
+    return true;
+}
+
+void EditorVkContext::destroyBoneResources()
+{
+    VkDevice dev = deviceCtx_.device();
+    if (dev == VK_NULL_HANDLE) return;
+
+    PipelineBuilder::destroy(dev, skinnedPipelineLayout_, skinnedPipeline_);
+    skinnedPipelineLayout_ = VK_NULL_HANDLE;
+    skinnedPipeline_ = VK_NULL_HANDLE;
+
+    if (boneDescPool_) {
+        vkDestroyDescriptorPool(dev, boneDescPool_, nullptr);
+        boneDescPool_ = VK_NULL_HANDLE;
+        boneSet_ = VK_NULL_HANDLE;
+    }
+    if (boneSetLayout_) {
+        vkDestroyDescriptorSetLayout(dev, boneSetLayout_, nullptr);
+        boneSetLayout_ = VK_NULL_HANDLE;
+    }
+    if (bonePalette_.mapped != nullptr) {
+        vkUnmapMemory(dev, boneMemory_);
+        bonePalette_ = dash::anim::BonePalette{};
+    }
+    if (boneBuffer_) { vkDestroyBuffer(dev, boneBuffer_, nullptr); boneBuffer_ = VK_NULL_HANDLE; }
+    if (boneMemory_) { vkFreeMemory(dev, boneMemory_, nullptr);    boneMemory_ = VK_NULL_HANDLE; }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Mesh resolution — mirrors Renderer::resolveMesh so the viewport and the
 // runtime pick the same model for a given RenderComponent::mesh.
 // ─────────────────────────────────────────────────────────────────────────────
-const dash::vkexp::MeshBuffers* EditorVkContext::resolveMesh(const std::string& meshId)
+std::string EditorVkContext::resolveModelPath(const std::string& meshId) const
 {
-    if (meshId.empty() || meshId == "cube") return nullptr;
-
-    if (CachedModel* cached = meshCache_.get(meshId)) {
-        return cached->meshBuffers.indexCount() > 0 ? &cached->meshBuffers : nullptr;
-    }
+    if (meshId.empty() || meshId == "cube") return {};
+    // Procedural ids are generated, never loaded, so they have no file on disk.
+    if (dash::procmesh::isProceduralMeshId(meshId)) return {};
 
     namespace fs = std::filesystem;
     std::error_code ec;
@@ -663,20 +786,50 @@ const dash::vkexp::MeshBuffers* EditorVkContext::resolveMesh(const std::string& 
         candidates.push_back(raw);
     }
 
-    fs::path resolved;
     for (const auto& c : candidates) {
-        if (fs::exists(c, ec) && fs::is_regular_file(c, ec)) { resolved = c; break; }
+        if (fs::exists(c, ec) && fs::is_regular_file(c, ec)) return c.string();
         ec.clear();
     }
+    return {};
+}
+
+const dash::vkexp::MeshBuffers* EditorVkContext::resolveMesh(const std::string& meshId)
+{
+    if (meshId.empty() || meshId == "cube") return nullptr;
+
+    if (CachedModel* cached = meshCache_.get(meshId)) {
+        return cached->meshBuffers.indexCount() > 0 ? &cached->meshBuffers : nullptr;
+    }
+
+    if (dash::procmesh::isProceduralMeshId(meshId)) {
+        CachedModel generated;
+        if (!dash::procmesh::uploadProceduralMesh(meshId, "(editor)",
+                                                  deviceCtx_.physicalDevice(),
+                                                  deviceCtx_.device(),
+                                                  generated.meshBuffers)) {
+            generated.meshBuffers.shutdown(deviceCtx_.device());
+        }
+        CachedModel& proc = meshCache_.store(meshId, std::move(generated));
+        return proc.meshBuffers.indexCount() > 0 ? &proc.meshBuffers : nullptr;
+    }
+
+    const std::string resolved = resolveModelPath(meshId);
 
     CachedModel model;
     if (resolved.empty()) {
         std::fprintf(stderr, "[EditorVk] Mesh not found: '%s' (using builtin cube)\n", meshId.c_str());
-    } else if (!model.meshBuffers.initFromGLTF(deviceCtx_.physicalDevice(),
-                                               deviceCtx_.device(),
-                                               resolved.string())) {
-        std::fprintf(stderr, "[EditorVk] Failed to load mesh: %s\n", resolved.string().c_str());
-        model.meshBuffers.shutdown(deviceCtx_.device());
+    } else {
+        // .dashmesh carries the skinning stream; anything else goes through Assimp.
+        const bool isDashMesh = std::filesystem::path(resolved).extension() == ".dashmesh";
+        const bool loaded = isDashMesh
+            ? model.meshBuffers.initFromDashMesh(deviceCtx_.physicalDevice(),
+                                                 deviceCtx_.device(), resolved)
+            : model.meshBuffers.initFromGLTF(deviceCtx_.physicalDevice(),
+                                             deviceCtx_.device(), resolved);
+        if (!loaded) {
+            std::fprintf(stderr, "[EditorVk] Failed to load mesh: %s\n", resolved.c_str());
+            model.meshBuffers.shutdown(deviceCtx_.device());
+        }
     }
 
     // Failures are cached too so a missing model is not retried every frame.
@@ -708,7 +861,7 @@ bool EditorVkContext::createOffscreenTarget(uint32_t w, uint32_t h)
     // The prepass pipelines bake in that size and destroyResources() drops them,
     // so they are rebuilt here rather than once at init.
     if (ssao_.createResources(pd, dev, w, h) && sceneDescSet_ != VK_NULL_HANDLE) {
-        ssao_.createPipelines(dev, VULKAN_SHADER_DIR, sceneDescLayout_, VK_NULL_HANDLE);
+        ssao_.createPipelines(dev, VULKAN_SHADER_DIR, sceneDescLayout_, boneSetLayout_);
 
         VkDescriptorImageInfo ssaoInfo{};
         ssaoInfo.sampler = ssao_.sampler();
@@ -1030,8 +1183,12 @@ void EditorVkContext::recordShadowPass(const std::vector<RenderInstance>& instan
             params.opaqueLayout      = shadowMap_.pipelineLayout();
             params.billboardPipeline = shadowMap_.billboardPipeline();
             params.billboardLayout   = shadowMap_.billboardPipelineLayout();
+            params.skinnedPipeline   = shadowMap_.skinnedPipeline();
+            params.skinnedLayout     = shadowMap_.skinnedPipelineLayout();
             params.defaultSet        = sceneDescSet_;
             params.fallbackMesh      = &cubeMeshBuf_;
+            params.boneSet           = boneSet_;
+            params.bonePalette       = &bonePalette_;
             // Culling then happens against this cascade's frustum.
             params.viewProj          = shadowMatrices_[cascade];
             params.cameraRight       = lightRight;
@@ -1089,8 +1246,12 @@ void EditorVkContext::recordSsaoPass(const std::vector<RenderInstance>& instance
         params.opaqueLayout      = ssao_.depthPipelineLayout();
         params.billboardPipeline = ssao_.billboardPipeline();
         params.billboardLayout   = ssao_.billboardPipelineLayout();
+        params.skinnedPipeline   = ssao_.skinnedPipeline();
+        params.skinnedLayout     = ssao_.skinnedPipelineLayout();
         params.defaultSet        = sceneDescSet_;
         params.fallbackMesh      = &cubeMeshBuf_;
+        params.boneSet           = boneSet_;
+        params.bonePalette       = &bonePalette_;
         params.viewProj          = viewProj;
 
         drawSceneInstances(cmd, instances, resources, LightingParams{}, params);
@@ -1160,7 +1321,6 @@ void EditorVkContext::shutdown()
     destroyOffscreenTarget();
 
     cubeMeshBuf_.shutdown(dev);
-    wolfMeshBuf_.shutdown(dev);
     terrainMeshBuf_.shutdown(dev);
     waterMeshBuf_.shutdown(dev);
     meshCache_.clear(dev);
@@ -1170,6 +1330,8 @@ void EditorVkContext::shutdown()
 
     shadowMap_.shutdown(dev);
     ssao_.shutdown(dev);
+
+    destroyBoneResources();
 
     // Terrain texture arrays
     destroyTerrainTextureSet(dev, terrainTextures_);

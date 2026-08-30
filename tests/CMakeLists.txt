@@ -662,6 +662,40 @@ dash_add_test(test_runtime3d_agent_ai test_runtime3d_agent_ai.cpp)
 # ── 3D runtime navigation vs. terrain cliff tiers (T2) ──────────────────────
 dash_add_test(test_runtime3d_cliff_nav test_runtime3d_cliff_nav.cpp)
 
+# ── Generadores de mallas procedurales (low-poly facetado) ──────────────────
+# ProceduralMesh.cpp no toca Vulkan: el test corre headless contra los buffers
+# en memoria, sin device ni swapchain.
+add_executable(test_procedural_mesh
+    test_procedural_mesh.cpp
+    ${CMAKE_SOURCE_DIR}/src/rendering/mesh/ProceduralMesh.cpp
+)
+target_include_directories(test_procedural_mesh PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_compile_options(test_procedural_mesh PRIVATE ${DASH_COMPILE_FLAGS})
+add_test(NAME test_procedural_mesh COMMAND test_procedural_mesh)
+
+# ── 3D runtime: input de ataque del jugador + LootDropEvent ─────────────────
+# Corre EnemySimulation3D de verdad, sin Vulkan y sin TerrainMesh. Necesita
+# VULKAN_ASSETS_DIR para que resuelva assets/gameplay/loot_tables.json.
+add_executable(test_runtime3d_attack_loot
+    test_runtime3d_attack_loot.cpp
+    ${CMAKE_SOURCE_DIR}/src/game/runtime3d/EnemySimulation3D.cpp
+)
+target_include_directories(test_runtime3d_attack_loot PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/src/core
+    ${CMAKE_SOURCE_DIR}/src/core/events
+    ${CMAKE_SOURCE_DIR}/src/game
+    ${SDL2_INCLUDE_DIRS}
+)
+target_compile_definitions(test_runtime3d_attack_loot PRIVATE
+    VULKAN_ASSETS_DIR="${CMAKE_SOURCE_DIR}/assets"
+)
+target_link_libraries(test_runtime3d_attack_loot PRIVATE
+    game_core nlohmann_json::nlohmann_json ${SDL2_LIBRARIES}
+)
+target_compile_options(test_runtime3d_attack_loot PRIVATE ${DASH_COMPILE_FLAGS})
+add_test(NAME test_runtime3d_attack_loot COMMAND test_runtime3d_attack_loot)
+
 # ── Combat VFX: particle pool, transient lights, camera feedback (T3) ───────
 dash_add_test(test_particle_system test_particle_system.cpp)
 
@@ -888,6 +922,29 @@ target_include_directories(test_bone_structure PRIVATE
 target_compile_options(test_bone_structure PRIVATE ${DASH_COMPILE_FLAGS})
 add_test(NAME test_bone_structure COMMAND test_bone_structure)
 
+# ── BonePalette: particion por frame en vuelo del UBO de huesos ─────────────
+# BonePalette.h es header-only y no toca Vulkan: el test corre sobre memoria
+# propia y verifica que las regiones de frames distintos no se solapen.
+add_executable(test_bone_palette test_bone_palette.cpp)
+target_include_directories(test_bone_palette PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+)
+target_compile_options(test_bone_palette PRIVATE ${DASH_COMPILE_FLAGS})
+add_test(NAME test_bone_palette COMMAND test_bone_palette)
+
+# ── StateMachinePanel: validacion del grafo y round-trip de .animsm.json ─────
+# Logica pura del panel (header-only): sin ImGui y sin SDL. Solo nlohmann, que
+# es lo unico que AnimationStateMachineFile.h necesita para leer y escribir.
+add_executable(test_state_machine_panel test_state_machine_panel.cpp)
+target_include_directories(test_state_machine_panel PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/src/editor
+)
+target_link_libraries(test_state_machine_panel PRIVATE nlohmann_json::nlohmann_json)
+target_compile_definitions(test_state_machine_panel PRIVATE PROJECT_DIR="${CMAKE_SOURCE_DIR}")
+target_compile_options(test_state_machine_panel PRIVATE ${DASH_COMPILE_FLAGS})
+add_test(NAME test_state_machine_panel COMMAND test_state_machine_panel)
+
 # ── AnimationComponent -> AnimationPlayer wiring ────────────────────────────
 # buildAnimators() and AnimationSetCache are header-only and Vulkan-free, so
 # this runs headless: no device, no swapchain, just RenderInstance + files.
@@ -903,6 +960,24 @@ target_include_directories(test_animation_wiring PRIVATE
 )
 target_compile_options(test_animation_wiring PRIVATE ${DASH_COMPILE_FLAGS})
 add_test(NAME test_animation_wiring COMMAND test_animation_wiring)
+
+# ── AnimationPanel: el scrub del reproductor contra el lobo versionado ───────
+# Necesita AnimationPlayer.cpp igual que test_animation_wiring; el resto del
+# panel (SceneData, ImGui) queda fuera porque scrubTo es header-only.
+add_executable(test_animation_panel
+    test_animation_panel.cpp
+    ${CMAKE_SOURCE_DIR}/src/rendering/animation/AnimationPlayer.cpp
+)
+target_include_directories(test_animation_panel PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/src/core
+    ${CMAKE_SOURCE_DIR}/src/core/components
+    ${CMAKE_SOURCE_DIR}/src/editor
+    ${SDL2_INCLUDE_DIRS}
+)
+target_compile_definitions(test_animation_panel PRIVATE PROJECT_DIR="${CMAKE_SOURCE_DIR}")
+target_compile_options(test_animation_panel PRIVATE ${DASH_COMPILE_FLAGS})
+add_test(NAME test_animation_panel COMMAND test_animation_panel)
 
 # ── Offline asset baker (not a test) ────────────────────────────────────────
 # Writes the .dashmesh/.dashskel/.dashanim triplet the runtime loads. Kept out

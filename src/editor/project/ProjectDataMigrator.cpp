@@ -8,15 +8,40 @@
 #include <nlohmann/json.hpp>
 #include <sqlite3.h>
 
+#include <algorithm>
 #include <chrono>
 #include <ctime>
 #include <filesystem>
 #include <fstream>
+#include <map>
+#include <string>
+
+#if defined(_WIN32)
+#include <sys/stat.h>
+#include <sys/types.h>
+#else
+#include <sys/stat.h>
+#endif
 
 namespace fs = std::filesystem;
 using json = nlohmann::json;
 
 namespace {
+
+// Unix seconds, read straight from the OS: converting file_time_type through
+// two clock now() calls jitters across a second boundary and would re-import
+// unchanged scenes.
+std::int64_t fileMtimeSeconds(const fs::path& path)
+{
+#if defined(_WIN32)
+    struct __stat64 st {};
+    if (_wstat64(path.wstring().c_str(), &st) != 0) return 0;
+#else
+    struct stat st {};
+    if (::stat(path.c_str(), &st) != 0) return 0;
+#endif
+    return static_cast<std::int64_t>(st.st_mtime);
+}
 
 std::string migrationsDirPath()
 {
@@ -304,6 +329,52 @@ bool migrateAssetDb(const fs::path& assetsDir, SqliteDb& db, ProjectDataMigrator
     return true;
 }
 
+constexpr const char* kInsertSceneSql =
+    "INSERT OR REPLACE INTO scenes("
+    "scene_id, file_name, scene_name, world_seed, next_entity_id, scene_version, raw_json, updated_at"
+    ") VALUES(?, ?, ?, ?, ?, ?, ?, ?);";
+
+// `updated_at` is stamped with the source file mtime, not the wall clock, so a
+// later run can tell whether the .json changed behind the cache's back.
+bool upsertSceneFromFile(SqliteStatement& stmt,
+                         const fs::path& file,
+                         const fs::path& assetsDir,
+                         std::string* error)
+{
+    const std::string fileName = file.filename().string();
+
+    SceneData scene;
+    if (!scene.loadFromFile(file.string(), assetsDir.string())) {
+        if (error) *error = "Failed loading scene: " + fileName;
+        return false;
+    }
+
+    std::string rawJson;
+    if (!scene.saveToJsonString(rawJson)) {
+        if (error) *error = "Failed serializing scene json: " + fileName;
+        return false;
+    }
+
+    const std::string sceneId = file.stem().string();
+    const std::string sceneName = scene.sceneName.empty() ? sceneId : scene.sceneName;
+
+    if (!stmt.reset() || !stmt.clearBindings()
+        || !stmt.bindText(1, sceneId)
+        || !stmt.bindText(2, fileName)
+        || !stmt.bindText(3, sceneName)
+        || !stmt.bindInt64(4, static_cast<std::int64_t>(scene.worldSeed))
+        || !stmt.bindInt64(5, static_cast<std::int64_t>(scene.nextEntityId))
+        || !stmt.bindInt(6, scene.sceneVersion)
+        || !stmt.bindText(7, rawJson)
+        || !stmt.bindInt64(8, fileMtimeSeconds(file))
+        || stmt.step() != SQLITE_DONE) {
+        if (error) *error = "Failed inserting scene row: " + fileName;
+        return false;
+    }
+
+    return true;
+}
+
 bool migrateScenes(const fs::path& scenesDir,
                    const fs::path& assetsDir,
                    SqliteDb& db,
@@ -316,11 +387,7 @@ bool migrateScenes(const fs::path& scenesDir,
     }
 
     std::string error;
-    auto insertScene = db.prepare(
-        "INSERT OR REPLACE INTO scenes("
-        "scene_id, file_name, scene_name, world_seed, next_entity_id, scene_version, raw_json, updated_at"
-        ") VALUES(?, ?, ?, ?, ?, ?, ?, strftime('%s','now'));",
-        &error);
+    auto insertScene = db.prepare(kInsertSceneSql, &error);
     if (!insertScene.isValid()) {
         logError(res, "[Migrator] Could not prepare scenes insert statement: " + error);
         return false;
@@ -335,32 +402,9 @@ bool migrateScenes(const fs::path& scenesDir,
         if (!entry.is_regular_file()) continue;
         if (entry.path().extension() != ".json") continue;
 
-        SceneData scene;
-        if (!scene.loadFromFile(entry.path().string(), assetsDir.string())) {
-            logError(res, "[Migrator] Failed loading scene for migration: " + entry.path().filename().string());
-            return false;
-        }
-
-        std::string rawJson;
-        if (!scene.saveToJsonString(rawJson)) {
-            logError(res, "[Migrator] Failed serializing scene json: " + entry.path().filename().string());
-            return false;
-        }
-
-        const std::string fileName = entry.path().filename().string();
-        const std::string sceneId = entry.path().stem().string();
-        const std::string sceneName = scene.sceneName.empty() ? sceneId : scene.sceneName;
-
-        if (!insertScene.reset() || !insertScene.clearBindings()
-            || !insertScene.bindText(1, sceneId)
-            || !insertScene.bindText(2, fileName)
-            || !insertScene.bindText(3, sceneName)
-            || !insertScene.bindInt64(4, static_cast<std::int64_t>(scene.worldSeed))
-            || !insertScene.bindInt64(5, static_cast<std::int64_t>(scene.nextEntityId))
-            || !insertScene.bindInt(6, scene.sceneVersion)
-            || !insertScene.bindText(7, rawJson)
-            || insertScene.step() != SQLITE_DONE) {
-            logError(res, "[Migrator] Failed inserting scene row: " + fileName);
+        std::string sceneError;
+        if (!upsertSceneFromFile(insertScene, entry.path(), assetsDir, &sceneError)) {
+            logError(res, "[Migrator] " + sceneError);
             return false;
         }
 
@@ -505,5 +549,135 @@ ProjectDataMigrator::Result ProjectDataMigrator::migrateJsonToSqlite(const Proje
     res.success = true;
     logLine(res, "[Migrator] Migration completed successfully.");
     finish();
+    return res;
+}
+
+ProjectDataMigrator::SceneSyncResult
+ProjectDataMigrator::syncScenesFromDisk(const ProjectManifest& manifest)
+{
+    SceneSyncResult res;
+
+    const fs::path assetsDir = manifest.absoluteAssetsDir();
+    const fs::path scenesDir = manifest.absoluteScenesDir();
+    const fs::path dbPath = fs::path(manifest.absoluteLibraryDir()) / "dash_engine.db";
+    res.dbPath = dbPath.string();
+
+    std::error_code ec;
+    if (!fs::is_directory(scenesDir, ec)) {
+        res.log.push_back("[SceneSync] scenes directory not found: " + scenesDir.string());
+        return res;
+    }
+
+    SqliteDb db;
+    std::string error;
+    if (!db.open(dbPath.string(), &error)) {
+        ++res.summary.errorCount;
+        res.log.push_back("[SceneSync] Could not open SQLite DB: " + error);
+        return res;
+    }
+
+    if (!SchemaManager::applyMigrations(db, migrationsDirPath(), nullptr)) {
+        ++res.summary.errorCount;
+        res.log.push_back("[SceneSync] Failed applying schema migrations.");
+        return res;
+    }
+
+    std::map<std::string, std::int64_t> cached;
+    {
+        auto select = db.prepare("SELECT file_name, updated_at FROM scenes;", &error);
+        if (!select.isValid()) {
+            ++res.summary.errorCount;
+            res.log.push_back("[SceneSync] Could not read scenes table: " + error);
+            return res;
+        }
+        while (true) {
+            const int rc = select.step();
+            if (rc == SQLITE_DONE) break;
+            if (rc != SQLITE_ROW) {
+                ++res.summary.errorCount;
+                res.log.push_back("[SceneSync] Failed iterating scenes rows.");
+                return res;
+            }
+            cached[select.columnText(0)] = select.columnInt64(1);
+        }
+    }
+
+    std::vector<fs::path> onDisk;
+    for (const auto& entry : fs::directory_iterator(scenesDir, ec)) {
+        if (ec) {
+            ++res.summary.errorCount;
+            res.log.push_back("[SceneSync] Error reading scenes directory.");
+            return res;
+        }
+        if (!entry.is_regular_file()) continue;
+        if (entry.path().extension() != ".json") continue;
+        onDisk.push_back(entry.path());
+    }
+
+    if (!db.beginTransaction(&error)) {
+        ++res.summary.errorCount;
+        res.log.push_back("[SceneSync] Could not start transaction: " + error);
+        return res;
+    }
+
+    auto insertScene = db.prepare(kInsertSceneSql, &error);
+    auto deleteScene = db.prepare("DELETE FROM scenes WHERE file_name = ?;", &error);
+    if (!insertScene.isValid() || !deleteScene.isValid()) {
+        db.rollback(nullptr);
+        ++res.summary.errorCount;
+        res.log.push_back("[SceneSync] Could not prepare statements: " + error);
+        return res;
+    }
+
+    for (const auto& file : onDisk) {
+        const std::string fileName = file.filename().string();
+        const auto it = cached.find(fileName);
+        if (it != cached.end() && fileMtimeSeconds(file) <= it->second) {
+            ++res.summary.upToDate;
+            continue;
+        }
+
+        std::string sceneError;
+        if (!upsertSceneFromFile(insertScene, file, assetsDir, &sceneError)) {
+            db.rollback(nullptr);
+            ++res.summary.errorCount;
+            res.log.push_back("[SceneSync] " + sceneError);
+            return res;
+        }
+        ++res.summary.imported;
+        res.log.push_back("[SceneSync] Re-imported from disk: " + fileName);
+    }
+
+    for (const auto& [fileName, updatedAt] : cached) {
+        (void)updatedAt;
+        const bool stillOnDisk = std::any_of(
+            onDisk.begin(), onDisk.end(),
+            [&](const fs::path& p) { return p.filename().string() == fileName; });
+        if (stillOnDisk) continue;
+
+        if (!deleteScene.reset() || !deleteScene.clearBindings()
+            || !deleteScene.bindText(1, fileName)
+            || deleteScene.step() != SQLITE_DONE) {
+            db.rollback(nullptr);
+            ++res.summary.errorCount;
+            res.log.push_back("[SceneSync] Failed dropping stale scene row: " + fileName);
+            return res;
+        }
+        ++res.summary.removed;
+        res.log.push_back("[SceneSync] Dropped row with no file on disk: " + fileName);
+    }
+
+    if (!db.commit(&error)) {
+        db.rollback(nullptr);
+        ++res.summary.errorCount;
+        res.log.push_back("[SceneSync] Could not commit transaction: " + error);
+        return res;
+    }
+
+    res.success = true;
+    res.log.push_back("[SceneSync] Scenes cache synced: "
+                      + std::to_string(res.summary.imported) + " imported, "
+                      + std::to_string(res.summary.upToDate) + " up to date, "
+                      + std::to_string(res.summary.removed) + " removed.");
     return res;
 }

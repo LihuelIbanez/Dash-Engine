@@ -11,7 +11,9 @@ struct InputBindings3D {
     int keyBackward  = 83;  // GLFW_KEY_S
     int keyLeft      = 65;  // GLFW_KEY_A
     int keyRight     = 68;  // GLFW_KEY_D
+    int keyAttack    = 32;  // GLFW_KEY_SPACE
     int mouseButtonLook = 1; // GLFW_MOUSE_BUTTON_RIGHT
+    int mouseButtonAttack = 0; // GLFW_MOUSE_BUTTON_LEFT
 
     // Tunables
     float moveSpeed        = 2.4f;

@@ -18,6 +18,9 @@
 #include "ValidationPanel.h"
 #include "RuntimeInspectorPanel.h"
 #include "BoneStructurePanel.h"
+#include "BiomeDesignerPanel.h"
+#include "AnimationPanel.h"
+#include "StateMachinePanel.h"
 #include "SpriteEditorPanel.h"
 #include "AudioPanel.h"
 #include "WelcomePanel.h"
@@ -30,6 +33,7 @@
 #include "gizmos/TransformGizmo.h"
 #include "project/ProjectManager.h"
 #include "EditorVkContext.h"
+#include "rendering/animation/AnimationWiring.h"
 #include <string>
 #include <vector>
 #include <map>
@@ -166,6 +170,18 @@ private:
     // ── Skeleton authoring ────────────────────────────
     BoneStructurePanel           boneStructurePanel_;
     bool                         showBoneStructurePanel_ = false;
+    // ── Biome authoring ───────────────────────────────
+    BiomeDesignerPanel           biomeDesignerPanel_;
+    bool                         showBiomeDesignerPanel_ = false;
+    dash::world::BiomeTable      biomeTable_;
+    // Reloads assets/world/biomes.json; falls back to the built-in thresholds.
+    void loadBiomeTable();
+    void regenerateWorld();
+    // ── Animation authoring ───────────────────────────
+    AnimationPanel               animationPanel_;
+    bool                         showAnimationPanel_ = false;
+    StateMachinePanel            stateMachinePanel_;
+    bool                         showStateMachinePanel_ = false;
     bool                         showMigrationLogModal_ = false;
     bool                         migrationLastSuccess_ = false;
     std::string                  migrationSummaryText_;
@@ -209,6 +225,13 @@ private:
         float lightIntensity = 1.7f;
         float ambientStrength = 0.30f;
     } viewport3D_;
+
+    // ── Skeletal animation preview ───────────────────────────────────────────
+    // Keyed by entity id, not instance index: the instance vector is rebuilt
+    // every frame and reorders whenever entities are added or removed.
+    dash::anim::AnimationSetCache animationSets_;
+    std::unordered_map<uint64_t, dash::anim::AnimationPlayer> animators_;
+    size_t loggedAnimatorCount_ = 0;
 
     // Displayed size of the viewport image (for mouse coordinate mapping)
     float vpDisplayW_ = 1.f;
@@ -306,6 +329,7 @@ private:
     void drawSceneHierarchy();
     void drawPropertiesPanel();
     void drawTilePalette();
+    void drawViewportToolbar();
     void drawViewport();
     void drawBuildLog();
     void drawPerformancePanel();
@@ -330,6 +354,12 @@ private:
 
     // ── Viewport helpers ─────────────────────────────────────────────────────
     void renderWorldToTexture();
+
+    // Advances one AnimationPlayer per animated instance and writes its bone
+    // palette slot. Runs in Edit mode too: the viewport is the animation preview.
+    void updateViewportAnimators(float dt,
+                                 const std::vector<dash::vkexp::RenderInstance>& instances,
+                                 std::vector<dash::vkexp::InstanceResources>& resources);
     void getSpritePivot(const std::string& spriteName, float& outPivotX, float& outPivotY);
     Vec2f worldToScreenIso3D(float wx, float wy, float wz) const;
     float entityWorldZ(uint64_t entityId) const;

@@ -136,8 +136,9 @@ bool ProjectManager::migrateProjectDataToSqlite(bool force)
     const fs::path dbPath = fs::path(manifest_.absoluteLibraryDir()) / "dash_engine.db";
     if (!force && fs::exists(dbPath)) {
         lastMigrationStatus_.dbPath = dbPath.string();
-        lastMigrationStatus_.log.push_back("[Migrator] SQLite DB already exists, skipping migration.");
-        return true;
+        lastMigrationStatus_.log.push_back("[Migrator] SQLite DB already exists, skipping full migration.");
+        // The DB is only a cache; the scene rows still have to catch up with disk.
+        return syncScenesFromDisk();
     }
 
     lastMigrationStatus_.attempted = true;
@@ -154,6 +155,31 @@ bool ProjectManager::migrateProjectDataToSqlite(bool force)
     }
 
     return lastMigrationStatus_.success;
+}
+
+bool ProjectManager::syncScenesFromDisk()
+{
+    lastSceneSyncStatus_ = SceneSyncStatus{};
+    if (!active_) {
+        lastSceneSyncStatus_.log.push_back("[SceneSync] No active project.");
+        return false;
+    }
+
+    lastSceneSyncStatus_.attempted = true;
+    auto sync = ProjectDataMigrator::syncScenesFromDisk(manifest_);
+    lastSceneSyncStatus_.success = sync.success;
+    lastSceneSyncStatus_.log = std::move(sync.log);
+    lastSceneSyncStatus_.summary = sync.summary;
+
+    if (sync.success) {
+        std::fprintf(stdout,
+                     "[ProjectManager] Scenes cache synced from disk: %d imported, %d up to date, %d removed.\n",
+                     sync.summary.imported, sync.summary.upToDate, sync.summary.removed);
+    } else {
+        std::fprintf(stderr, "[ProjectManager] Scenes cache sync failed; SQLite scene rows may be stale\n");
+    }
+
+    return sync.success;
 }
 
 void ProjectManager::closeProject()

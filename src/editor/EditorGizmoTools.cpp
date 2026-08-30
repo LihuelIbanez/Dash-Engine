@@ -265,9 +265,12 @@ void EditorApp::drawHierarchyNode(uint64_t entityId, int depth)
 dash::gizmo::Vec3 EditorApp::entityGizmoPivot(uint64_t entityId)
 {
     const Transform3D w = dash::editor::worldTransform(scene_, entityId);
-    // Scene x/y is the tile plane and z is height; render space is y-up.
+    // Scene x/y is the tile plane and z is height; render space is y-up. This
+    // has to land on the instance origin the renderer draws around, which is the
+    // centre of its AABB: any extra offset shows up as a gizmo floating off the
+    // object, and a fixed one is wrong the moment meshes stop being unit cubes.
     return { w.x * TILE_SCALE,
-             world_.terrain().sampleHeight(w.x, w.y) + 0.6f + w.z,
+             world_.terrain().sampleHeight(w.x, w.y) + w.z,
              w.y * TILE_SCALE };
 }
 

@@ -2,7 +2,10 @@
 
 file(GLOB GAME_RUNTIME_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/runtime/*.cpp")
 file(GLOB GAME_SYSTEM_SOURCES  "${CMAKE_CURRENT_SOURCE_DIR}/systems/*.cpp")
+# GameplayDatabase.cpp lives in game_core: the 3D runtime needs it too and the
+# editor links game_runtime and vulkan_experimental into the same binary.
 file(GLOB GAME_DATA_SOURCES    "${CMAKE_CURRENT_SOURCE_DIR}/data/*.cpp")
+list(REMOVE_ITEM GAME_DATA_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/data/GameplayDatabase.cpp")
 file(GLOB GAME_SAVE_SOURCES    "${CMAKE_CURRENT_SOURCE_DIR}/save/*.cpp")
 file(GLOB GAME_RENDERING_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/rendering/*.cpp")
 file(GLOB GAME_AUDIO_SOURCES   "${CMAKE_CURRENT_SOURCE_DIR}/audio/*.cpp")

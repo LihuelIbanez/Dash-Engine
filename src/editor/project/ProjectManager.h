@@ -24,6 +24,13 @@ public:
         ProjectDataMigrator::Summary summary;
     };
 
+    struct SceneSyncStatus {
+        bool attempted = false;
+        bool success = false;
+        std::vector<std::string> log;
+        ProjectDataMigrator::SceneSyncSummary summary;
+    };
+
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
     // Create a new project directory at `dirPath` with the given name and
@@ -40,7 +47,12 @@ public:
     // If force is false, migration only runs when DB does not exist.
     bool migrateProjectDataToSqlite(bool force = false);
 
+    // Refresh the SQLite `scenes` cache from the .json files on disk, which are
+    // the source of truth. Cheap no-op when nothing changed.
+    bool syncScenesFromDisk();
+
     const MigrationStatus& lastMigrationStatus() const { return lastMigrationStatus_; }
+    const SceneSyncStatus& lastSceneSyncStatus() const { return lastSceneSyncStatus_; }
 
     // Close the active project (clears state; does not delete files).
     void closeProject();
@@ -69,4 +81,5 @@ private:
     bool                     active_ = false;
     std::vector<std::string> recentPaths_;
     MigrationStatus          lastMigrationStatus_;
+    SceneSyncStatus          lastSceneSyncStatus_;
 };

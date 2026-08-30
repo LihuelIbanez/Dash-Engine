@@ -22,7 +22,9 @@
 #include "rendering/Frustum.h"
 #include "rendering/vulkan/PipelineBuilder.h"
 #include "rendering/vulkan/SceneRenderer.h"
+#include "rendering/mesh/ProceduralMeshUpload.h"
 #include "rendering/mesh/TerrainVertex.h"
+#include "world/BiomeTableFile.h"
 #include "world/TerrainMesh.h"
 
 #ifndef VULKAN_SHADER_DIR
@@ -651,6 +653,19 @@ bool Renderer::init(WindowContext& window)
     dash::physics::Vec3 spawn{0.0f, 0.8f, 0.0f};
     bool loadedSceneSpawn = false;
     if (!scenePath_.empty()) {
+        // Loaded before anything generates a world so the terrain mesh and the
+        // navigation grid are built from the same rules.
+        {
+            const std::string biomePath =
+                (std::filesystem::path(VULKAN_ASSETS_DIR) / "world" / "biomes.json").string();
+            std::string biomeError;
+            if (!dash::world::loadBiomeTableFile(biomePath, biomeTable_, &biomeError)) {
+                biomeTable_ = {};
+                std::fprintf(stderr, "[Biomes] %s: %s (using built-in thresholds)\n",
+                             biomePath.c_str(), biomeError.c_str());
+            }
+        }
+
         const LoadedScene loadedScene = SceneLoader::load(scenePath_);
         if (!loadedScene.valid) {
             std::fprintf(stderr, "[VSTEP] Could not load scene: %s\n", scenePath_.c_str());
@@ -676,7 +691,7 @@ bool Renderer::init(WindowContext& window)
         if (terrainPipeline_ != VK_NULL_HANDLE) {
             const unsigned int sceneSeed = loadedScene.data.worldSeed;
             TerrainMesh terrainMesh;
-            terrainMesh.generate(sceneSeed);
+            terrainMesh.generate(sceneSeed, biomeTable_.empty() ? nullptr : &biomeTable_);
             std::vector<TerrainVkVertex> terrainVerts;
             std::vector<uint32_t> terrainIndices;
             terrainMesh.buildVulkanMesh(terrainVerts, terrainIndices);
@@ -738,7 +753,8 @@ bool Renderer::init(WindowContext& window)
 
         snapInstancesToTerrain();
         spawnSceneryPhysicsBodies(loadedScene);
-        enemySim_.build(loadedScene.data, sceneInstances_);
+        enemySim_.build(loadedScene.data, sceneInstances_,
+                        biomeTable_.empty() ? nullptr : &biomeTable_);
 
         if (!enemySim_.empty()) {
             events_.subscribe<DamageEvent>([](const DamageEvent& e) {
@@ -749,6 +765,13 @@ bool Renderer::init(WindowContext& window)
             events_.subscribe<DeathEvent>([](const DeathEvent& e) {
                 std::printf("[Combat] %s died at tile (%.2f, %.2f), %d xp\n",
                             e.entityName.c_str(), e.x, e.y, e.expReward);
+            });
+            events_.subscribe<LootDropEvent>([](const LootDropEvent& e) {
+                std::printf("[Loot] %s dropped at tile (%.2f, %.2f):", e.enemyId.c_str(), e.x, e.y);
+                for (const auto& item : e.items) {
+                    std::printf(" %s x%d", item.item.c_str(), item.qty);
+                }
+                std::printf("\n");
             });
         }
     }
@@ -1096,6 +1119,8 @@ void Renderer::recordSsaoPass(VkCommandBuffer cmd, uint32_t imageIndex,
 std::string Renderer::resolveModelPath(const std::string& meshId) const
 {
     if (meshId.empty() || meshId == "cube") return {};
+    // Procedural ids are generated, never loaded, so they have no file on disk.
+    if (dash::procmesh::isProceduralMeshId(meshId)) return {};
 
     namespace fs = std::filesystem;
     std::error_code ec;
@@ -1127,6 +1152,18 @@ const MeshBuffers* Renderer::resolveMesh(const std::string& meshId)
 
     if (CachedModel* cached = assetCache_.get(meshId)) {
         return cached->meshBuffers.indexCount() > 0 ? &cached->meshBuffers : nullptr;
+    }
+
+    if (dash::procmesh::isProceduralMeshId(meshId)) {
+        CachedModel generated;
+        if (!dash::procmesh::uploadProceduralMesh(meshId, "(runtime)",
+                                                  deviceContext_.physicalDevice(),
+                                                  deviceContext_.device(),
+                                                  generated.meshBuffers)) {
+            generated.meshBuffers.shutdown(deviceContext_.device());
+        }
+        CachedModel& proc = assetCache_.store(meshId, std::move(generated));
+        return proc.meshBuffers.indexCount() > 0 ? &proc.meshBuffers : nullptr;
     }
 
     const std::string resolved = resolveModelPath(meshId);
@@ -1188,7 +1225,10 @@ void Renderer::buildSceneAnimators()
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Bone palette — one dynamic-offset UBO shared by every skinned draw. Slots are
-// padded to the device alignment so a whole frame fits in a single buffer.
+// padded to the device alignment, and the buffer carries one disjoint region per
+// frame in flight so a frame being recorded never overwrites poses the GPU is
+// still reading. Regions are indexed by swapchain image, the same granularity
+// the camera UBO, the light UBO and the material sets already use.
 // ─────────────────────────────────────────────────────────────────────────────
 bool Renderer::createBoneResources()
 {
@@ -1199,12 +1239,13 @@ bool Renderer::createBoneResources()
     const VkDeviceSize align = std::max<VkDeviceSize>(
         props.limits.minUniformBufferOffsetAlignment, 1);
 
-    constexpr uint32_t kSlots = 64;
+    constexpr uint32_t kSlotsPerFrame = 64;
+    const uint32_t regions = std::max<uint32_t>(swapchain_.imageCount(), 1);
     const uint32_t stride = static_cast<uint32_t>(
         ((dash::anim::kBonePaletteBytes + align - 1) / align) * align);
 
     if (!createHostVisibleBuffer(deviceContext_.physicalDevice(), dev,
-                                 static_cast<VkDeviceSize>(stride) * kSlots,
+                                 static_cast<VkDeviceSize>(stride) * kSlotsPerFrame * regions,
                                  VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
                                  boneBuffer_, boneMemory_)) {
         std::fprintf(stderr, "[Skin] Failed to create bone palette buffer.\n");
@@ -1218,7 +1259,8 @@ bool Renderer::createBoneResources()
     }
     bonePalette_.mapped = static_cast<unsigned char*>(mapped);
     bonePalette_.slotStride = stride;
-    bonePalette_.slotCount = kSlots;
+    bonePalette_.regionSlots = kSlotsPerFrame;
+    bonePalette_.regionCount = regions;
 
     VkDescriptorSetLayoutBinding binding{};
     binding.binding = 0;
@@ -1266,8 +1308,15 @@ bool Renderer::createBoneResources()
     write.pBufferInfo = &bufInfo;
     vkUpdateDescriptorSets(dev, 1, &write, 0, nullptr);
 
-    std::printf("[Skin] Bone palette ready: %u slots of %u bytes (%u bones max).\n",
-                kSlots, stride, dash::anim::kBonePaletteMatrixCount);
+    std::printf("[Skin] Bone palette ready: %u frame region(s) x %u slots of %u bytes"
+                " (%u bones max, %llu bytes total).\n",
+                regions, kSlotsPerFrame, stride, dash::anim::kBonePaletteMatrixCount,
+                static_cast<unsigned long long>(bonePalette_.bufferBytes()));
+    for (uint32_t r = 0; r < regions; ++r) {
+        std::printf("[Skin]   frame region %u: bytes [%u, %u)\n",
+                    r, r * bonePalette_.regionStride(),
+                    (r + 1) * bonePalette_.regionStride());
+    }
     return true;
 }
 
@@ -1302,10 +1351,11 @@ void Renderer::destroyBoneResources()
     skinnedPipeline_ = VK_NULL_HANDLE;
 }
 
-void Renderer::updateSkinnedInstances(float dt, std::vector<InstanceResources>& res)
+void Renderer::updateSkinnedInstances(float dt, uint32_t frameIndex,
+                                      std::vector<InstanceResources>& res)
 {
     if (!bonePalette_.usable()) return;
-    bonePalette_.reset();
+    bonePalette_.beginFrame(frameIndex);
 
     for (auto& [index, player] : animators_) {
         if (index >= res.size() || index >= sceneInstances_.size()) continue;
@@ -1826,7 +1876,7 @@ void Renderer::recordDrawCommands(VkCommandBuffer cmd, uint32_t imageIndex)
         instanceRes[i].roughness = mat.asset.roughness;
     }
 
-    updateSkinnedInstances(frameDeltaSeconds_, instanceRes);
+    updateSkinnedInstances(frameDeltaSeconds_, imageIndex, instanceRes);
 
     recordShadowPass(cmd, imageIndex, instanceRes);
 
@@ -2047,7 +2097,7 @@ bool Renderer::runSmoke(WindowContext& window, uint32_t targetFrames)
             player_.syncToInstances(sceneInstances_);
 
             // ── Enemy AI + melee, planned on the tile grid, drawn in 3D ─────
-            enemySim_.update(dt, player_.x(), player_.z(),
+            enemySim_.update(dt, player_.x(), player_.z(), player_.attackHeld(),
                              &terrainMesh_, terrainMeshReady_, events_);
             enemySim_.syncToInstances(sceneInstances_);
             events_.flush();

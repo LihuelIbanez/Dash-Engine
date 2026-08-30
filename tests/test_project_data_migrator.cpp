@@ -5,6 +5,7 @@
 #include <sqlite3.h>
 
 #include <cstdio>
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -91,9 +92,68 @@ static int queryInt(const std::string& dbPath, const std::string& sql)
     return stmt.columnInt(0);
 }
 
+// ── La cache de escenas sigue al disco ───────────────────────────────────────
+static void test_scene_sync_follows_disk()
+{
+    std::printf("  test_scene_sync_follows_disk\n");
+
+    const fs::path root = fs::temp_directory_path() / "dash_test_scene_sync";
+    const ProjectManifest manifest = createTempProject(root, "scene_sync");
+
+    const std::string sceneV1 = R"JSON({
+  "sceneVersion": 6, "name": "arena", "worldSeed": 7, "nextEntityId": 2,
+  "tileOverrides": [],
+  "entities": [ { "id": 1, "type": "Player", "name": "Hero", "x": 1.0, "y": 2.0 } ]
+})JSON";
+    ASSERT(writeTextFile(root / "scenes" / "arena.json", sceneV1), "escribe la escena inicial");
+
+    // Primera pasada: la fila no existe, así que se importa.
+    auto first = ProjectDataMigrator::syncScenesFromDisk(manifest);
+    ASSERT(first.success, "la primera sincronizacion tiene exito");
+    ASSERT(first.summary.imported == 1, "importa la escena que falta");
+    ASSERT(first.summary.upToDate == 0, "nada estaba al dia todavia");
+
+    // Segunda pasada sin tocar el archivo: no debe reimportar.
+    auto second = ProjectDataMigrator::syncScenesFromDisk(manifest);
+    ASSERT(second.success, "la segunda sincronizacion tiene exito");
+    ASSERT(second.summary.imported == 0, "un .json sin cambios no se reimporta");
+    ASSERT(second.summary.upToDate == 1, "la fila queda marcada al dia");
+
+    // El disco manda: un .json mas nuevo tiene que pisar la cache. La mtime se
+    // adelanta a mano porque el reloj del filesystem tiene poca resolucion y dos
+    // escrituras seguidas pueden compartir timestamp.
+    const std::string sceneV2 = R"JSON({
+  "sceneVersion": 6, "name": "arena", "worldSeed": 99, "nextEntityId": 3,
+  "tileOverrides": [],
+  "entities": [
+    { "id": 1, "type": "Player", "name": "Hero",  "x": 1.0, "y": 2.0 },
+    { "id": 2, "type": "Enemy",  "name": "Wolf",  "x": 5.0, "y": 6.0 }
+  ]
+})JSON";
+    const fs::path scenePath = root / "scenes" / "arena.json";
+    ASSERT(writeTextFile(scenePath, sceneV2), "reescribe la escena");
+
+    std::error_code ec;
+    fs::last_write_time(scenePath,
+                        fs::file_time_type::clock::now() + std::chrono::seconds(5), ec);
+    ASSERT(!ec, "puede adelantar la mtime");
+
+    auto third = ProjectDataMigrator::syncScenesFromDisk(manifest);
+    ASSERT(third.success, "la tercera sincronizacion tiene exito");
+    ASSERT(third.summary.imported == 1, "un .json mas nuevo se reimporta");
+
+    // Y lo reimportado es de verdad la version nueva, no la vieja.
+    ASSERT(queryInt(third.dbPath, "SELECT world_seed FROM scenes WHERE file_name='arena.json';") == 99,
+           "la fila refleja el contenido nuevo");
+
+    fs::remove_all(root, ec);
+}
+
 int main()
 {
     std::printf("=== test_project_data_migrator ===\n");
+
+    test_scene_sync_follows_disk();
 
     const fs::path base = fs::temp_directory_path() / "dash_test_project_data_migrator";
     std::error_code ec;

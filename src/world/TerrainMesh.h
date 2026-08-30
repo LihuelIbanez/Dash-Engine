@@ -1,10 +1,13 @@
 #pragma once
 #include "IsoRenderer.h"
+#include "BiomeScatter.h"
+#include "BiomeTable.h"
 #include "rendering/mesh/TerrainVertex.h"
 #include <vector>
 #include <array>
 #include <cstdint>
 #include <cmath>
+#include <string>
 
 // ─── WC3-style terrain constants ────────────────────────────────────────────
 constexpr float CLIFF_STEP         = 12.0f;   // world units per cliff level
@@ -66,8 +69,25 @@ public:
 
     TerrainMesh();
 
-    // Procedural generation (same algorithm as World::generate)
-    void generate(unsigned int seed = 42);
+    // Procedural generation (same algorithm as World::generate).
+    // `biomes` null or empty falls back to the built-in thresholds, so a broken
+    // or missing biomes.json never changes how an existing scene looks.
+    void generate(unsigned int seed = 42, const dash::world::BiomeTable* biomes = nullptr);
+
+    // ── Biome map ────────────────────────────────────────────────────────────
+    // Elevation and moisture are kept per face so the Biome Designer can re-map
+    // the world to edited ranges without re-running the noise.
+    float faceElevation(int fx, int fy) const { return faceElev_[fy * FW + fx]; }
+    float faceMoisture(int fx, int fy) const  { return faceMoist_[fy * FW + fx]; }
+    int   faceBiome(int fx, int fy) const     { return faceBiome_[fy * FW + fx]; }
+    const std::vector<float>&   faceElevations() const { return faceElev_; }
+    const std::vector<float>&   faceMoistures()  const { return faceMoist_; }
+    const std::vector<int16_t>& faceBiomes()     const { return faceBiome_; }
+    bool  usedBiomeTable() const { return usedBiomeTable_; }
+
+    // ── Procedural vegetation scattered by the biome table ──────────────────
+    const std::vector<dash::world::ScatterInstance>& vegetation() const { return vegetation_; }
+    const dash::world::ScatterStats& vegetationStats() const { return vegetationStats_; }
 
     // ── Accessors ────────────────────────────────────────────────────────────
     TerrainVertex&       vert(int vx, int vy)       { return vertices_[vy * VW + vx]; }
@@ -122,5 +142,17 @@ private:
     std::vector<TerrainVertex> vertices_;   // VW * VH
     std::vector<TerrainFace>   faces_;      // FW * FH
     std::vector<WaterBody>     waterBodies_;
+
+    std::vector<float>   faceElev_;         // FW * FH
+    std::vector<float>   faceMoist_;        // FW * FH
+    std::vector<int16_t> faceBiome_;        // FW * FH, -1 = no biome
+    std::vector<uint8_t> faceTexLayer_;     // FW * FH, TerrainTextureId per face
+    std::vector<dash::world::ScatterInstance> vegetation_;
+    dash::world::ScatterStats vegetationStats_;
+    bool usedBiomeTable_ = false;
+
+    static TerrainTextureId defaultTextureFor(TileType t);
+    void logBiomeStats(const dash::world::BiomeTable* biomes) const;
+
     bool dirty_ = true;
 };

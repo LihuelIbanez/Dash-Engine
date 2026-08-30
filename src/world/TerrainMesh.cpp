@@ -1,4 +1,5 @@
 #include "TerrainMesh.h"
+#include <cstdio>
 #include <cstdlib>
 #include <cmath>
 #include <algorithm>
@@ -113,11 +114,22 @@ TerrainMesh::TerrainMesh()
 {
     vertices_.resize(VW * VH);
     faces_.resize(FW * FH);
+    faceElev_.assign(FW * FH, 0.0f);
+    faceMoist_.assign(FW * FH, 0.0f);
+    faceBiome_.assign(FW * FH, -1);
+    faceTexLayer_.assign(FW * FH, 0);
 }
 
-void TerrainMesh::generate(unsigned int seed)
+void TerrainMesh::generate(unsigned int seed, const dash::world::BiomeTable* biomes)
 {
     const float scale = 0.07f;
+    const bool useTable = (biomes != nullptr && !biomes->empty());
+    usedBiomeTable_ = useTable;
+    if (!useTable) {
+        std::fprintf(stderr,
+                     "[Biomes] No biome table available - falling back to the built-in "
+                     "hardcoded elevation/moisture thresholds.\n");
+    }
 
     // ── Phase 1: per-vertex elevation ────────────────────────────────────────
     tmInitPerm(seed);
@@ -144,12 +156,19 @@ void TerrainMesh::generate(unsigned int seed)
 
     tmInitPerm(seed + 77777u);
 
+    faceBiome_.assign(FW * FH, -1);
+    faceElev_.assign(FW * FH, 0.0f);
+    faceMoist_.assign(FW * FH, 0.0f);
+
     for (int fy = 0; fy < FH; ++fy) {
         for (int fx = 0; fx < FW; ++fx) {
             float e = faceAverageHeight(fx, fy);
             float m = moist[fy * FW + fx];
             float cx = fx + 0.5f, cy = fy + 0.5f;
             float detail = tmNorm01(tmPerlin(cx * 0.25f, cy * 0.25f));
+
+            faceElev_[fy * FW + fx]  = e;
+            faceMoist_[fy * FW + fx] = m;
 
             TerrainFace& f = face(fx, fy);
             f.walkable = true;
@@ -159,6 +178,20 @@ void TerrainMesh::generate(unsigned int seed)
                 f.type = TileType::Water;
                 f.walkable = false;
                 continue;
+            }
+
+            if (useTable) {
+                const int b = dash::world::resolveBiome(*biomes, e, m);
+                if (b >= 0) {
+                    const dash::world::BiomeDef& def = biomes->biomes[static_cast<size_t>(b)];
+                    faceBiome_[fy * FW + fx] = static_cast<int16_t>(b);
+                    f.type = static_cast<TileType>(
+                        std::max(0, std::min(static_cast<int>(TileType::Snow), def.tileType)));
+                    f.walkable = def.walkable;
+                    continue;
+                }
+                // A hole in the table leaves the face on the built-in rules below;
+                // the designer's validation surfaces it as a Gap issue.
             }
 
             // Elevation thresholds (same as World::generate)
@@ -240,11 +273,95 @@ void TerrainMesh::generate(unsigned int seed)
         }
     }
 
+    // ── Phase 4: biome-driven texture layers + vegetation ───────────────────
+    // Post-processing above rewrote some faces (filled ponds, coast sand); those
+    // no longer belong to their biome, so they lose both its texture and its
+    // plants instead of growing a forest on a beach.
+    faceTexLayer_.assign(FW * FH, 0);
+    for (int fy = 0; fy < FH; ++fy) {
+        for (int fx = 0; fx < FW; ++fx) {
+            const int idx = fy * FW + fx;
+            const int b = faceBiome_[idx];
+            bool stillOwned = false;
+            if (useTable && b >= 0) {
+                const dash::world::BiomeDef& def = biomes->biomes[static_cast<size_t>(b)];
+                stillOwned = (static_cast<int>(face(fx, fy).type) == def.tileType);
+                if (stillOwned)
+                    faceTexLayer_[idx] = static_cast<uint8_t>(
+                        std::max(0, std::min(static_cast<int>(TerrainTextureId::Count) - 1,
+                                             def.textureLayer)));
+            }
+            if (!stillOwned) {
+                faceBiome_[idx] = -1;
+                faceTexLayer_[idx] = static_cast<uint8_t>(defaultTextureFor(face(fx, fy).type));
+            }
+        }
+    }
+
+    vegetation_.clear();
+    vegetationStats_ = dash::world::ScatterStats{};
+    if (useTable) {
+        vegetation_ = dash::world::scatterVegetation(*biomes, faceBiome_, FW, FH,
+                                                     seed, biomes->maxVegetationInstances,
+                                                     &vegetationStats_);
+    }
+    logBiomeStats(biomes);
+
     computeSmoothNormals();
     assignTextureLayers();
     computeAmbientOcclusion();
 
     dirty_ = true;
+}
+
+TerrainTextureId TerrainMesh::defaultTextureFor(TileType t)
+{
+    switch (t) {
+        case TileType::DeepWater: return TerrainTextureId::Gravel;
+        case TileType::Water:     return TerrainTextureId::Sand;
+        case TileType::Sand:      return TerrainTextureId::Sand;
+        case TileType::Grass:     return TerrainTextureId::Grass;
+        case TileType::Forest:    return TerrainTextureId::DarkGrass;
+        case TileType::Dirt:      return TerrainTextureId::Dirt;
+        case TileType::Stone:     return TerrainTextureId::Rock;
+        case TileType::Mountain:  return TerrainTextureId::Rock;
+        case TileType::Snow:      return TerrainTextureId::Snow;
+    }
+    return TerrainTextureId::Grass;
+}
+
+void TerrainMesh::logBiomeStats(const dash::world::BiomeTable* biomes) const
+{
+    if (biomes == nullptr || biomes->empty()) {
+        std::fprintf(stderr, "[Biomes] Built-in thresholds, 0 biomes loaded, 0 vegetation instances.\n");
+        return;
+    }
+
+    std::vector<int> histogram(biomes->biomes.size(), 0);
+    int unassigned = 0;
+    for (int16_t b : faceBiome_) {
+        if (b < 0 || b >= static_cast<int16_t>(histogram.size())) ++unassigned;
+        else ++histogram[static_cast<size_t>(b)];
+    }
+
+    std::fprintf(stderr, "[Biomes] %zu biome(s) loaded, face distribution over %d faces:\n",
+                 biomes->biomes.size(), FW * FH);
+    for (size_t i = 0; i < histogram.size(); ++i) {
+        std::fprintf(stderr, "[Biomes]   %-18s %6d faces (%5.2f%%)\n",
+                     biomes->biomes[i].id.c_str(), histogram[i],
+                     100.0 * histogram[i] / static_cast<double>(FW * FH));
+    }
+    std::fprintf(stderr, "[Biomes]   %-18s %6d faces (%5.2f%%)\n",
+                 "<none/reshaped>", unassigned,
+                 100.0 * unassigned / static_cast<double>(FW * FH));
+
+    std::fprintf(stderr, "[Biomes] Vegetation: %d instance(s) from %d plant(s) "
+                         "(wanted %d, cap %d%s)\n",
+                 vegetationStats_.instances, vegetationStats_.plants,
+                 vegetationStats_.wanted, biomes->maxVegetationInstances,
+                 vegetationStats_.capped ? ", CAPPED" : "");
+    for (const auto& kv : vegetationStats_.perKind)
+        std::fprintf(stderr, "[Biomes]   %-18s %6d plant(s)\n", kv.first.c_str(), kv.second);
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -307,21 +424,6 @@ void TerrainMesh::assignTextureLayers()
 {
     constexpr int kTexCount = static_cast<int>(TerrainTextureId::Count);
 
-    auto texForType = [](TileType t) {
-        switch (t) {
-            case TileType::DeepWater: return TerrainTextureId::Gravel;
-            case TileType::Water:     return TerrainTextureId::Sand;
-            case TileType::Sand:      return TerrainTextureId::Sand;
-            case TileType::Grass:     return TerrainTextureId::Grass;
-            case TileType::Forest:    return TerrainTextureId::DarkGrass;
-            case TileType::Dirt:      return TerrainTextureId::Dirt;
-            case TileType::Stone:     return TerrainTextureId::Rock;
-            case TileType::Mountain:  return TerrainTextureId::Rock;
-            case TileType::Snow:      return TerrainTextureId::Snow;
-        }
-        return TerrainTextureId::Grass;
-    };
-
     for (int vy = 0; vy < VH; ++vy) {
         for (int vx = 0; vx < VW; ++vx) {
             std::array<float, kTexCount> w{};
@@ -329,7 +431,10 @@ void TerrainMesh::assignTextureLayers()
                 for (int dx = -1; dx <= 0; ++dx) {
                     const int fx = vx + dx, fy = vy + dy;
                     if (fx < 0 || fx >= FW || fy < 0 || fy >= FH) continue;
-                    w[static_cast<int>(texForType(face(fx, fy).type))] += 1.0f;
+                    const int layer = faceTexLayer_.empty()
+                        ? static_cast<int>(defaultTextureFor(face(fx, fy).type))
+                        : static_cast<int>(faceTexLayer_[fy * FW + fx]);
+                    w[std::max(0, std::min(kTexCount - 1, layer))] += 1.0f;
                 }
             }
 

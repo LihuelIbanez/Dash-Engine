@@ -174,6 +174,11 @@ file(GLOB CORE_SOURCES
     "src/game/nav/*.cpp"
     "src/game/physics/*.cpp"
 )
+# Gameplay tables (enemies, loot) are read by both runtimes: the 2D one through
+# SpawnRewardSystem and the 3D one through EnemySimulation3D. Keeping the single
+# definition here avoids duplicating it across game_runtime and
+# vulkan_experimental, which the editor links together.
+list(APPEND CORE_SOURCES "${CMAKE_SOURCE_DIR}/src/game/data/GameplayDatabase.cpp")
 add_library(game_core STATIC ${CORE_SOURCES})
 target_include_directories(game_core PUBLIC
     src
@@ -217,6 +222,7 @@ if(ENABLE_VULKAN_EXPERIMENTAL AND NOT IOS)
             ${CMAKE_SOURCE_DIR}/src/rendering/platform/WindowContext.cpp
             ${CMAKE_SOURCE_DIR}/src/rendering/mesh/MeshBuffers.cpp
             ${CMAKE_SOURCE_DIR}/src/rendering/mesh/MeshUploader.cpp
+            ${CMAKE_SOURCE_DIR}/src/rendering/mesh/ProceduralMesh.cpp
             ${CMAKE_SOURCE_DIR}/src/rendering/animation/AnimationPlayer.cpp
             ${CMAKE_SOURCE_DIR}/src/rendering/textures/TextureLoader.cpp
             ${CMAKE_SOURCE_DIR}/src/rendering/textures/TerrainTextureArray.cpp

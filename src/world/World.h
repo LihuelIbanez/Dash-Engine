@@ -30,7 +30,7 @@ public:
     World();
 
     // Procedurally fill both the legacy grid and the terrain mesh
-    void generate(unsigned int seed = 42);
+    void generate(unsigned int seed = 42, const dash::world::BiomeTable* biomes = nullptr);
 
     // Draw all tiles (painter order: top → bottom) — legacy 2D
     void draw(SDL_Renderer* renderer, float camX, float camY) const;

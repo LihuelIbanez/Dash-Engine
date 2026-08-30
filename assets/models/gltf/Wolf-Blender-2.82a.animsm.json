@@ -1,0 +1,95 @@
+{
+  "version": 1,
+  "name": "wolf",
+  "initialState": "idle",
+  "parameters": [
+    {
+      "name": "speed",
+      "type": "float",
+      "default": 0.0
+    },
+    {
+      "name": "sit",
+      "type": "bool",
+      "default": false
+    }
+  ],
+  "states": [
+    {
+      "name": "idle",
+      "clip": "04_Idle_Armature_0",
+      "speed": 1.0,
+      "loop": true
+    },
+    {
+      "name": "run",
+      "clip": "01_Run_Armature_0",
+      "speed": 1.0,
+      "loop": true
+    },
+    {
+      "name": "sit",
+      "clip": "05_site_Armature_0",
+      "speed": 1.0,
+      "loop": true
+    }
+  ],
+  "transitions": [
+    {
+      "from": "idle",
+      "to": "run",
+      "blendSeconds": 0.2,
+      "hasExitTime": false,
+      "exitTime": 1.0,
+      "conditions": [
+        {
+          "parameter": "speed",
+          "op": "greater",
+          "value": 0.1
+        }
+      ]
+    },
+    {
+      "from": "run",
+      "to": "idle",
+      "blendSeconds": 0.25,
+      "hasExitTime": false,
+      "exitTime": 1.0,
+      "conditions": [
+        {
+          "parameter": "speed",
+          "op": "less",
+          "value": 0.1
+        }
+      ]
+    },
+    {
+      "from": "idle",
+      "to": "sit",
+      "blendSeconds": 0.3,
+      "hasExitTime": false,
+      "exitTime": 1.0,
+      "conditions": [
+        {
+          "parameter": "sit",
+          "op": "isTrue",
+          "value": 0.0
+        }
+      ]
+    },
+    {
+      "from": "sit",
+      "to": "idle",
+      "blendSeconds": 0.3,
+      "hasExitTime": false,
+      "exitTime": 1.0,
+      "conditions": [
+        {
+          "parameter": "sit",
+          "op": "isFalse",
+          "value": 0.0
+        }
+      ]
+    }
+  ]
+}

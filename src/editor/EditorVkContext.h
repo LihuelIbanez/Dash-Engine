@@ -4,6 +4,7 @@
 #include <SDL2/SDL.h>
 #include "imgui.h"
 #include "assets/cache/AssetCache3D.h"
+#include "rendering/animation/BonePalette.h"
 #include "rendering/vulkan/ColorGrading.h"
 #include "rendering/vulkan/DeviceContext.h"
 #include "rendering/vulkan/SwapchainContext.h"
@@ -99,15 +100,29 @@ public:
     VkPipelineLayout    billboardPipelineLayout() const { return billboardPipelineLayout_; }
     VkDescriptorSet     sceneDescriptorSet()    const { return sceneDescSet_; }
 
+    // ── Skinning ────────────────────────────────────────────────────────────
+    // VK_NULL_HANDLE when the bone palette or the skinned shaders are missing;
+    // drawSceneInstances then falls back to drawing skinned meshes in bind pose.
+    VkPipeline          skinnedPipeline()       const { return skinnedPipeline_; }
+    VkPipelineLayout    skinnedPipelineLayout() const { return skinnedPipelineLayout_; }
+    VkDescriptorSet     boneDescriptorSet()     const { return boneSet_; }
+    dash::anim::BonePalette& bonePalette() { return bonePalette_; }
+    // Swapchain image being recorded: which bone palette region this frame owns.
+    // Only meaningful between beginFrame() and endFrame().
+    uint32_t currentFrameIndex() const { return currentImageIndex_; }
+
     // ── Mesh buffer access ──────────────────────────────────────────────────
     const dash::vkexp::MeshBuffers& terrainMesh()  const { return terrainMeshBuf_; }
     const dash::vkexp::MeshBuffers& waterMesh()    const { return waterMeshBuf_; }
     const dash::vkexp::MeshBuffers& cubeMesh()     const { return cubeMeshBuf_; }
-    const dash::vkexp::MeshBuffers& wolfMesh()     const { return wolfMeshBuf_; }
 
     // Resolves RenderComponent::mesh to a loaded mesh, caching hits and misses.
     // Returns nullptr for the builtin cube or when the model cannot be loaded.
     const dash::vkexp::MeshBuffers* resolveMesh(const std::string& meshId);
+
+    // Absolute path a mesh id maps to, or empty. Animation wiring derives the
+    // .dashskel/.dashanim siblings from it.
+    std::string resolveModelPath(const std::string& meshId) const;
 
     // Scene pass the viewport pipelines are built against (HDR, not the LDR
     // image ImGui ends up sampling).
@@ -120,6 +135,11 @@ private:
     bool createSceneDescriptors();
     bool createTerrainTextureArray();
     bool createPipelines();
+
+    // Bone palette ring plus its dynamic-offset descriptor (set 1), shared by
+    // every skinned draw in a frame. Mirrors Renderer::createBoneResources.
+    bool createBoneResources();
+    void destroyBoneResources();
 
     // Vulkan core
     VkInstance                       instance_    = VK_NULL_HANDLE;
@@ -169,6 +189,16 @@ private:
     VkPipeline       basicLitPipeline_       = VK_NULL_HANDLE;
     VkPipelineLayout billboardPipelineLayout_ = VK_NULL_HANDLE;
     VkPipeline       billboardPipeline_       = VK_NULL_HANDLE;
+    VkPipelineLayout skinnedPipelineLayout_   = VK_NULL_HANDLE;
+    VkPipeline       skinnedPipeline_         = VK_NULL_HANDLE;
+
+    // Bone palette (set 1, one dynamic-offset UBO)
+    VkDescriptorSetLayout   boneSetLayout_  = VK_NULL_HANDLE;
+    VkDescriptorPool        boneDescPool_   = VK_NULL_HANDLE;
+    VkDescriptorSet         boneSet_        = VK_NULL_HANDLE;
+    VkBuffer                boneBuffer_     = VK_NULL_HANDLE;
+    VkDeviceMemory          boneMemory_     = VK_NULL_HANDLE;
+    dash::anim::BonePalette bonePalette_;
 
     dash::vkexp::AssetCache3D meshCache_;
 
@@ -193,7 +223,6 @@ private:
     dash::vkexp::MeshBuffers terrainMeshBuf_;
     dash::vkexp::MeshBuffers waterMeshBuf_;
     dash::vkexp::MeshBuffers cubeMeshBuf_;
-    dash::vkexp::MeshBuffers wolfMeshBuf_;
 
     uint32_t currentImageIndex_ = 0;
     bool     frameInFlight_     = false;
