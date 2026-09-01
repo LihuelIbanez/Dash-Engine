@@ -18,6 +18,7 @@ imgui.ini
 
 # Runtime logs
 *.logcd
+editor.log
 
 # Asset import cache (regenerable from assets/ via the import pipeline).
 # The per-project SQLite db lives here too and mutates on every editor run.
