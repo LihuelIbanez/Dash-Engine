@@ -84,6 +84,14 @@ private:
     std::vector<uint64_t> selection_;     // multi-selection; back() is active
     CommandStack commandStack_;
 
+    // Grounded world position (post-terrain-sampling, matches the GPU selection
+    // outline exactly) recorded by renderWorldToTexture() each frame, keyed by
+    // entity id. entityGizmoPivot() reads this instead of re-deriving the same
+    // number through a second, independent computation - see the gizmo-vs-mesh
+    // drift investigation this replaces for why two "equivalent" formulas
+    // stopped being safe to trust.
+    std::unordered_map<uint64_t, dash::gizmo::Vec3> lastRenderedPivot_;
+
     EntityData* findEntityById(uint64_t id);
     void performUndo();
     void performRedo();

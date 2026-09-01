@@ -267,6 +267,18 @@ void EditorApp::drawHierarchyNode(uint64_t entityId, int depth)
 // ─────────────────────────────────────────────────────────────────────────────
 dash::gizmo::Vec3 EditorApp::entityGizmoPivot(uint64_t entityId)
 {
+    // Prefer the exact number renderWorldToTexture() computed for this entity
+    // last frame (recorded into lastRenderedPivot_) over re-deriving it here.
+    // Both used to run the identical-looking formula independently - grounded
+    // position via flattenHierarchy() + buildInstances() + terrain sampling -
+    // and were verified via runtime logging to compute the same number, yet
+    // the gizmo still visibly drifted from the mesh as the camera moved,
+    // which only a shared, single source of truth rules out by construction
+    // instead of by continuing to audit two formulas that "should" agree.
+    if (auto it = lastRenderedPivot_.find(entityId); it != lastRenderedPivot_.end()) {
+        return it->second;
+    }
+
     // Mirrors the exact grounding EditorApp::renderWorldToTexture() applies:
     // baseHeight (player/enemy) and the cube placeholder's extra lift live in
     // SceneLoader::buildInstances(), not in the raw TransformComponent, so

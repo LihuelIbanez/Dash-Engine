@@ -271,6 +271,13 @@ void EditorApp::renderWorldToTexture()
         inst.position.y += world_.terrain().sampleHeight(inst.position.x, inst.position.z)
                          + (isCubePlaceholder ? inst.scale.y : 0.0f);
         resources[i].mesh = vkCtx_.resolveMesh(inst.meshId);
+
+        // Recorded so entityGizmoPivot() (built earlier next frame, in
+        // drawViewport()) can read the exact number this frame's mesh/outline
+        // used instead of re-deriving it through flattenHierarchy() + terrain
+        // sampling a second time - see lastRenderedPivot_'s doc comment.
+        lastRenderedPivot_[inst.entityId] = { inst.position.x * TILE_SCALE, inst.position.y,
+                                              inst.position.z * TILE_SCALE };
     }
 
     // ── Enemy AI + combat (Play mode only; enemySim_ is armed in enterPlayMode) ──
