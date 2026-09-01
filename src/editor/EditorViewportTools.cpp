@@ -118,6 +118,17 @@ void EditorApp::drawViewport()
     vpScreenX_ = cursorPos.x;
     vpScreenY_ = cursorPos.y;
 
+    // Resolved now, not left for renderWorldToTexture() (called later this
+    // same frame, after ImGui::Render()): the gizmo below reads
+    // vkCtx_.viewportWidth()/Height() to match Vulkan's actual render target
+    // aspect ratio, and needs this frame's value, not whatever the previous
+    // frame's renderWorldToTexture() last left it at. While the panel keeps
+    // changing size (dragging a divider, live-resizing the window) that gap
+    // was a permanent one-frame lag between the overlay and the mesh, not
+    // just a transient rounding difference.
+    vkCtx_.ensureViewportSize(static_cast<uint32_t>(std::max(1.0f, vpDisplayW_)),
+                              static_cast<uint32_t>(std::max(1.0f, vpDisplayH_)));
+
     // ── Prefab drag-drop target ──────────────────────────────────────────────
     if (editorMode_ == EditorMode::Edit && ImGui::BeginDragDropTarget()) {
         if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("PREFAB_GUID")) {
@@ -164,12 +175,43 @@ void EditorApp::drawViewport()
         if (ImGui::IsKeyDown(ImGuiKey_D)) { camX_ += speed; camY_ -= speed; }
     }
 
+    // Mouse-wheel zoom and right-drag pan, same reasoning as the WASD block
+    // above: this used to run down in the "Edit-mode interaction" section,
+    // after the gizmo viewProj was already built. Zooming or right-dragging
+    // therefore reached the mesh render one frame before it reached the
+    // gizmo overlay, which is exactly the "closer = centered, farther = the
+    // gizmo drifts off the model" symptom - the lag is proportional to how
+    // far the change moved the camera, so it grows with zoom/pan speed and
+    // is invisible once the mouse stops moving for a frame.
+    if (vpHovered) {
+        ImGuiIO& io = ImGui::GetIO();
+        if (io.MouseWheel != 0.f) {
+            viewport3D_.cameraDistance -= io.MouseWheel * 1.5f;
+            viewport3D_.cameraDistance = std::clamp(viewport3D_.cameraDistance, 5.0f, 80.0f);
+        }
+        if (ImGui::IsMouseDragging(ImGuiMouseButton_Right)) {
+            ImVec2 d = ImGui::GetMouseDragDelta(ImGuiMouseButton_Right);
+            camX_ -= d.x * 0.03f;
+            camY_ -= d.y * 0.03f;
+            ImGui::ResetMouseDragDelta(ImGuiMouseButton_Right);
+        }
+    }
+
     // ── Transform gizmo ──────────────────────────────────────────────────────
     // Runs before the tools below so a gizmo drag swallows the click instead of
     // painting a tile or moving the entity underneath.
     bool gizmoOwnsPointer = false;
     float gizmoViewProj[16];
-    buildViewProjMatrix(vpDisplayW_, vpDisplayH_, gizmoViewProj);
+    // Aspect ratio from the actual render target (which can lag this frame's
+    // fresh panel size - ensureViewportSize() only reallocates past a pixel
+    // hysteresis), so the overlay's NDC math matches what Vulkan rendered
+    // rather than the panel it's about to be stretched into. The rect below
+    // is deliberately still the fresh display size/position: that is where
+    // ImGui actually draws the (possibly slightly stretched) texture, so NDC
+    // -> pixel has to map onto that, not onto the render target's own size.
+    buildViewProjMatrix(static_cast<float>(vkCtx_.viewportWidth()),
+                       static_cast<float>(vkCtx_.viewportHeight()),
+                       gizmoViewProj);
     const dash::gizmo::ViewportRect gizmoRect{vpScreenX_, vpScreenY_, vpDisplayW_, vpDisplayH_};
 
     if (editorMode_ == EditorMode::Edit) {
@@ -232,20 +274,6 @@ void EditorApp::drawViewport()
             SDL_SetCursor(cursorHand_);
 
         ImGuiIO& io = ImGui::GetIO();
-
-        // Scroll → zoom camera (change orbit distance)
-        if (io.MouseWheel != 0.f) {
-            viewport3D_.cameraDistance -= io.MouseWheel * 1.5f;
-            viewport3D_.cameraDistance = std::clamp(viewport3D_.cameraDistance, 5.0f, 80.0f);
-        }
-
-        // Right-drag → pan camera
-        if (ImGui::IsMouseDragging(ImGuiMouseButton_Right)) {
-            ImVec2 d = ImGui::GetMouseDragDelta(ImGuiMouseButton_Right);
-            camX_ -= d.x * 0.03f;
-            camY_ -= d.y * 0.03f;
-            ImGui::ResetMouseDragDelta(ImGuiMouseButton_Right);
-        }
 
         float mx = io.MousePos.x - vpScreenX_;
         float my = io.MousePos.y - vpScreenY_;
@@ -627,7 +655,13 @@ bool EditorApp::viewportScreenToWorld(float vx, float vy, float& wx, float& wy)
 {
     // Build the same viewProj used for rendering
     float viewProj[16];
-    buildViewProjMatrix(vpDisplayW_, vpDisplayH_, viewProj);
+    // Same aspect-ratio source as the gizmo/render (see drawViewport()): the
+    // actual render target size, not the fresh panel size, so the ray this
+    // unprojects matches what's actually on screen instead of drifting during
+    // a resize.
+    buildViewProjMatrix(static_cast<float>(vkCtx_.viewportWidth()),
+                       static_cast<float>(vkCtx_.viewportHeight()),
+                       viewProj);
 
     // Invert the viewProj matrix (4x4 cofactor inverse)
     float inv[16];

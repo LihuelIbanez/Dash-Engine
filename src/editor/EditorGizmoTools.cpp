@@ -19,6 +19,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 
 using dash::editor::Transform3D;
 
@@ -418,61 +419,6 @@ bool EditorApp::updateViewportGizmo(const float viewProj[16],
     return out.dragging || out.handleHovered;
 }
 
-// Wireframe box around the selected entity's own mesh footprint, so it is
-// unambiguous which visible model owns the gizmo - a small pivot dot alone
-// was easy to mix up with a different, more prominent nearby entity.
-void EditorApp::drawSelectionOutline(ImDrawList* dl, const float viewProj[16],
-                                     const dash::gizmo::ViewportRect& rect, uint64_t entityId)
-{
-    const SceneData flatScene = dash::editor::flattenHierarchy(scene_);
-    const auto instances = dash::vkexp::SceneLoader::buildInstances(flatScene);
-    for (auto inst : instances) {
-        if (inst.entityId != entityId) continue;
-
-        // Mirrors the grounding renderWorldToTexture() applies before drawing.
-        const bool isCubePlaceholder = inst.meshId.empty() || inst.meshId == "cube";
-        inst.position.y += world_.terrain().sampleHeight(inst.position.x, inst.position.z)
-                         + (isCubePlaceholder ? inst.scale.y : 0.0f);
-
-        // Real meshes (e.g. the wolf) don't fit a +-1 local cube - their actual
-        // bounds aren't tracked anywhere - so drawing this box for them would
-        // show a wrong-shaped outline instead of no outline. The pivot ring in
-        // drawSelectionOverlays() already marks those; only cube placeholders
-        // get the exact box.
-        if (!isCubePlaceholder) return;
-
-        const dash::vkexp::Mat4 model = dash::vkexp::trs(
-            {inst.position.x * TILE_SCALE, inst.position.y, inst.position.z * TILE_SCALE},
-            inst.yawDeg, inst.pitchDeg, inst.rollDeg,
-            {inst.scale.x, inst.scale.y, inst.scale.z});
-
-        static constexpr float kCorners[8][3] = {
-            {-1,-1,-1}, {1,-1,-1}, {1,1,-1}, {-1,1,-1},
-            {-1,-1, 1}, {1,-1, 1}, {1,1, 1}, {-1,1, 1},
-        };
-        ImVec2 screen[8];
-        bool ok[8];
-        for (int i = 0; i < 8; ++i) {
-            const float lx = kCorners[i][0], ly = kCorners[i][1], lz = kCorners[i][2];
-            const float wx = model.m[0] * lx + model.m[4] * ly + model.m[8]  * lz + model.m[12];
-            const float wy = model.m[1] * lx + model.m[5] * ly + model.m[9]  * lz + model.m[13];
-            const float wz = model.m[2] * lx + model.m[6] * ly + model.m[10] * lz + model.m[14];
-            ok[i] = projectToScreen(viewProj, {wx, wy, wz}, rect, screen[i].x, screen[i].y);
-        }
-
-        static constexpr int kEdges[12][2] = {
-            {0,1},{1,2},{2,3},{3,0},  // bottom
-            {4,5},{5,6},{6,7},{7,4},  // top
-            {0,4},{1,5},{2,6},{3,7},  // verticals
-        };
-        const ImU32 col = IM_COL32(255, 190, 60, 235);
-        for (const auto& e : kEdges) {
-            if (ok[e[0]] && ok[e[1]]) dl->AddLine(screen[e[0]], screen[e[1]], col, 2.0f);
-        }
-        return;
-    }
-}
-
 void EditorApp::drawSelectionOverlays(ImDrawList* dl, const float viewProj[16],
                                       const dash::gizmo::ViewportRect& rect)
 {
@@ -481,13 +427,29 @@ void EditorApp::drawSelectionOverlays(ImDrawList* dl, const float viewProj[16],
     // Selection markers.
     for (uint64_t id : selection_) {
         if (!findEntityById(id)) continue;
-        drawSelectionOutline(dl, viewProj, rect, id);
         const dash::gizmo::Vec3 p = entityGizmoPivot(id);
         float sx = 0.f, sy = 0.f;
         if (!projectToScreen(viewProj, p, rect, sx, sy)) continue;
         const bool active = (id == selectedEntityId_);
         const ImU32 col = active ? IM_COL32(255, 190, 60, 255) : IM_COL32(255, 190, 60, 140);
         dl->AddCircle({sx, sy}, active ? 9.f : 6.f, col, 12, active ? 2.5f : 1.5f);
+
+        // TEMP: live readout, every frame (not gated to selection changes),
+        // so numbers can be read straight off the viewport while zooming or
+        // panning instead of round-tripping a screenshot + a Build Log line.
+        if (active) {
+            char buf[320];
+            std::snprintf(buf, sizeof(buf),
+                "pivot=(%.2f,%.2f,%.2f) screen=(%.1f,%.1f) rect=(%.0f,%.0f,%.0f,%.0f)\n"
+                "camXY=(%.2f,%.2f) dist=%.2f camH=%.2f iso=(%.1f,%.1f) vpWH=(%u,%u)",
+                p.x, p.y, p.z, sx, sy, rect.x, rect.y, rect.w, rect.h,
+                camX_, camY_, viewport3D_.cameraDistance, viewport3D_.cameraHeight,
+                viewport3D_.isoYawDeg, viewport3D_.isoPitchDeg,
+                vkCtx_.viewportWidth(), vkCtx_.viewportHeight());
+            dl->AddRectFilled({rect.x + 6, rect.y + 6}, {rect.x + 430, rect.y + 46},
+                              IM_COL32(0, 0, 0, 180));
+            dl->AddText({rect.x + 10, rect.y + 10}, IM_COL32(255, 255, 0, 255), buf);
+        }
     }
 
     // Light entities get a range ring so they are placeable without a shader.

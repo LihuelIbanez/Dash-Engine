@@ -222,7 +222,10 @@ void EditorApp::updateViewportAnimators(float dt,
 
 void EditorApp::renderWorldToTexture()
 {
-    // Determine viewport size from the ImGui panel
+    // Determine viewport size from the ImGui panel. drawViewport() already
+    // resolved vkCtx_.ensureViewportSize() with this same value earlier this
+    // frame (before the gizmo overlay was built); the calls below are just
+    // the render target's own idempotent bookkeeping (resize, begin/end).
     uint32_t vpW = static_cast<uint32_t>(std::max(1.0f, vpDisplayW_));
     uint32_t vpH = static_cast<uint32_t>(std::max(1.0f, vpDisplayH_));
 
@@ -230,11 +233,21 @@ void EditorApp::renderWorldToTexture()
     vkCtx_.updateTerrainMesh(world_.terrain());
 
     // ── Build view-projection matrix (isometric 3D camera) ──────────────────
-    // Uses the exact float panel size (not vpW/vpH's pixel-rounded copy) so the
-    // aspect ratio matches drawViewport()'s gizmoViewProj exactly.
+    // Uses vkCtx_.viewportWidth()/Height() (the actual Vulkan render target
+    // size), not vpDisplayW_/H_ (the ImGui panel's raw size): drawViewport()
+    // already called vkCtx_.ensureViewportSize() with this frame's panel size
+    // before the gizmo overlay was built, so by the time this runs (later,
+    // after ImGui::Render()) both agree on the same, already-resolved size.
+    // Building this from the panel's raw size directly used to leave the
+    // gizmo permanently a frame behind the mesh while the panel kept changing
+    // size (dragging a divider, live window resize): the overlay was built
+    // earlier in the frame from whatever the LAST frame's render left the
+    // target sized at, while the mesh below used THIS frame's fresh size.
     float eyeX, eyeY, eyeZ;
     float viewProj[16];
-    buildViewProjMatrix(vpDisplayW_, vpDisplayH_, viewProj, &eyeX, &eyeY, &eyeZ);
+    buildViewProjMatrix(static_cast<float>(vkCtx_.viewportWidth()),
+                        static_cast<float>(vkCtx_.viewportHeight()),
+                        viewProj, &eyeX, &eyeY, &eyeZ);
 
     vkCtx_.updateCamera(viewProj);
 
@@ -455,6 +468,54 @@ void EditorApp::renderWorldToTexture()
         std::memcpy(params.viewProj.m, viewProj, sizeof(params.viewProj.m));
 
         dash::vkexp::drawSceneInstances(cmd, instances, resources, lighting, params);
+
+        // ── Selection outline (Blender-style inverted hull) ─────────────────
+        // Redraws each selected entity's own mesh slightly larger and unlit in
+        // a solid colour, depth-tested against what was just drawn above: the
+        // real mesh already wrote the closer depth in the middle, so only the
+        // silhouette rim of the larger copy survives the depth test. Because
+        // this goes through the exact same model matrix, mesh and camera UBO
+        // as the real draw, it cannot drift from it the way a screen-space
+        // ImGui overlay can - there is only one source of truth for where the
+        // mesh is, which is the point (see the entityGizmoPivot() investigation
+        // in EditorGizmoTools.cpp for why a CPU-side overlay wasn't good enough).
+        if (editorMode_ == EditorMode::Edit && !selection_.empty()) {
+            for (size_t i = 0; i < instances.size(); ++i) {
+                const auto& inst = instances[i];
+                const bool isSelected = std::find(selection_.begin(), selection_.end(),
+                                                  inst.entityId) != selection_.end();
+                if (!isSelected) continue;
+
+                const dash::vkexp::MeshBuffers* mesh = resources[i].mesh ? resources[i].mesh : &vkCtx_.cubeMesh();
+                if (mesh->indexCount() == 0) continue;
+
+                vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, opaquePipeline);
+                vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                       opaqueLayout, 0, 1, &ds, 0, nullptr);
+                VkBuffer ovb[] = { mesh->vertexBuffer() };
+                VkDeviceSize ovbOffsets[] = { 0 };
+                vkCmdBindVertexBuffers(cmd, 0, 1, ovb, ovbOffsets);
+                vkCmdBindIndexBuffer(cmd, mesh->indexBuffer(), 0, mesh->indexType());
+
+                const bool active = (inst.entityId == selectedEntityId_);
+                const float grow = 1.06f;
+                const dash::vkexp::Mat4 outlineModel = dash::vkexp::trs(
+                    {inst.position.x * TILE_SCALE, inst.position.y, inst.position.z * TILE_SCALE},
+                    inst.yawDeg, inst.pitchDeg, inst.rollDeg,
+                    {inst.scale.x * grow, inst.scale.y * grow, inst.scale.z * grow});
+                float pc[dash::vkexp::kInstancePushConstantFloats];
+                dash::vkexp::LightingParams flat{};
+                flat.intensity = 0.0f;
+                flat.ambient = active ? 1.0f : 0.6f;
+                dash::vkexp::buildInstancePushConstants(
+                    outlineModel, active ? 1.0f : 0.6f, active ? 0.55f : 0.33f, 0.0f, 1.0f,
+                    flat, pc, 0, 0.0f, 1.0f);
+                vkCmdPushConstants(cmd, opaqueLayout,
+                                  VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+                                  0, sizeof(pc), pc);
+                vkCmdDrawIndexed(cmd, mesh->indexCount(), 1, 0, 0, 0);
+            }
+        }
     }
 
     // Drawn last, still inside the HDR pass, same as Renderer::particles_.record().

@@ -138,6 +138,14 @@ public:
                         const std::vector<dash::vfx::ParticleInstance>& alphaBatch,
                         const std::vector<dash::vfx::ParticleInstance>& additiveBatch);
 
+    // The actual size of the offscreen render target right now, which can lag
+    // a frame or more behind the panel's own size: ensureViewportSize() only
+    // reallocates past a hysteresis threshold. Anything building a projection
+    // or NDC<->pixel mapping for the 3D view must use these, not the panel's
+    // raw size, or its aspect ratio drifts from what Vulkan actually renders.
+    uint32_t viewportWidth() const { return vpWidth_; }
+    uint32_t viewportHeight() const { return vpHeight_; }
+
 private:
     bool createInstance(SDL_Window* window);
     bool createOffscreenTarget(uint32_t w, uint32_t h);
