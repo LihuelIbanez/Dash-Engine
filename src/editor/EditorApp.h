@@ -34,6 +34,8 @@
 #include "project/ProjectManager.h"
 #include "EditorVkContext.h"
 #include "rendering/animation/AnimationWiring.h"
+#include "EventDispatcher.h"
+#include "game/runtime3d/EnemySimulation3D.h"
 #include <string>
 #include <vector>
 #include <map>
@@ -177,6 +179,9 @@ private:
     // Reloads assets/world/biomes.json; falls back to the built-in thresholds.
     void loadBiomeTable();
     void regenerateWorld();
+    // ── Play mode gameplay simulation (AI/combat, same system as VulkanBootstrap) ──
+    dash::runtime3d::EnemySimulation3D enemySim_;
+    EventDispatcher                    events_;
     // ── Animation authoring ───────────────────────────
     AnimationPanel               animationPanel_;
     bool                         showAnimationPanel_ = false;

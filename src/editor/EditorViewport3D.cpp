@@ -259,6 +259,22 @@ void EditorApp::renderWorldToTexture()
         resources[i].mesh = vkCtx_.resolveMesh(inst.meshId);
     }
 
+    // ── Enemy AI + combat (Play mode only; enemySim_ is armed in enterPlayMode) ──
+    // Runs after the grounding loop above: syncToInstances() writes each agent's
+    // already-grounded absolute position, which must be the last word on it.
+    if (editorMode_ == EditorMode::Play && !enemySim_.empty()) {
+        float playerX = 0.0f, playerZ = 0.0f;
+        for (const auto& e : flatScene.entities) {
+            if (e.type == EntityData::Type::Player) { playerX = e.x; playerZ = e.y; break; }
+        }
+        const float simDt = playback_.paused() ? 0.0f
+            : std::min(ImGui::GetIO().DeltaTime, 0.1f) * playback_.timeScale();
+        const bool attackInput = ImGui::IsKeyDown(ImGuiKey_Space);
+        enemySim_.update(simDt, playerX, playerZ, attackInput, &world_.terrain(), true, events_);
+        enemySim_.syncToInstances(instances);
+        events_.flush();
+    }
+
     dash::vkexp::LightingParams lighting;
     lighting.dirX = viewport3D_.lightDirX;
     lighting.dirY = viewport3D_.lightDirY;

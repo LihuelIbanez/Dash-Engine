@@ -5,7 +5,9 @@
 // Split out of EditorApp.cpp to keep that file navigable.
 // ═════════════════════════════════════════════════════════════════════════════
 #include "EditorApp.h"
+#include "GameEvents.h"
 #include "IconsFontAwesome6.h"
+#include "rendering/vulkan/SceneLoader.h"
 #include "imgui.h"
 
 #include <chrono>
@@ -274,6 +276,31 @@ void EditorApp::enterPlayMode()
     scene_.filePath = prevPath;
     scene_.modified = prevMod;
     addLog(std::string("[Play] Scene exported: ") + (saved ? "ok" : "failed"));
+
+    // ── Enemy AI + melee simulation: same runtime3d system VulkanBootstrap uses,
+    // driven every frame from EditorApp::renderWorldToTexture() while Play is active.
+    {
+        const SceneData flatScene = dash::editor::flattenHierarchy(scene_);
+        const auto instances = dash::vkexp::SceneLoader::buildInstances(flatScene);
+        enemySim_.build(flatScene, instances, biomeTable_.empty() ? nullptr : &biomeTable_);
+
+        events_.clear(); // drop subscriptions from any previous Play session
+        if (!enemySim_.empty()) {
+            events_.subscribe<DamageEvent>([this](const DamageEvent& e) {
+                addLog("[Combat] hit " + e.targetName + " for " + std::to_string(e.damage) +
+                       " (hp left " + std::to_string(e.finalHealth) + ")");
+            });
+            events_.subscribe<DeathEvent>([this](const DeathEvent& e) {
+                addLog("[Combat] " + e.entityName + " died (+" + std::to_string(e.expReward) + " xp)");
+            });
+            events_.subscribe<LootDropEvent>([this](const LootDropEvent& e) {
+                std::string items;
+                for (const auto& item : e.items) items += " " + item.item + " x" + std::to_string(item.qty);
+                addLog("[Loot] " + e.enemyId + " dropped:" + items);
+            });
+            addLog("[Play] Enemy simulation armed: " + std::to_string(enemySim_.agentCount()) + " agent(s).");
+        }
+    }
 
     editorMode_ = EditorMode::Play;
 
