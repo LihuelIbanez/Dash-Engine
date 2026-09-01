@@ -150,6 +150,20 @@ void EditorApp::drawViewport()
     bool vpFocused = ImGui::IsWindowFocused();
     bool vpHovered = ImGui::IsItemHovered();
 
+    // Edit mode: WASD pans camera. Must run before the gizmo viewProj below is
+    // built: it used to run after, so a pan applied this frame reached the
+    // mesh render (built later, in renderWorldToTexture()) but not the gizmo
+    // overlay (built here) - one frame of drift every frame WASD was held,
+    // which reads as the gizmo never quite sitting on its entity.
+    if (vpFocused && editorMode_ == EditorMode::Edit) {
+        ImGuiIO& io = ImGui::GetIO();
+        float speed = 12.f * io.DeltaTime;
+        if (ImGui::IsKeyDown(ImGuiKey_W)) { camX_ -= speed; camY_ -= speed; }
+        if (ImGui::IsKeyDown(ImGuiKey_S)) { camX_ += speed; camY_ += speed; }
+        if (ImGui::IsKeyDown(ImGuiKey_A)) { camX_ -= speed; camY_ += speed; }
+        if (ImGui::IsKeyDown(ImGuiKey_D)) { camX_ += speed; camY_ -= speed; }
+    }
+
     // ── Transform gizmo ──────────────────────────────────────────────────────
     // Runs before the tools below so a gizmo drag swallows the click instead of
     // painting a tile or moving the entity underneath.
@@ -170,18 +184,6 @@ void EditorApp::drawViewport()
 
     // ── Play-mode input: Vulkan handles its own input ────────────────────────
     // (clicking in viewport sends input to Vulkan process, not editor)
-
-    // ── Edit-mode interaction ────────────────────────────────────────────────
-
-    // Edit mode: WASD pans camera
-    if (vpFocused && editorMode_ == EditorMode::Edit) {
-        ImGuiIO& io = ImGui::GetIO();
-        float speed = 12.f * io.DeltaTime;
-        if (ImGui::IsKeyDown(ImGuiKey_W)) { camX_ -= speed; camY_ -= speed; }
-        if (ImGui::IsKeyDown(ImGuiKey_S)) { camX_ += speed; camY_ += speed; }
-        if (ImGui::IsKeyDown(ImGuiKey_A)) { camX_ -= speed; camY_ += speed; }
-        if (ImGui::IsKeyDown(ImGuiKey_D)) { camX_ += speed; camY_ -= speed; }
-    }
 
     // Play mode: WASD moves player entity, camera follows
     if (vpFocused && editorMode_ == EditorMode::Play) {

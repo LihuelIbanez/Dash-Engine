@@ -230,10 +230,11 @@ void EditorApp::renderWorldToTexture()
     vkCtx_.updateTerrainMesh(world_.terrain());
 
     // ── Build view-projection matrix (isometric 3D camera) ──────────────────
+    // Uses the exact float panel size (not vpW/vpH's pixel-rounded copy) so the
+    // aspect ratio matches drawViewport()'s gizmoViewProj exactly.
     float eyeX, eyeY, eyeZ;
     float viewProj[16];
-    buildViewProjMatrix(static_cast<float>(vpW), static_cast<float>(vpH),
-                        viewProj, &eyeX, &eyeY, &eyeZ);
+    buildViewProjMatrix(vpDisplayW_, vpDisplayH_, viewProj, &eyeX, &eyeY, &eyeZ);
 
     vkCtx_.updateCamera(viewProj);
 

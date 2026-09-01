@@ -379,6 +379,7 @@ void BoneStructurePanel::drawTree(float width)
         }
     }
     ImGui::EndChild();
+    ImGui::EndGroup();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
