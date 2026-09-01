@@ -121,6 +121,8 @@ private:
                              float mouseX, float mouseY, bool viewportHovered);
     void drawSelectionOverlays(ImDrawList* dl, const float viewProj[16],
                                const dash::gizmo::ViewportRect& rect);
+    void drawSelectionOutline(ImDrawList* dl, const float viewProj[16],
+                              const dash::gizmo::ViewportRect& rect, uint64_t entityId);
     void handleGizmoShortcuts(bool viewportFocused);
 
     // ── Rectangle selection ──────────────────────────────────────────────────

@@ -171,6 +171,7 @@ void EditorApp::drawViewport()
     float gizmoViewProj[16];
     buildViewProjMatrix(vpDisplayW_, vpDisplayH_, gizmoViewProj);
     const dash::gizmo::ViewportRect gizmoRect{vpScreenX_, vpScreenY_, vpDisplayW_, vpDisplayH_};
+
     if (editorMode_ == EditorMode::Edit) {
         handleGizmoShortcuts(vpFocused);
 
