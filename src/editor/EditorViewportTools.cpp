@@ -517,7 +517,8 @@ void EditorApp::texturePaintAt(float wx, float wy)
     commandStack_.execute(std::move(cmd), scene_, world_);
 }
 
-void EditorApp::waterToolAt(float wx, float wy)
+// Water level is per-body, not per-position; wx/wy only keep the call site uniform with the other tools.
+void EditorApp::waterToolAt(float, float)
 {
     // Water tool sets/adjusts water level for the selected water body
     TerrainMesh& tm = world_.terrain();

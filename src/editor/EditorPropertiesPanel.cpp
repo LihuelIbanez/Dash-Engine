@@ -395,6 +395,7 @@ void EditorApp::drawPropertiesPanel()
             case ComponentType::Combat:    newComp = CombatComponent{};    break;
             case ComponentType::AI:        newComp = AIComponent{};        break;
             case ComponentType::Physics:   newComp = PhysicsComponent{};   break;
+            default: break; // Light/Animation/Audio: added via their own UI, never in `missing`
             }
             commandStack_.execute(
                 std::make_unique<AddComponentCommand>(e.id, newComp),

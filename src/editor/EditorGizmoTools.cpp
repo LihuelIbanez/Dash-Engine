@@ -371,6 +371,7 @@ bool EditorApp::updateViewportGizmo(const float viewProj[16],
                     w.y = gizmoDragPivot_.y + (entry.startWorld.y - gizmoDragPivot_.y) * f;
                     break;
                 }
+                default: break; // None: no gizmo shown, so dragging can't start
             }
             dash::editor::setWorldTransform(scene_, entry.entityId, w);
         }
