@@ -434,6 +434,13 @@ void EditorApp::drawSelectionOutline(ImDrawList* dl, const float viewProj[16],
         inst.position.y += world_.terrain().sampleHeight(inst.position.x, inst.position.z)
                          + (isCubePlaceholder ? inst.scale.y : 0.0f);
 
+        // Real meshes (e.g. the wolf) don't fit a +-1 local cube - their actual
+        // bounds aren't tracked anywhere - so drawing this box for them would
+        // show a wrong-shaped outline instead of no outline. The pivot ring in
+        // drawSelectionOverlays() already marks those; only cube placeholders
+        // get the exact box.
+        if (!isCubePlaceholder) return;
+
         const dash::vkexp::Mat4 model = dash::vkexp::trs(
             {inst.position.x * TILE_SCALE, inst.position.y, inst.position.z * TILE_SCALE},
             inst.yawDeg, inst.pitchDeg, inst.rollDeg,
