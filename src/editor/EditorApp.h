@@ -361,7 +361,6 @@ private:
                                  const std::vector<dash::vkexp::RenderInstance>& instances,
                                  std::vector<dash::vkexp::InstanceResources>& resources);
     void getSpritePivot(const std::string& spriteName, float& outPivotX, float& outPivotY);
-    Vec2f worldToScreenIso3D(float wx, float wy, float wz) const;
     float entityWorldZ(uint64_t entityId) const;
     float tileHeight(TileType type) const;
     bool syncSceneRender3DSettingsFromUI();
