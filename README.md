@@ -8,6 +8,8 @@
 
 ## Estado del Proyecto
 
+> Nota (2026-09-01): el numero de version de CMake es `2.0.0` (ver `project()` en `CMakeLists.txt`), no coincide con las etiquetas "v14.0-alpha" de mas abajo — son numeros de sprint, no de release. Ademas del listado siguiente, la rama `feat/vulkan` sumo trabajo sustancial no trackeado en un sprint formal: iluminacion multi-fuente, sombras en cascada, skinning esqueletal, texturas de terreno PBR, SSAO, VFX de particulas, audio 3D, transporte de Play mode y un Runtime Inspector. Ver `planning/tasks/23_SPRINT15_COMPONENTES_3D.md` y `planning/tasks/24_BACKLOG_POST_SPRINT15.md` para el detalle verificado mas reciente.
+
 ```
 Overall  [██████████████████████████████]  100%  v14.0-alpha (Sprint 14)
 
@@ -24,6 +26,7 @@ Importacion 3D     [████████████████████
 Windows Port       [██████████████████████████████]  100%  (D106-D110)
 Visual Polish      [██████████████████████████████]  100%  (Sprint 13)
 Terrain 3D + Gravity [██████████████████████████████]  100%  (Sprint 14)
+Componentes 3D     [██████████████████████████████]  100%  (Sprint 15)
 ```
 
 | Modulo | Estado | Detalle |
@@ -41,8 +44,9 @@ Terrain 3D + Gravity [███████████████████�
 | Windows Port | ✅ Completo | CMake MSVC + CMakePresets.json, build_windows.ps1, Packaging cross-platform (DMG/ZIP+NSIS), CI/CD GitHub Actions dual |
 | Visual Polish | ✅ Completo | Tema VS Code Dark+, status bar con modo/escena/FPS, separadores verticales, audit funcional completo |
 | Terrain 3D + Gravity | ✅ Completo | TILE_SCALE configurable, smooth normals, paleta mejorada, AO, Blinn-Phong shaders, niebla, animacion de agua, terrain-following para personajes |
+| Componentes 3D | ✅ Completo | RenderInstance con rotacion/mesh/material/visible/layer, MaterialImporter + Asset Browser, RenderMode::BillboardSprite, PhysicsComponent por entidad, frustum culling (442 instancias -> 10 dibujadas) |
 
-**Sprint 14 completado:** terreno 3D con visual polish avanzado (smooth shading, iluminacion Blinn-Phong, AO, niebla) y gravedad/terrain-following para personajes.
+**Sprint 15 completado:** componentes de render/fisica conectados end-to-end (ver `planning/tasks/23_SPRINT15_COMPONENTES_3D.md`); el backlog de cierre (`24_BACKLOG_POST_SPRINT15.md`) esta resuelto en su totalidad. Trabajo posterior (iluminacion, sombras, skinning, terreno PBR, SSAO, VFX, audio 3D, Play mode) vive en `feat/vulkan` sin un documento de sprint dedicado — la fuente de verdad son los commits y `planning/tasks/`.
 
 ---
 

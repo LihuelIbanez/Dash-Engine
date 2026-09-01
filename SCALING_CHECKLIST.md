@@ -3,7 +3,7 @@
 Este plan prioriza primero el Editor (como Unity/Unreal/Godot) y luego el Runtime del juego.
 Marca cada item con [x] cuando este completado.
 
-**Ultima actualizacion: 2026-04-23**
+**Ultima actualizacion: 2026-09-01**
 
 ## Objetivos de Escalado
 
@@ -157,7 +157,7 @@ Spec completa: `planning/tasks/23_SPRINT15_COMPONENTES_3D.md`
 - [x] 15.8 Cuerpos fisicos por entidad y eventos de colision tipados.
 
 ### 25) Rendimiento (Fase 4)
-- [ ] 15.9 Batching por malla e instancing — **postergada**: el culling ya redujo los draws 97.7%, medir antes de optimizar.
+- [ ] 15.9 Batching por malla e instancing — **descartada con datos** (2026-08-27): el culling ya redujo los draws 97.7%, medido y documentado en `planning/tasks/24_BACKLOG_POST_SPRINT15.md` (item A1).
 - [x] 15.10 Frustum culling y ordenamiento por capa (442 instancias → 10 dibujadas).
 
 ### 26) Cobertura de tests (Fase 5)
@@ -194,7 +194,7 @@ Marca como completado cuando se cumpla todo:
 | Sprint 12 - Portabilidad Windows | ✅ Completada | 100% (D106-D110) |
 | Sprint 13 - Visual Polish | ✅ Completada | 100% (tema VS Code, status bar, audit) |
 | Auditoria Tecnica Ago-2026 | ✅ Completada | 100% (3 bugs + 6 mejoras — ver planning/tasks/22_AUDIT_AGOSTO_2026.md) |
-| Sprint 15 - Componentes 3D | 🟡 En progreso | Fases 1-3 + culling (ver planning/tasks/23_SPRINT15_COMPONENTES_3D.md) |
+| Sprint 15 - Componentes 3D | ✅ Completada | 100% (ver planning/tasks/23_SPRINT15_COMPONENTES_3D.md y 24_BACKLOG_POST_SPRINT15.md) |
 
 ## Notas
 
