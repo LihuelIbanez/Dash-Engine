@@ -808,8 +808,10 @@ bool Renderer::init(WindowContext& window)
     }
 
     setupShadowLight();
-    // Generate a small checkerboard floor when no terrain was loaded
-    if (terrainInstances_.empty()) {
+    // A successful terrain mesh upload also clears terrainInstances_ (the tile
+    // grid it replaces), so checking emptiness alone fired this unconditionally
+    // and phantom-floored the world near the origin on every load.
+    if (terrainInstances_.empty() && !terrainMeshReady_) {
         for (int z = -3; z <= 3; ++z) {
             for (int x = -3; x <= 3; ++x) {
                 const bool checker = ((x + z) & 1) == 0;

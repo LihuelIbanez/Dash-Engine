@@ -278,26 +278,17 @@ bool EditorApp::selectionGizmoPivot(dash::gizmo::Vec3& outPivot, Transform3D& ou
 {
     if (selection_.empty()) return false;
 
-    dash::gizmo::Vec3 sum{0.f, 0.f, 0.f};
-    Transform3D sceneSum;
-    int count = 0;
-    for (uint64_t id : selection_) {
-        if (!findEntityById(id)) continue;
-        const dash::gizmo::Vec3 p = entityGizmoPivot(id);
-        const Transform3D w = dash::editor::worldTransform(scene_, id);
-        sum.x += p.x; sum.y += p.y; sum.z += p.z;
-        sceneSum.x += w.x; sceneSum.y += w.y; sceneSum.z += w.z;
-        ++count;
+    // The active entity (selection_.back(), per its own doc comment) owns the
+    // pivot, matching Unreal: multi-selecting three objects across the map and
+    // averaging their positions would drop the gizmo in empty space between
+    // them instead of on anything you actually selected.
+    for (auto it = selection_.rbegin(); it != selection_.rend(); ++it) {
+        if (!findEntityById(*it)) continue;
+        outPivot = entityGizmoPivot(*it);
+        outScenePivot = dash::editor::worldTransform(scene_, *it);
+        return true;
     }
-    if (count == 0) return false;
-
-    const float inv = 1.f / static_cast<float>(count);
-    outPivot = { sum.x * inv, sum.y * inv, sum.z * inv };
-    outScenePivot = Transform3D{};
-    outScenePivot.x = sceneSum.x * inv;
-    outScenePivot.y = sceneSum.y * inv;
-    outScenePivot.z = sceneSum.z * inv;
-    return true;
+    return false;
 }
 
 void EditorApp::handleGizmoShortcuts(bool viewportFocused)
