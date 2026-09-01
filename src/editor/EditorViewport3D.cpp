@@ -273,6 +273,10 @@ void EditorApp::renderWorldToTexture()
         enemySim_.update(simDt, playerX, playerZ, attackInput, &world_.terrain(), true, events_);
         enemySim_.syncToInstances(instances);
         events_.flush();
+
+        particleSim_.update(simDt);
+        particleSim_.buildInstances(particleAlphaBatch_, particleAdditiveBatch_,
+                                    dash::vfx::kAtlasCols, dash::vfx::kAtlasRows);
     }
 
     dash::vkexp::LightingParams lighting;
@@ -450,6 +454,14 @@ void EditorApp::renderWorldToTexture()
         std::memcpy(params.viewProj.m, viewProj, sizeof(params.viewProj.m));
 
         dash::vkexp::drawSceneInstances(cmd, instances, resources, lighting, params);
+    }
+
+    // Drawn last, still inside the HDR pass, same as Renderer::particles_.record().
+    if (!particleAlphaBatch_.empty() || !particleAdditiveBatch_.empty()) {
+        dash::vkexp::Mat4 particleViewProj{};
+        std::memcpy(particleViewProj.m, viewProj, sizeof(particleViewProj.m));
+        vkCtx_.recordParticles(particleViewProj, camRight, camUp,
+                              particleAlphaBatch_, particleAdditiveBatch_);
     }
 
     vkCtx_.endViewportRender();

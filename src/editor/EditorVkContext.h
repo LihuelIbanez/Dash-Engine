@@ -10,6 +10,7 @@
 #include "rendering/vulkan/SwapchainContext.h"
 #include "rendering/vulkan/FrameGraphLite.h"
 #include "rendering/vulkan/HdrTarget.h"
+#include "rendering/vulkan/ParticleRenderer.h"
 #include "rendering/vulkan/SceneRenderer.h"
 #include "rendering/vulkan/ShadowMap.h"
 #include "rendering/vulkan/SsaoPass.h"
@@ -128,6 +129,15 @@ public:
     // image ImGui ends up sampling).
     VkRenderPass viewportRenderPass() const { return hdr_.renderPass(); }
 
+    // ── Combat VFX (blood/impact/death particles) ──────────────────────────
+    // Batches are built by the caller's CPU-side dash::vfx::ParticleSystem;
+    // this just uploads and draws them, same as Renderer::particles_.record().
+    // No-op (and cheap) when particles_ failed to come up.
+    void recordParticles(const dash::vkexp::Mat4& viewProj,
+                        const dash::vkexp::Vec3& camRight, const dash::vkexp::Vec3& camUp,
+                        const std::vector<dash::vfx::ParticleInstance>& alphaBatch,
+                        const std::vector<dash::vfx::ParticleInstance>& additiveBatch);
+
 private:
     bool createInstance(SDL_Window* window);
     bool createOffscreenTarget(uint32_t w, uint32_t h);
@@ -163,6 +173,7 @@ private:
     // samples that image raw onto a _UNORM swapchain, so the resolve is the one
     // that has to encode sRGB by hand.
     dash::vkexp::HdrTarget      hdr_;    dash::vkexp::GradingParams  grading_;
+    dash::vkexp::ParticleRenderer particles_;
 
     // Scene descriptor (UBO binding 0)
     VkDescriptorSetLayout sceneDescLayout_ = VK_NULL_HANDLE;

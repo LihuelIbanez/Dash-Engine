@@ -36,6 +36,8 @@
 #include "rendering/animation/AnimationWiring.h"
 #include "EventDispatcher.h"
 #include "game/runtime3d/EnemySimulation3D.h"
+#include "rendering/vfx/CombatVfx.h"
+#include "rendering/vfx/ParticleSystem.h"
 #include <string>
 #include <vector>
 #include <map>
@@ -182,6 +184,10 @@ private:
     // ── Play mode gameplay simulation (AI/combat, same system as VulkanBootstrap) ──
     dash::runtime3d::EnemySimulation3D enemySim_;
     EventDispatcher                    events_;
+    // CPU-side combat particles; drawn by EditorVkContext::recordParticles().
+    dash::vfx::ParticleSystem                particleSim_;
+    std::vector<dash::vfx::ParticleInstance> particleAlphaBatch_;
+    std::vector<dash::vfx::ParticleInstance> particleAdditiveBatch_;
     // ── Animation authoring ───────────────────────────
     AnimationPanel               animationPanel_;
     bool                         showAnimationPanel_ = false;

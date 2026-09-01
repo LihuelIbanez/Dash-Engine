@@ -285,13 +285,44 @@ void EditorApp::enterPlayMode()
         enemySim_.build(flatScene, instances, biomeTable_.empty() ? nullptr : &biomeTable_);
 
         events_.clear(); // drop subscriptions from any previous Play session
+        particleSim_.clear();
+        particleSim_.setSeed(0xC0FFEEu);
         if (!enemySim_.empty()) {
-            events_.subscribe<DamageEvent>([this](const DamageEvent& e) {
+            // Target position for the splatter: the player if it's the target,
+            // else whichever live agent owns that entity id. No attacker lookup
+            // (yet), so particles fly in a fixed direction rather than "away
+            // from the hit" — a cosmetic simplification, not a correctness gap.
+            auto locateTarget = [this](uint64_t targetId, const std::string& targetName,
+                                       float& tx, float& tz) -> bool {
+                if (targetName == "Player") {
+                    for (const auto& e : scene_.entities) {
+                        if (e.type == EntityData::Type::Player) { tx = e.x; tz = e.y; return true; }
+                    }
+                    return false;
+                }
+                for (const auto& agent : enemySim_.agents()) {
+                    if (agent.entityId == targetId) { tx = agent.x; tz = agent.z; return true; }
+                }
+                return false;
+            };
+
+            events_.subscribe<DamageEvent>([this, locateTarget](const DamageEvent& e) {
                 addLog("[Combat] hit " + e.targetName + " for " + std::to_string(e.damage) +
                        " (hp left " + std::to_string(e.finalHealth) + ")");
+                float tx = 0.f, tz = 0.f;
+                if (!locateTarget(e.targetId, e.targetName, tx, tz)) return;
+                const float ground = world_.terrain().sampleHeight(tx, tz);
+                const float wx = tx * TILE_SCALE, wz = tz * TILE_SCALE, wy = ground + 0.35f;
+                particleSim_.emit(dash::vfx::bloodSplatter(wx, wy, wz, 0.f, 1.f, e.damage, ground + 0.02f));
+                particleSim_.emit(dash::vfx::impactSparks(wx, wy, wz, 0.f, 1.f, e.damage));
             });
             events_.subscribe<DeathEvent>([this](const DeathEvent& e) {
                 addLog("[Combat] " + e.entityName + " died (+" + std::to_string(e.expReward) + " xp)");
+                const float ground = world_.terrain().sampleHeight(e.x, e.y);
+                const float wx = e.x * TILE_SCALE, wz = e.y * TILE_SCALE, wy = ground + 0.55f;
+                particleSim_.emit(dash::vfx::deathShockwave(wx, wy, wz));
+                particleSim_.emit(dash::vfx::deathGibs(wx, wy, wz, ground + 0.02f));
+                particleSim_.emit(dash::vfx::deathSmoke(wx, wy, wz));
             });
             events_.subscribe<LootDropEvent>([this](const LootDropEvent& e) {
                 std::string items;

@@ -262,6 +262,13 @@ bool EditorVkContext::init(SDL_Window* window)
         return false;
     }
 
+    // Non-fatal: the viewport still renders correctly without combat VFX.
+    if (!particles_.init(deviceCtx_.physicalDevice(), deviceCtx_.device(),
+                         deviceCtx_.graphicsQueue(), frameGraph_.commandPool(),
+                         hdr_.renderPass(), swapchain_.imageCount(), VULKAN_SHADER_DIR)) {
+        std::fprintf(stderr, "[EditorVk] Particle renderer unavailable; combat VFX disabled.\n");
+    }
+
     // ── Offscreen resolve pass (tonemap output, sampled by ImGui) ───────────
     {
         VkAttachmentDescription colorAtt{};
@@ -1038,6 +1045,17 @@ ImTextureID EditorVkContext::viewportTexture() const
     return reinterpret_cast<ImTextureID>(vpImGuiDesc_);
 }
 
+void EditorVkContext::recordParticles(const dash::vkexp::Mat4& viewProj,
+                                      const dash::vkexp::Vec3& camRight, const dash::vkexp::Vec3& camUp,
+                                      const std::vector<dash::vfx::ParticleInstance>& alphaBatch,
+                                      const std::vector<dash::vfx::ParticleInstance>& additiveBatch)
+{
+    if (!particles_.valid()) return;
+    particles_.record(currentCmd(), deviceCtx_.device(), currentFrameIndex(),
+                      {vpWidth_, vpHeight_}, viewProj, camRight, camUp,
+                      alphaBatch, additiveBatch);
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Camera UBO
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1330,6 +1348,7 @@ void EditorVkContext::shutdown()
 
     shadowMap_.shutdown(dev);
     ssao_.shutdown(dev);
+    particles_.shutdown(dev);
 
     destroyBoneResources();
 
