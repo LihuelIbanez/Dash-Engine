@@ -12,6 +12,7 @@
 #include "commands/MultiEditComponentFieldCommand.h"
 #include "commands/ReparentEntityCommand.h"
 #include "commands/TransformEntitiesCommand.h"
+#include "rendering/vulkan/SceneLoader.h"
 
 #include "imgui.h"
 
@@ -264,11 +265,23 @@ void EditorApp::drawHierarchyNode(uint64_t entityId, int depth)
 // ─────────────────────────────────────────────────────────────────────────────
 dash::gizmo::Vec3 EditorApp::entityGizmoPivot(uint64_t entityId)
 {
+    // Mirrors the exact grounding EditorApp::renderWorldToTexture() applies:
+    // baseHeight (player/enemy) and the cube placeholder's extra lift live in
+    // SceneLoader::buildInstances(), not in the raw TransformComponent, so
+    // reading tf.z alone left the gizmo floating below/behind the mesh.
+    const SceneData flatScene = dash::editor::flattenHierarchy(scene_);
+    const auto instances = dash::vkexp::SceneLoader::buildInstances(flatScene);
+    for (const auto& inst : instances) {
+        if (inst.entityId != entityId) continue;
+        const bool isCubePlaceholder = inst.meshId.empty() || inst.meshId == "cube";
+        const float y = inst.position.y
+                      + world_.terrain().sampleHeight(inst.position.x, inst.position.z)
+                      + (isCubePlaceholder ? inst.scale.y : 0.0f);
+        return { inst.position.x * TILE_SCALE, y, inst.position.z * TILE_SCALE };
+    }
+
+    // Fallback for entities buildInstances() skips (e.g. hidden helpers).
     const Transform3D w = dash::editor::worldTransform(scene_, entityId);
-    // Scene x/y is the tile plane and z is height; render space is y-up. This
-    // has to land on the instance origin the renderer draws around, which is the
-    // centre of its AABB: any extra offset shows up as a gizmo floating off the
-    // object, and a fixed one is wrong the moment meshes stop being unit cubes.
     return { w.x * TILE_SCALE,
              world_.terrain().sampleHeight(w.x, w.y) + w.z,
              w.y * TILE_SCALE };
