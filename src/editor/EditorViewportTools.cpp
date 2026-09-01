@@ -686,13 +686,27 @@ bool EditorApp::viewportScreenToWorld(float vx, float vy, float& wx, float& wy)
     // Ray direction
     float dirX = farX - nearX, dirY = farY - nearY, dirZ = farZ - nearZ;
 
-    // Intersect ray with terrain plane y = 0
+    // Intersect ray with terrain, iterating instead of assuming a flat y=0
+    // plane: each pass re-intersects at the height sampled from the previous
+    // guess, converging in a few steps on real slopes. A single y=0 pass put
+    // the hit tile away from whatever the cursor was actually over (and thus
+    // whatever the gizmo/tools acted on) anywhere the ground isn't flat.
     if (std::abs(dirY) < 1e-6f) return false;  // ray parallel to ground
-    float t = -nearY / dirY;
-    if (t < 0.0f) return false;  // intersection behind camera
 
-    float hitX = nearX + t * dirX;
-    float hitZ = nearZ + t * dirZ;
+    float planeY = 0.0f;
+    float hitX = 0.0f, hitZ = 0.0f;
+    for (int i = 0; i < 4; ++i) {
+        const float t = (planeY - nearY) / dirY;
+        if (t < 0.0f) return false;  // intersection behind camera
+
+        hitX = nearX + t * dirX;
+        hitZ = nearZ + t * dirZ;
+
+        const float tileX = hitX / TILE_SCALE;
+        const float tileZ = hitZ / TILE_SCALE;
+        if (tileX < 0 || tileX >= WORLD_W || tileZ < 0 || tileZ >= WORLD_H) break;
+        planeY = world_.terrain().sampleHeight(tileX, tileZ);
+    }
 
     // Convert from 3D world space to tile coords
     wx = hitX / TILE_SCALE;
