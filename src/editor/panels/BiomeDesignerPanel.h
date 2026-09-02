@@ -180,10 +180,14 @@ public:
 
     // `table` is the live table the editor generates from; regenerate re-runs
     // the world with the given seed after the table has been edited.
+    // `biomeTableId` is the active scene's SceneData::biomeTableId: empty means
+    // the default assets/world/biomes.json; "Save As..." writes a named table
+    // under assets/world/biomes/ and assigns it to the scene.
     void draw(dash::world::BiomeTable& table,
               const TerrainMesh& terrain,
               const std::string& assetsRoot,
               unsigned int& worldSeed,
+              std::string& biomeTableId,
               const RegenerateCallback& regenerate,
               const LogCallback& log);
 
@@ -199,6 +203,7 @@ private:
     std::vector<dash::editor::biomedesign::PreviewRun> previewRuns_;
     std::vector<int> previewCounts_;
     unsigned int previewGeneration_ = 0;
+    char saveAsNameBuf_[96] = {0};
 };
 
 #endif // DASH_BIOME_DESIGNER_NO_IMGUI

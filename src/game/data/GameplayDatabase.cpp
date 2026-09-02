@@ -55,6 +55,7 @@ bool GameplayDatabase::load(const std::string& assetsDir)
     ok &= loadPlayerClasses(dir + "player_classes.json");
     ok &= loadEnemies(dir + "enemies.json");
     ok &= loadLootTables(dir + "loot_tables.json");
+    ok &= loadItems(dir + "items.json");
     return ok;
 }
 
@@ -74,6 +75,12 @@ const LootTableData* GameplayDatabase::findLootTableForEnemy(const std::string& 
 {
     auto it = lootByEnemy_.find(enemyId);
     return it != lootByEnemy_.end() ? &lootTables_[it->second] : nullptr;
+}
+
+const ItemData* GameplayDatabase::findItem(const std::string& id) const
+{
+    auto it = itemIndex_.find(id);
+    return it != itemIndex_.end() ? &items_[it->second] : nullptr;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -139,7 +146,8 @@ bool GameplayDatabase::loadFromSqlite(const std::string& dbPath)
 
     return loadPlayerClassesFromSqlite()
         && loadEnemiesFromSqlite()
-        && loadLootTablesFromSqlite();
+        && loadLootTablesFromSqlite()
+        && loadItemsFromSqlite();
 }
 
 bool GameplayDatabase::loadPlayerClassesFromSqlite()
@@ -379,12 +387,246 @@ bool GameplayDatabase::loadLootTablesFromSqlite()
     return true;
 }
 
+namespace {
+
+ItemData itemFromJson(const json& j)
+{
+    ItemData d;
+    d.id          = j.value("id", "unknown");
+    d.name        = j.value("name", d.id);
+    d.description = j.value("description", "");
+    d.type        = itemTypeFromStr(j.value("type", "misc"));
+    d.rarity      = itemRarityFromStr(j.value("rarity", "normal"));
+    d.icon        = j.value("icon", "");
+    d.levelReq    = j.value("levelReq", 1);
+    d.goldValue   = j.value("goldValue", 0);
+    d.stackable   = j.value("stackable", false);
+    d.maxStack    = j.value("maxStack", 1);
+    d.bonusAttack      = j.value("bonusAttack", 0);
+    d.bonusDefense     = j.value("bonusDefense", 0);
+    d.bonusMagicAttack = j.value("bonusMagicAttack", 0);
+    d.bonusSpeed       = j.value("bonusSpeed", 0.0f);
+    d.bonusCritChance  = j.value("bonusCritChance", 0.0f);
+    d.bonusMaxHp       = j.value("bonusMaxHp", 0);
+    d.bonusMaxMana     = j.value("bonusMaxMana", 0);
+    d.consumableEffect = j.value("consumableEffect", "");
+    d.consumableValue  = j.value("consumableValue", 0);
+    return d;
+}
+
+json itemToJson(const ItemData& d)
+{
+    json j;
+    j["id"]          = d.id;
+    j["name"]        = d.name;
+    j["description"] = d.description;
+    j["type"]        = itemTypeToStr(d.type);
+    j["rarity"]      = itemRarityToStr(d.rarity);
+    j["icon"]        = d.icon;
+    j["levelReq"]    = d.levelReq;
+    j["goldValue"]   = d.goldValue;
+    j["stackable"]   = d.stackable;
+    j["maxStack"]    = d.maxStack;
+    if (d.bonusAttack != 0)      j["bonusAttack"] = d.bonusAttack;
+    if (d.bonusDefense != 0)     j["bonusDefense"] = d.bonusDefense;
+    if (d.bonusMagicAttack != 0) j["bonusMagicAttack"] = d.bonusMagicAttack;
+    if (d.bonusSpeed != 0.0f)      j["bonusSpeed"] = d.bonusSpeed;
+    if (d.bonusCritChance != 0.0f) j["bonusCritChance"] = d.bonusCritChance;
+    if (d.bonusMaxHp != 0)   j["bonusMaxHp"] = d.bonusMaxHp;
+    if (d.bonusMaxMana != 0) j["bonusMaxMana"] = d.bonusMaxMana;
+    if (!d.consumableEffect.empty()) {
+        j["consumableEffect"] = d.consumableEffect;
+        j["consumableValue"]  = d.consumableValue;
+    }
+    return j;
+}
+
+} // namespace
+
+bool GameplayDatabase::loadItems(const std::string& path)
+{
+    // items.json is a newer, optional gameplay file: older/test projects that
+    // predate it should still load successfully with an empty item catalog.
+    std::ifstream f(path);
+    if (!f.is_open()) {
+        std::printf("[GameplayDB] No items.json at %s (0 items)\n", path.c_str());
+        return true;
+    }
+
+    json arr = json::parse(f, nullptr, false);
+    if (arr.is_discarded() || !arr.is_array()) {
+        std::fprintf(stderr, "[GameplayDB] Invalid JSON in %s\n", path.c_str());
+        return false;
+    }
+
+    for (auto& j : arr) {
+        ItemData d = itemFromJson(j);
+        itemIndex_[d.id] = items_.size();
+        items_.push_back(std::move(d));
+    }
+
+    std::printf("[GameplayDB] Loaded %zu items\n", items_.size());
+    return true;
+}
+
+bool GameplayDatabase::loadItemsFromSqlite()
+{
+    SqliteDb db;
+    std::string error;
+    if (!db.open(sqlitePath_, &error)) {
+        return false;
+    }
+
+    auto stmt = db.prepare(
+        "SELECT id, name, description, item_type, rarity, icon, level_req, gold_value, "
+        "stackable, max_stack, bonus_attack, bonus_defense, bonus_magic_attack, "
+        "bonus_speed, bonus_crit_chance, bonus_max_hp, bonus_max_mana, "
+        "consumable_effect, consumable_value FROM items;",
+        &error);
+    if (!stmt.isValid()) {
+        return false;
+    }
+
+    while (true) {
+        const int rc = stmt.step();
+        if (rc == SQLITE_DONE) break;
+        if (rc != SQLITE_ROW) {
+            return false;
+        }
+
+        ItemData d;
+        d.id          = stmt.columnText(0);
+        d.name        = stmt.columnText(1);
+        d.description = stmt.columnText(2);
+        d.type        = itemTypeFromStr(stmt.columnText(3));
+        d.rarity      = itemRarityFromStr(stmt.columnText(4));
+        d.icon        = stmt.columnText(5);
+        d.levelReq    = stmt.columnInt(6);
+        d.goldValue   = stmt.columnInt(7);
+        d.stackable   = stmt.columnInt(8) != 0;
+        d.maxStack    = stmt.columnInt(9);
+        d.bonusAttack      = stmt.columnInt(10);
+        d.bonusDefense     = stmt.columnInt(11);
+        d.bonusMagicAttack = stmt.columnInt(12);
+        d.bonusSpeed       = static_cast<float>(stmt.columnDouble(13));
+        d.bonusCritChance  = static_cast<float>(stmt.columnDouble(14));
+        d.bonusMaxHp       = stmt.columnInt(15);
+        d.bonusMaxMana     = stmt.columnInt(16);
+        d.consumableEffect = stmt.columnText(17);
+        d.consumableValue  = stmt.columnInt(18);
+
+        itemIndex_[d.id] = items_.size();
+        items_.push_back(std::move(d));
+    }
+
+    std::printf("[GameplayDB] Loaded %zu items (SQLite)\n", items_.size());
+    return true;
+}
+
+void GameplayDatabase::rebuildItemIndex()
+{
+    itemIndex_.clear();
+    for (std::size_t i = 0; i < items_.size(); ++i)
+        itemIndex_[items_[i].id] = i;
+}
+
+bool GameplayDatabase::saveItemsToJson(const std::string& path) const
+{
+    json arr = json::array();
+    for (const ItemData& d : items_) arr.push_back(itemToJson(d));
+
+    std::ofstream out(path);
+    if (!out.is_open()) {
+        std::fprintf(stderr, "[GameplayDB] Cannot write %s\n", path.c_str());
+        return false;
+    }
+    out << arr.dump(4) << '\n';
+    return true;
+}
+
+void GameplayDatabase::rebuildEnemyIndex()
+{
+    enemyIndex_.clear();
+    for (std::size_t i = 0; i < enemies_.size(); ++i)
+        enemyIndex_[enemies_[i].id] = i;
+}
+
+bool GameplayDatabase::saveEnemiesToJson(const std::string& path) const
+{
+    json arr = json::array();
+    for (const EnemyData& d : enemies_) {
+        json j;
+        j["id"]              = d.id;
+        j["name"]            = d.name;
+        j["maxHp"]           = d.maxHp;
+        j["detectionRadius"] = d.detectionRadius;
+        j["attackRadius"]    = d.attackRadius;
+        j["expReward"]       = d.expReward;
+        j["attackCooldown"]  = d.attackCooldown;
+        j["stats"] = {
+            { "attack",      d.attack },
+            { "defense",     d.defense },
+            { "magicAttack", d.magicAttack },
+            { "speed",       d.speed },
+            { "critChance",  d.critChance },
+        };
+        arr.push_back(std::move(j));
+    }
+
+    std::ofstream out(path);
+    if (!out.is_open()) {
+        std::fprintf(stderr, "[GameplayDB] Cannot write %s\n", path.c_str());
+        return false;
+    }
+    out << arr.dump(4) << '\n';
+    return true;
+}
+
+void GameplayDatabase::rebuildClassIndex()
+{
+    classIndex_.clear();
+    for (std::size_t i = 0; i < playerClasses_.size(); ++i)
+        classIndex_[playerClasses_[i].id] = i;
+}
+
+bool GameplayDatabase::savePlayerClassesToJson(const std::string& path) const
+{
+    json arr = json::array();
+    for (const PlayerClassData& d : playerClasses_) {
+        json j;
+        j["id"]              = d.id;
+        j["name"]            = d.name;
+        j["description"]     = d.description;
+        j["maxHp"]           = d.maxHp;
+        j["maxMana"]         = d.maxMana;
+        j["attackCooldown"]  = d.attackCooldown;
+        j["stats"] = {
+            { "attack",      d.attack },
+            { "defense",     d.defense },
+            { "magicAttack", d.magicAttack },
+            { "speed",       d.speed },
+            { "critChance",  d.critChance },
+        };
+        arr.push_back(std::move(j));
+    }
+
+    std::ofstream out(path);
+    if (!out.is_open()) {
+        std::fprintf(stderr, "[GameplayDB] Cannot write %s\n", path.c_str());
+        return false;
+    }
+    out << arr.dump(4) << '\n';
+    return true;
+}
+
 void GameplayDatabase::clearAll()
 {
     playerClasses_.clear();
     enemies_.clear();
     lootTables_.clear();
+    items_.clear();
     classIndex_.clear();
     enemyIndex_.clear();
     lootByEnemy_.clear();
+    itemIndex_.clear();
 }

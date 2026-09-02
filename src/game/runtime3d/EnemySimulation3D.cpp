@@ -154,12 +154,17 @@ void EnemySimulation3D::build(const SceneData& scene,
         if (e.type != EntityData::Type::Enemy) continue;
 
         // Scenes park lights and other helpers on Enemy entities; those are not
-        // combatants.
+        // combatants. A static PhysicsComponent (no existing enemy/prefab uses
+        // one) marks immovable scenery such as the settlement generator's
+        // buildings: also not a combatant.
         bool isHelper = false;
         for (const auto& c : e.components) {
             if (std::get_if<LightComponent>(&c)) { isHelper = true; break; }
             if (const auto* rc = std::get_if<RenderComponent>(&c)) {
                 if (!rc->visible) { isHelper = true; break; }
+            }
+            if (const auto* pc = std::get_if<PhysicsComponent>(&c)) {
+                if (pc->isStatic) { isHelper = true; break; }
             }
         }
         if (isHelper) continue;

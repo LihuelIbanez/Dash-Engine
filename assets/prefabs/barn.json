@@ -1,0 +1,9 @@
+{
+    "guid": "prefab-barn-001",
+    "name": "Barn",
+    "components": [
+        { "type": "Transform", "x": 0.0, "y": 0.0, "z": 0.0, "yawDeg": 0.0, "pitchDeg": 0.0, "rollDeg": 0.0, "scale": 2.1 },
+        { "type": "Render", "renderMode": 0, "mesh": "cube", "material": "default", "sprite": "default", "layer": 0, "visible": true },
+        { "type": "Physics", "shape": 0, "halfExtentX": 2.1, "halfExtentY": 1.4, "halfExtentZ": 2.1, "mass": 1.0, "isStatic": true }
+    ]
+}

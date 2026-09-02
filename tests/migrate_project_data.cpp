@@ -27,6 +27,7 @@ int main(int argc, char** argv)
     std::cout << "PlayerClasses: " << result.summary.playerClasses << "\n";
     std::cout << "Enemies: " << result.summary.enemies << "\n";
     std::cout << "LootTables: " << result.summary.lootTables << "\n";
+    std::cout << "Items: " << result.summary.items << "\n";
     std::cout << "Errors: " << result.summary.errorCount << "\n";
 
     for (const auto& line : result.log) {

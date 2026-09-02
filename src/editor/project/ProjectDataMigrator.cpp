@@ -78,7 +78,8 @@ bool clearGameplayTables(SqliteDb& db, std::string* error)
         && db.exec("DELETE FROM loot_table_enemies;", error)
         && db.exec("DELETE FROM loot_tables;", error)
         && db.exec("DELETE FROM enemies;", error)
-        && db.exec("DELETE FROM player_classes;", error);
+        && db.exec("DELETE FROM player_classes;", error)
+        && db.exec("DELETE FROM items;", error);
 }
 
 bool clearSceneTables(SqliteDb& db, std::string* error)
@@ -254,6 +255,71 @@ bool migrateLoot(const fs::path& gameplayDir, SqliteDb& db, ProjectDataMigrator:
     logLine(res, "[Migrator] Migrated loot tables: " + std::to_string(arr.size()));
     logLine(res, "[Migrator] Migrated loot enemy links: " + std::to_string(enemyLinks));
     logLine(res, "[Migrator] Migrated loot drops: " + std::to_string(drops));
+    return true;
+}
+
+bool migrateItems(const fs::path& gameplayDir, SqliteDb& db, ProjectDataMigrator::Result& res)
+{
+    // items.json is a newer, optional gameplay file: projects that predate it
+    // migrate successfully with an empty items table.
+    if (!fs::exists(gameplayDir / "items.json")) {
+        logLine(res, "[Migrator] items.json not found, skipping items migration");
+        return true;
+    }
+
+    json arr;
+    if (!readJsonArray(gameplayDir / "items.json", arr)) {
+        logError(res, "[Migrator] Invalid items.json");
+        return false;
+    }
+
+    std::string error;
+    auto stmt = db.prepare(
+        "INSERT OR REPLACE INTO items("
+        "id, name, description, item_type, rarity, icon, level_req, gold_value,"
+        "stackable, max_stack, bonus_attack, bonus_defense, bonus_magic_attack,"
+        "bonus_speed, bonus_crit_chance, bonus_max_hp, bonus_max_mana,"
+        "consumable_effect, consumable_value"
+        ") VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+        &error);
+    if (!stmt.isValid()) {
+        logError(res, "[Migrator] Could not prepare items insert: " + error);
+        return false;
+    }
+
+    for (const auto& item : arr) {
+        if (!stmt.reset() || !stmt.clearBindings()
+            || !stmt.bindText(1, item.value("id", "unknown"))
+            || !stmt.bindText(2, item.value("name", "unknown"))
+            || !stmt.bindText(3, item.value("description", ""))
+            || !stmt.bindText(4, item.value("type", "misc"))
+            || !stmt.bindText(5, item.value("rarity", "normal"))
+            || !stmt.bindText(6, item.value("icon", ""))
+            || !stmt.bindInt(7, item.value("levelReq", 1))
+            || !stmt.bindInt(8, item.value("goldValue", 0))
+            || !stmt.bindInt(9, item.value("stackable", false) ? 1 : 0)
+            || !stmt.bindInt(10, item.value("maxStack", 1))
+            || !stmt.bindInt(11, item.value("bonusAttack", 0))
+            || !stmt.bindInt(12, item.value("bonusDefense", 0))
+            || !stmt.bindInt(13, item.value("bonusMagicAttack", 0))
+            || !stmt.bindDouble(14, item.value("bonusSpeed", 0.0))
+            || !stmt.bindDouble(15, item.value("bonusCritChance", 0.0))
+            || !stmt.bindInt(16, item.value("bonusMaxHp", 0))
+            || !stmt.bindInt(17, item.value("bonusMaxMana", 0))
+            || !stmt.bindText(18, item.value("consumableEffect", ""))
+            || !stmt.bindInt(19, item.value("consumableValue", 0))) {
+            logError(res, "[Migrator] Could not bind items row");
+            return false;
+        }
+
+        if (stmt.step() != SQLITE_DONE) {
+            logError(res, "[Migrator] Could not insert items row");
+            return false;
+        }
+    }
+
+    res.summary.items = static_cast<int>(arr.size());
+    logLine(res, "[Migrator] Migrated items: " + std::to_string(arr.size()));
     return true;
 }
 
@@ -527,6 +593,7 @@ ProjectDataMigrator::Result ProjectDataMigrator::migrateJsonToSqlite(const Proje
         || !migratePlayerClasses(gameplayDir, db, res)
         || !migrateEnemies(gameplayDir, db, res)
         || !migrateLoot(gameplayDir, db, res)
+        || !migrateItems(gameplayDir, db, res)
         || !migrateScenes(scenesDir, assetsDir, db, res)) {
         db.rollback(nullptr);
         logError(res, "[Migrator] Migration failed. Transaction rolled back.");

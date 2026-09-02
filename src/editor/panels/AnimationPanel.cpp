@@ -3,10 +3,12 @@
 #include "Reflection.h"
 #include "SceneData.h"
 #include "rendering/animation/AnimationWiring.h"
+#include "rendering/animation/DashMeshFile.h"
 
 #include "imgui.h"
 
 #include <algorithm>
+#include <cstring>
 #include <string>
 #include <vector>
 
@@ -23,9 +25,9 @@ AnimationComponent* findAnimation(EntityData& e)
     return nullptr;
 }
 
-const RenderComponent* findRender(const EntityData& e)
+RenderComponent* findRender(EntityData& e)
 {
-    for (const ComponentVariant& comp : e.components)
+    for (ComponentVariant& comp : e.components)
         if (getVariantType(comp) == ComponentType::Render)
             return &std::get<RenderComponent>(comp);
     return nullptr;
@@ -85,7 +87,7 @@ void AnimationPanel::draw(SceneData& scene,
     }
 
     // ── Model, clips and live player ─────────────────────────────────────────
-    const RenderComponent* render = findRender(*entity);
+    RenderComponent* render = findRender(*entity);
     const std::string meshPath =
         (render && resolveMeshPath) ? resolveMeshPath(render->mesh) : std::string{};
 
@@ -98,6 +100,35 @@ void AnimationPanel::draw(SceneData& scene,
     auto playerIt = players.find(entity->id);
     dash::anim::AnimationPlayer* player = playerIt == players.end() ? nullptr : &playerIt->second;
 
+    // ── Model characteristics (editable) ───────────────────────────
+    ImGui::SeparatorText("Model");
+    if (render) {
+        char meshBuf[128];
+        char materialBuf[128];
+        const std::size_t meshN = std::min(render->mesh.size(), sizeof(meshBuf) - 1);
+        std::copy_n(render->mesh.begin(), meshN, meshBuf);
+        meshBuf[meshN] = '\0';
+        const std::size_t matN = std::min(render->material.size(), sizeof(materialBuf) - 1);
+        std::copy_n(render->material.begin(), matN, materialBuf);
+        materialBuf[matN] = '\0';
+
+        ImGui::SetNextItemWidth(220.f);
+        if (ImGui::InputText("Mesh id", meshBuf, sizeof(meshBuf))) render->mesh = meshBuf;
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(160.f);
+        if (ImGui::InputText("Material", materialBuf, sizeof(materialBuf))) render->material = materialBuf;
+
+        int renderMode = render->renderMode;
+        ImGui::SetNextItemWidth(180.f);
+        if (ImGui::Combo("Render Mode", &renderMode, "Mesh3D\0BillboardSprite\0"))
+            render->renderMode = renderMode;
+        ImGui::SameLine();
+        ImGui::Checkbox("Visible", &render->visible);
+    } else {
+        ImGui::TextDisabled("Entity has no RenderComponent.");
+    }
+
+    // ── Model details (read-only, from the .dashmesh on disk) ───────────
     ImGui::Separator();
     if (!set) {
         ImGui::TextColored(kWarnColor, "No skeleton for mesh '%s'.",
@@ -107,6 +138,15 @@ void AnimationPanel::draw(SceneData& scene,
         ImGui::Text("Model: %s", meshPath.c_str());
         ImGui::Text("Bones: %zu    Clips: %zu",
                     set->skeleton->boneCount(), set->clips.size());
+    }
+    if (!meshPath.empty()) {
+        dash::anim::DashMeshData meshData;
+        std::string              meshError;
+        if (dash::anim::readDashMesh(meshPath, meshData, meshError)) {
+            ImGui::Text("Vertices: %zu    Indices: %zu    %s",
+                       meshData.vertices.size(), meshData.indices.size(),
+                       meshData.isSkinned() ? "skinned" : "static");
+        }
     }
     ImGui::TextColored(player ? kOkColor : kWarnColor, "%s",
                        player ? "Live viewport player attached."

@@ -654,10 +654,21 @@ bool Renderer::init(WindowContext& window)
     bool loadedSceneSpawn = false;
     if (!scenePath_.empty()) {
         // Loaded before anything generates a world so the terrain mesh and the
-        // navigation grid are built from the same rules.
+        // navigation grid are built from the same rules. Peeked directly from
+        // the scene JSON (cheap) because the full SceneData parse happens a
+        // few lines below and the biome table must exist before that.
         {
-            const std::string biomePath =
-                (std::filesystem::path(VULKAN_ASSETS_DIR) / "world" / "biomes.json").string();
+            std::string biomeTableId;
+            std::ifstream sceneIn(scenePath_);
+            if (sceneIn.is_open()) {
+                nlohmann::json sceneJson = nlohmann::json::parse(sceneIn, nullptr, false);
+                if (!sceneJson.is_discarded() && sceneJson.is_object())
+                    biomeTableId = sceneJson.value("biomeTableId", "");
+            }
+
+            const std::string biomePath = biomeTableId.empty()
+                ? (std::filesystem::path(VULKAN_ASSETS_DIR) / "world" / "biomes.json").string()
+                : (std::filesystem::path(VULKAN_ASSETS_DIR) / "world" / "biomes" / (biomeTableId + ".json")).string();
             std::string biomeError;
             if (!dash::world::loadBiomeTableFile(biomePath, biomeTable_, &biomeError)) {
                 biomeTable_ = {};

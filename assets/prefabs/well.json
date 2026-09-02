@@ -1,0 +1,9 @@
+{
+    "guid": "prefab-well-001",
+    "name": "Well",
+    "components": [
+        { "type": "Transform", "x": 0.0, "y": 0.0, "z": 0.0, "yawDeg": 0.0, "pitchDeg": 0.0, "rollDeg": 0.0, "scale": 0.7 },
+        { "type": "Render", "renderMode": 0, "mesh": "cube", "material": "stone.mat.json", "sprite": "default", "layer": 0, "visible": true },
+        { "type": "Physics", "shape": 0, "halfExtentX": 0.7, "halfExtentY": 0.7, "halfExtentZ": 0.7, "mass": 1.0, "isStatic": true }
+    ]
+}

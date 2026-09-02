@@ -71,10 +71,11 @@ struct TextureOverride {
 // SceneData – everything needed to describe one scenario / level
 // ─────────────────────────────────────────────────────────────────────────────
 struct SceneData {
-    // v7 adds entity parenting (EntityData::parentId) plus the Light and
-    // Animation components. All are optional, so older scenes load unchanged:
-    // absent parentId means root and absent components mean no light/animation.
-    static constexpr int kCurrentVersion = 7;
+    // v8 adds biomeTableId: which named biome table (assets/world/biomes/<id>.json)
+    // this scene generates its terrain from. Empty = the default global table
+    // (assets/world/biomes.json), so v7-and-older scenes keep behaving exactly
+    // as before.
+    static constexpr int kCurrentVersion = 8;
 
     struct Render3DSettings {
         bool  useVulkan3D = true;
@@ -92,6 +93,9 @@ struct SceneData {
     unsigned int worldSeed    = 12345;
     int          sceneVersion = kCurrentVersion;
     Render3DSettings render3d;
+
+    // Empty = use the default assets/world/biomes.json table.
+    std::string  biomeTableId;
 
     std::vector<TileOverride> tileOverrides;
     std::vector<VertexHeightOverride> vertexHeightOverrides;

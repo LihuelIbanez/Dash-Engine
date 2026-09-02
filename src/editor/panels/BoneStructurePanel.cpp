@@ -1018,6 +1018,48 @@ void BoneStructurePanel::drawPreview3D(LogCallback& logCb)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+void BoneStructurePanel::drawAssignedModel()
+{
+    const std::string meshPath = siblingPath(".dashmesh");
+    if (meshPath.empty()) return;
+
+    std::error_code ec;
+    ImGui::SeparatorText(ICON_FA_CUBE "  Assigned Model");
+
+    const bool haveMesh = fs::is_regular_file(meshPath, ec);
+    ImGui::TextWrapped("Mesh: %s", fs::path(meshPath).filename().string().c_str());
+    if (haveMesh) {
+        dash::anim::DashMeshData meshData;
+        std::string              error;
+        if (dash::anim::readDashMesh(meshPath, meshData, error)) {
+            ImGui::TextColored(kOkColor, "  %zu vertices, %zu indices, %s, %u bone(s) expected",
+                               meshData.vertices.size(), meshData.indices.size(),
+                               meshData.isSkinned() ? "skinned" : "static", meshData.boneCount);
+            if (meshData.isSkinned() && meshData.boneCount != doc_.bones.size()) {
+                ImGui::TextColored(kWarningColor,
+                                   "  Warning: mesh expects %u bone(s) but this skeleton has %zu.",
+                                   meshData.boneCount, doc_.bones.size());
+            }
+        } else {
+            ImGui::TextColored(kErrorColor, "  Could not read mesh: %s", error.c_str());
+        }
+    } else {
+        ImGui::TextColored(kWarningColor, "  No sibling .dashmesh next to this .dashskel yet.");
+    }
+
+    const std::string animPath = siblingPath(".dashanim");
+    const bool        haveAnim = fs::is_regular_file(animPath, ec);
+    ImGui::TextWrapped("Animation: %s", fs::path(animPath).filename().string().c_str());
+    if (haveAnim) {
+        ensurePreviewAnimLoaded();
+        ImGui::TextColored(kOkColor, "  %zu clip(s) — see the 3D Preview below to play them",
+                           previewClips_.size());
+    } else {
+        ImGui::TextDisabled("  No sibling .dashanim found.");
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 void BoneStructurePanel::draw(const std::string& assetsRoot, const std::string& libraryRoot,
                               LogCallback logCb)
 {
@@ -1040,6 +1082,7 @@ void BoneStructurePanel::draw(const std::string& assetsRoot, const std::string& 
     ImGui::Separator();
     ImGui::Text("%zu bone(s)%s", doc_.bones.size(), dirty_ ? "  *modified*" : "");
 
+    drawAssignedModel();
     drawPreview3D(logCb);
 
     if (ImGui::BeginTable("##bs_layout", 2,

@@ -9,6 +9,7 @@
 #include "IconsFontAwesome6.h"
 #include "db/DbMode.h"
 #include "scene/SceneRepositorySqlite.h"
+#include "world/BiomeTableFile.h"
 
 #include "imgui.h"
 
@@ -66,6 +67,13 @@ void EditorApp::reinitAssetPipeline()
         else
             addLog("[WARN] Failed to reload asset DB.");
     }
+
+    // Reload the gameplay database (items/enemies/classes) for the new root.
+    gameplayDb_ = GameplayDatabase{};
+    if (gameplayDb_.load(assetsRoot_))
+        addLog("Gameplay DB reloaded (" + std::to_string(gameplayDb_.items().size()) + " items, "
+              + std::to_string(gameplayDb_.enemies().size()) + " enemy types, "
+              + std::to_string(gameplayDb_.playerClasses().size()) + " classes).");
 
     // Re-import assets for the new root.
     std::vector<std::string> errors;
@@ -306,6 +314,7 @@ void EditorApp::focusCameraOnEntities()
 
 void EditorApp::regenerateWorld()
 {
+    loadBiomeTable();
     world_.generate(scene_.worldSeed, biomeTable_.empty() ? nullptr : &biomeTable_);
     applySceneToWorld();
     // The viewport draws an uploaded copy of the mesh, so it has to be refreshed
@@ -492,6 +501,26 @@ void EditorApp::saveScene(const std::string& path)
     selectedSceneFile_ = fileName;
 }
 
+// Resolves assets/world/biomes/<scene_.biomeTableId>.json (or the default
+// assets/world/biomes.json when empty) into biomeTable_. Must run before any
+// world_.generate() call, or the terrain silently keeps the previous table.
+void EditorApp::loadBiomeTable()
+{
+    const std::string path = scene_.biomeTableId.empty()
+        ? dash::world::biomeTablePath(assetsRoot_)
+        : (fs::path(assetsRoot_) / "world" / "biomes" / (scene_.biomeTableId + ".json")).string();
+
+    std::string error;
+    dash::world::BiomeTable loaded;
+    if (dash::world::loadBiomeTableFile(path, loaded, &error)) {
+        biomeTable_ = std::move(loaded);
+        addLog("Biome table loaded (" + std::to_string(biomeTable_.biomes.size()) + " biomes) from " + path);
+    } else {
+        biomeTable_ = {};
+        addLog("[Biomes] " + path + ": " + error + " (using built-in thresholds)");
+    }
+}
+
 void EditorApp::openScene(const std::string& path)
 {
     const std::string fileName = fs::path(path).filename().string();
@@ -509,6 +538,7 @@ void EditorApp::openScene(const std::string& path)
                 for (auto& err : scene_.loadErrors)
                     addLog("  [load] " + err);
 
+                loadBiomeTable();
                 world_.generate(scene_.worldSeed, biomeTable_.empty() ? nullptr : &biomeTable_);
                 applySceneToWorld();
                 clearSelection();
@@ -528,6 +558,7 @@ void EditorApp::openScene(const std::string& path)
         for (auto& err : scene_.loadErrors)
             addLog("  [load] " + err);
 
+        loadBiomeTable();
         world_.generate(scene_.worldSeed, biomeTable_.empty() ? nullptr : &biomeTable_);
         applySceneToWorld();
         clearSelection();

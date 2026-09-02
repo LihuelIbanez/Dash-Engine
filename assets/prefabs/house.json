@@ -1,0 +1,9 @@
+{
+    "guid": "prefab-house-001",
+    "name": "House",
+    "components": [
+        { "type": "Transform", "x": 0.0, "y": 0.0, "z": 0.0, "yawDeg": 0.0, "pitchDeg": 0.0, "rollDeg": 0.0, "scale": 1.6 },
+        { "type": "Render", "renderMode": 0, "mesh": "cube", "material": "default", "sprite": "default", "layer": 0, "visible": true },
+        { "type": "Physics", "shape": 0, "halfExtentX": 1.6, "halfExtentY": 1.6, "halfExtentZ": 1.6, "mass": 1.0, "isStatic": true }
+    ]
+}

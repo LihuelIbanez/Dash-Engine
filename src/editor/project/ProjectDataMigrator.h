@@ -14,6 +14,7 @@ public:
         int lootTables = 0;
         int lootEnemyLinks = 0;
         int lootDrops = 0;
+        int items = 0;
         int assets = 0;
         int assetDependencies = 0;
         int errorCount = 0;

@@ -860,6 +860,7 @@ private:
 
     void drawSourceBar(const std::string& assetsRoot, const std::string& libraryRoot,
                        LogCallback& logCb);
+    void drawAssignedModel();
     void drawTree(float width);
     void drawBoneNode(int index, const std::vector<bool>& visible);
     void drawDetails(LogCallback& logCb);

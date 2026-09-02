@@ -207,17 +207,9 @@ bool EditorApp::init(const std::string& projectPath)
 
     // Biome table before any world generation: an empty table makes the terrain
     // fall back to its built-in thresholds, and the viewport would then disagree
-    // with what the runtime draws.
-    {
-        const std::string biomePath = (fs::path(assetsRoot_) / "world" / "biomes.json").string();
-        std::string biomeError;
-        if (dash::world::loadBiomeTableFile(biomePath, biomeTable_, &biomeError)) {
-            addLog("Biome table loaded (" + std::to_string(biomeTable_.biomes.size()) + " biomes).");
-        } else {
-            biomeTable_ = {};
-            addLog("[Biomes] " + biomePath + ": " + biomeError + " (using built-in thresholds)");
-        }
-    }
+    // with what the runtime draws. scene_ is still the default-constructed scene
+    // here (biomeTableId empty), so this resolves to the global biomes.json.
+    loadBiomeTable();
 
     // ── File browser root ────────────────────────────────────────────────────
     fileEditorPanel_.init(AppPaths::getResourcesDir());
@@ -232,6 +224,14 @@ bool EditorApp::init(const std::string& projectPath)
     } else {
         addLog("Asset DB not found, starting fresh.");
     }
+
+    // ── Gameplay database (items/enemies/classes) ─────────────────
+    if (gameplayDb_.load(assetsRoot_))
+        addLog("Gameplay DB loaded (" + std::to_string(gameplayDb_.items().size()) + " items, "
+              + std::to_string(gameplayDb_.enemies().size()) + " enemy types, "
+              + std::to_string(gameplayDb_.playerClasses().size()) + " classes).");
+    else
+        addLog("[WARN] Failed to load gameplay DB.");
 
     // ── Initial asset import ─────────────────────────────────────────────────
     {
@@ -559,7 +559,7 @@ void EditorApp::run()
                                      [this](const std::string& m){ addLog(m); });
         if (showBiomeDesignerPanel_)
             biomeDesignerPanel_.draw(biomeTable_, world_.terrain(), assetsRoot_,
-                                     scene_.worldSeed,
+                                     scene_.worldSeed, scene_.biomeTableId,
                                      [this](unsigned int){ regenerateWorld(); },
                                      [this](const std::string& m){ addLog(m); });
         if (showAnimationPanel_)
@@ -568,6 +568,15 @@ void EditorApp::run()
                                  [this](const std::string& m){ addLog(m); });
         if (showStateMachinePanel_)
             stateMachinePanel_.draw(assetsRoot_, [this](const std::string& m){ addLog(m); });
+        if (showItemsPanel_)
+            itemsPanel_.draw(gameplayDb_, assetsRoot_, [this](const std::string& m){ addLog(m); });
+        if (showBestiaryPanel_)
+            bestiaryPanel_.draw(gameplayDb_, assetsRoot_, [this](const std::string& m){ addLog(m); });
+        if (showClassesPanel_)
+            classesPanel_.draw(gameplayDb_, assetsRoot_, [this](const std::string& m){ addLog(m); });
+        if (showSettlementPanel_)
+            settlementPanel_.draw(scene_, world_, commandStack_, assetsRoot_,
+                                  [this](const std::string& m){ addLog(m); });
         if (spriteEditor_.isOpen)
             spriteEditor_.draw();
         if (showAudioPanel_)

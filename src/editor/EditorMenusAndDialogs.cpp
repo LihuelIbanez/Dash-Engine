@@ -70,6 +70,11 @@ void EditorApp::drawMenuBar()
         ImGui::MenuItem("Bone Structure", nullptr, &showBoneStructurePanel_);
         ImGui::MenuItem("Animation", nullptr, &showAnimationPanel_);
         ImGui::MenuItem("State Machine", nullptr, &showStateMachinePanel_);
+        ImGui::Separator();
+        ImGui::MenuItem("Items", nullptr, &showItemsPanel_);
+        ImGui::MenuItem("Bestiary", nullptr, &showBestiaryPanel_);
+        ImGui::MenuItem("Classes", nullptr, &showClassesPanel_);
+        ImGui::MenuItem("Settlements", nullptr, &showSettlementPanel_);
 
         ImGui::SeparatorText("Diagnostics");
         ImGui::MenuItem("Build Log", nullptr, &showBuildLog_);

@@ -19,6 +19,7 @@ void SceneData::createDefault()
     sceneName = "Untitled";
     worldSeed = 12345;
     render3d = Render3DSettings{};
+    biomeTableId.clear();
     nextEntityId = 1;
     tileOverrides.clear();
     vertexHeightOverrides.clear();
@@ -54,6 +55,7 @@ nlohmann::json SceneData::toJson() const
     j["sceneVersion"] = kCurrentVersion;
     j["name"]         = sceneName;
     j["worldSeed"]    = worldSeed;
+    j["biomeTableId"] = biomeTableId;
     j["render3d"] = {
         {"useVulkan3D", render3d.useVulkan3D},
         {"embeddedPreview", render3d.embeddedPreview},
@@ -205,6 +207,7 @@ bool SceneData::loadFromJson(const nlohmann::json& j, const std::string& assetsR
     // ── Core fields ──────────────────────────────────────────────────────────
     sceneName    = j.value("name", "Untitled");
     worldSeed    = j.value("worldSeed", 12345u);
+    biomeTableId = j.value("biomeTableId", "");
     nextEntityId = j.value("nextEntityId", (uint64_t)1);
 
     if (j.contains("render3d") && j["render3d"].is_object()) {

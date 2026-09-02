@@ -21,6 +21,11 @@
 #include "BiomeDesignerPanel.h"
 #include "AnimationPanel.h"
 #include "StateMachinePanel.h"
+#include "ItemsPanel.h"
+#include "BestiaryPanel.h"
+#include "ClassesPanel.h"
+#include "SettlementPanel.h"
+#include "game/data/GameplayDatabase.h"
 #include "SpriteEditorPanel.h"
 #include "AudioPanel.h"
 #include "WelcomePanel.h"
@@ -201,6 +206,16 @@ private:
     bool                         showAnimationPanel_ = false;
     StateMachinePanel            stateMachinePanel_;
     bool                         showStateMachinePanel_ = false;
+    // ── RPG content database (items/enemies/classes) ──
+    GameplayDatabase             gameplayDb_;
+    ItemsPanel                   itemsPanel_;
+    bool                         showItemsPanel_ = false;
+    BestiaryPanel                bestiaryPanel_;
+    bool                         showBestiaryPanel_ = false;
+    ClassesPanel                 classesPanel_;
+    bool                         showClassesPanel_ = false;
+    SettlementPanel               settlementPanel_;
+    bool                         showSettlementPanel_ = false;
     bool                         showMigrationLogModal_ = false;
     bool                         migrationLastSuccess_ = false;
     std::string                  migrationSummaryText_;

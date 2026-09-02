@@ -5,6 +5,7 @@
 
 #include <cstdio>
 #include <cstring>
+#include <filesystem>
 
 namespace {
 
@@ -48,6 +49,7 @@ void BiomeDesignerPanel::draw(BiomeTable& table,
                               const TerrainMesh& terrain,
                               const std::string& assetsRoot,
                               unsigned int& worldSeed,
+                              std::string& biomeTableId,
                               const RegenerateCallback& regenerate,
                               const LogCallback& log)
 {
@@ -56,7 +58,9 @@ void BiomeDesignerPanel::draw(BiomeTable& table,
         return;
     }
 
-    const std::string path = dash::world::biomeTablePath(assetsRoot);
+    const std::string path = biomeTableId.empty()
+        ? dash::world::biomeTablePath(assetsRoot)
+        : (assetsRoot + "/world/biomes/" + biomeTableId + ".json");
 
     // ── Toolbar ─────────────────────────────────────────────────────────────
     if (ImGui::Button("Load")) {
@@ -79,11 +83,53 @@ void BiomeDesignerPanel::draw(BiomeTable& table,
             log("Biomes: save failed (" + err + ")");
     }
     ImGui::SameLine();
+    if (ImGui::Button("Save As...")) {
+        std::snprintf(saveAsNameBuf_, sizeof(saveAsNameBuf_), "%s",
+                      biomeTableId.empty() ? "my_biome" : biomeTableId.c_str());
+        ImGui::OpenPopup("Save Biome As");
+    }
+    ImGui::SameLine();
     if (ImGui::Button("Add Biome")) {
         selected_ = dash::editor::biomedesign::addBiome(table);
     }
-    ImGui::SameLine();
-    ImGui::TextDisabled("%s", path.c_str());
+
+    if (ImGui::BeginPopupModal("Save Biome As", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::TextUnformatted("Saves this table under assets/world/biomes/<name>.json");
+        ImGui::TextUnformatted("and assigns it to the current scene.");
+        ImGui::InputText("Name", saveAsNameBuf_, sizeof(saveAsNameBuf_));
+        const bool validName = saveAsNameBuf_[0] != '\0';
+        ImGui::BeginDisabled(!validName);
+        if (ImGui::Button("Save && Assign", {160, 0})) {
+            const std::string namedPath = assetsRoot + "/world/biomes/" + std::string(saveAsNameBuf_) + ".json";
+            std::error_code dirEc;
+            std::filesystem::create_directories(assetsRoot + "/world/biomes", dirEc);
+            std::string err;
+            if (dash::world::saveBiomeTableFile(namedPath, table, &err)) {
+                biomeTableId = saveAsNameBuf_;
+                log("Biomes: saved '" + biomeTableId + "' to " + namedPath + " and assigned it to the scene.");
+                if (regenerate) regenerate(worldSeed);
+            } else {
+                log("Biomes: save-as failed (" + err + ")");
+            }
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndDisabled();
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel", {100, 0})) ImGui::CloseCurrentPopup();
+        ImGui::EndPopup();
+    }
+
+    if (biomeTableId.empty()) {
+        ImGui::TextDisabled("Using default: %s", path.c_str());
+    } else {
+        ImGui::TextColored({0.5f, 0.8f, 1.0f, 1.0f}, "Scene biome: %s", biomeTableId.c_str());
+        ImGui::SameLine();
+        if (ImGui::SmallButton("Use Default##biome")) {
+            biomeTableId.clear();
+            log("Biomes: scene reverted to the default biome table.");
+            if (regenerate) regenerate(worldSeed);
+        }
+    }
 
     int seed = static_cast<int>(worldSeed);
     ImGui::SetNextItemWidth(140.0f);
