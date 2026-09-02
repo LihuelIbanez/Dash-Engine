@@ -97,6 +97,12 @@ public:
     // VK_NULL_HANDLE when the *_lit shaders are missing; callers must fall back.
     VkPipeline          basicLitPipeline()       const { return basicLitPipeline_; }
     VkPipelineLayout    basicLitPipelineLayout() const { return basicLitPipelineLayout_; }
+    // Same shaders as basicPipeline() but front-face culled, so drawing an
+    // entity's own mesh enlarged through this pipeline only rasterizes the
+    // silhouette rim (the front-facing bulk depth-fails against the mesh's
+    // own regular draw) - the GPU half of the Blender-style selection outline.
+    VkPipeline          outlinePipeline()       const { return outlinePipeline_; }
+    VkPipelineLayout    outlinePipelineLayout() const { return outlinePipelineLayout_; }
     VkPipeline          billboardPipeline()       const { return billboardPipeline_; }
     VkPipelineLayout    billboardPipelineLayout() const { return billboardPipelineLayout_; }
     VkDescriptorSet     sceneDescriptorSet()    const { return sceneDescSet_; }
@@ -206,6 +212,8 @@ private:
     VkPipeline       basicPipeline_         = VK_NULL_HANDLE;
     VkPipelineLayout basicLitPipelineLayout_ = VK_NULL_HANDLE;
     VkPipeline       basicLitPipeline_       = VK_NULL_HANDLE;
+    VkPipelineLayout outlinePipelineLayout_  = VK_NULL_HANDLE;
+    VkPipeline       outlinePipeline_        = VK_NULL_HANDLE;
     VkPipelineLayout billboardPipelineLayout_ = VK_NULL_HANDLE;
     VkPipeline       billboardPipeline_       = VK_NULL_HANDLE;
     VkPipelineLayout skinnedPipelineLayout_   = VK_NULL_HANDLE;

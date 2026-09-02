@@ -48,7 +48,8 @@ bool PipelineBuilder::createBasicPipeline(
     const std::string& fragSpvPath,
     VkPipelineLayout& outPipelineLayout,
     VkPipeline& outPipeline,
-    std::string& outError)
+    std::string& outError,
+    VkCullModeFlags cullMode)
 {
     std::vector<char> vertCode;
     std::vector<char> fragCode;
@@ -152,7 +153,10 @@ bool PipelineBuilder::createBasicPipeline(
     rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
     rasterizer.lineWidth = 1.0f;
     // Keep all faces visible while camera conventions are evolving between editor/runtime.
-    rasterizer.cullMode = VK_CULL_MODE_NONE;
+    // Callers building an inverted-hull selection outline pass VK_CULL_MODE_FRONT_BIT
+    // instead, so only the back faces of the enlarged copy survive - see
+    // EditorVkContext's outlinePipeline_.
+    rasterizer.cullMode = cullMode;
     rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
     rasterizer.depthBiasEnable = VK_FALSE;
 

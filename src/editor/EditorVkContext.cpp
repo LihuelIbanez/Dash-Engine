@@ -621,6 +621,18 @@ bool EditorVkContext::createPipelines()
         return false;
     }
 
+    // Selection outline: same unlit shaders as basicPipeline_, but front-face
+    // culled so drawing an enlarged copy of the mesh only rasterizes what the
+    // regular (smaller) draw doesn't already cover in the depth buffer - the
+    // silhouette rim. Optional: without it, selection just has no GPU outline.
+    if (!PipelineBuilder::createBasicPipeline(dev, ext, scenePass, sceneDescLayout_,
+            shaderDir + "/basic.vert.spv", shaderDir + "/basic.frag.spv",
+            outlinePipelineLayout_, outlinePipeline_, err, VK_CULL_MODE_FRONT_BIT)) {
+        std::fprintf(stderr, "[EditorVk] Outline pipeline: %s (selection outline disabled)\n", err.c_str());
+        outlinePipeline_ = VK_NULL_HANDLE;
+        outlinePipelineLayout_ = VK_NULL_HANDLE;
+    }
+
     // Lit variant is optional: without it the viewport keeps the flat shading.
     if (!PipelineBuilder::createBasicPipeline(dev, ext, scenePass, sceneDescLayout_,
             shaderDir + "/basic.vert.spv",
@@ -1359,10 +1371,12 @@ void EditorVkContext::shutdown()
     PipelineBuilder::destroy(dev, waterPipelineLayout_, waterPipeline_);
     PipelineBuilder::destroy(dev, basicPipelineLayout_, basicPipeline_);
     PipelineBuilder::destroy(dev, basicLitPipelineLayout_, basicLitPipeline_);
+    PipelineBuilder::destroy(dev, outlinePipelineLayout_, outlinePipeline_);
     terrainPipelineLayout_ = VK_NULL_HANDLE; terrainPipeline_ = VK_NULL_HANDLE;
     waterPipelineLayout_ = VK_NULL_HANDLE;   waterPipeline_ = VK_NULL_HANDLE;
     basicPipelineLayout_ = VK_NULL_HANDLE;   basicPipeline_ = VK_NULL_HANDLE;
     basicLitPipelineLayout_ = VK_NULL_HANDLE; basicLitPipeline_ = VK_NULL_HANDLE;
+    outlinePipelineLayout_ = VK_NULL_HANDLE; outlinePipeline_ = VK_NULL_HANDLE;
 
     if (uboBuffer_) { vkDestroyBuffer(dev, uboBuffer_, nullptr); uboBuffer_ = VK_NULL_HANDLE; }
     if (uboMemory_) {

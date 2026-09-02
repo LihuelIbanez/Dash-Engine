@@ -477,16 +477,18 @@ void EditorApp::renderWorldToTexture()
         dash::vkexp::drawSceneInstances(cmd, instances, resources, lighting, params);
 
         // ── Selection outline (Blender-style inverted hull) ─────────────────
-        // Redraws each selected entity's own mesh slightly larger and unlit in
-        // a solid colour, depth-tested against what was just drawn above: the
-        // real mesh already wrote the closer depth in the middle, so only the
-        // silhouette rim of the larger copy survives the depth test. Because
-        // this goes through the exact same model matrix, mesh and camera UBO
-        // as the real draw, it cannot drift from it the way a screen-space
-        // ImGui overlay can - there is only one source of truth for where the
-        // mesh is, which is the point (see the entityGizmoPivot() investigation
-        // in EditorGizmoTools.cpp for why a CPU-side overlay wasn't good enough).
-        if (editorMode_ == EditorMode::Edit && !selection_.empty()) {
+        // Redraws each selected entity's own mesh slightly larger through a
+        // front-face-culled pipeline: only the back faces of the enlarged copy
+        // rasterize, which (for a convex-ish mesh) is exactly the silhouette
+        // rim - the front-facing bulk would otherwise sit closer to the camera
+        // than the real mesh at every point on its surface and win the depth
+        // test everywhere, painting the whole shape instead of just its edge.
+        // Because this goes through the exact same model matrix, mesh and
+        // camera UBO as the real draw, it cannot drift from it the way a
+        // screen-space ImGui overlay can (see the entityGizmoPivot()
+        // investigation in EditorGizmoTools.cpp for why that wasn't enough).
+        if (editorMode_ == EditorMode::Edit && !selection_.empty() &&
+            vkCtx_.outlinePipeline() != VK_NULL_HANDLE) {
             for (size_t i = 0; i < instances.size(); ++i) {
                 const auto& inst = instances[i];
                 const bool isSelected = std::find(selection_.begin(), selection_.end(),
@@ -496,9 +498,9 @@ void EditorApp::renderWorldToTexture()
                 const dash::vkexp::MeshBuffers* mesh = resources[i].mesh ? resources[i].mesh : &vkCtx_.cubeMesh();
                 if (mesh->indexCount() == 0) continue;
 
-                vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, opaquePipeline);
+                vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, vkCtx_.outlinePipeline());
                 vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                       opaqueLayout, 0, 1, &ds, 0, nullptr);
+                                       vkCtx_.outlinePipelineLayout(), 0, 1, &ds, 0, nullptr);
                 VkBuffer ovb[] = { mesh->vertexBuffer() };
                 VkDeviceSize ovbOffsets[] = { 0 };
                 vkCmdBindVertexBuffers(cmd, 0, 1, ovb, ovbOffsets);
@@ -517,7 +519,7 @@ void EditorApp::renderWorldToTexture()
                 dash::vkexp::buildInstancePushConstants(
                     outlineModel, active ? 1.0f : 0.6f, active ? 0.55f : 0.33f, 0.0f, 1.0f,
                     flat, pc, 0, 0.0f, 1.0f);
-                vkCmdPushConstants(cmd, opaqueLayout,
+                vkCmdPushConstants(cmd, vkCtx_.outlinePipelineLayout(),
                                   VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
                                   0, sizeof(pc), pc);
                 vkCmdDrawIndexed(cmd, mesh->indexCount(), 1, 0, 0, 0);

@@ -18,7 +18,8 @@ public:
         const std::string& fragSpvPath,
         VkPipelineLayout& outPipelineLayout,
         VkPipeline& outPipeline,
-        std::string& outError);
+        std::string& outError,
+        VkCullModeFlags cullMode = VK_CULL_MODE_NONE);
 
     static bool createTerrainPipeline(
         VkDevice device,
