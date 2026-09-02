@@ -315,6 +315,12 @@ bool EditorVkContext::init(SDL_Window* window)
     // ── Pipelines ───────────────────────────────────────────────────────────
     if (!createPipelines()) return false;
 
+    // Non-fatal: the Bone Structure panel falls back to its software-only
+    // skeleton overlay (no rendered mesh) if this pipeline is unavailable.
+    if (!createPreviewPipeline()) {
+        std::fprintf(stderr, "[EditorVk] Bone Structure preview pipeline unavailable.\n");
+    }
+
     if (!hdr_.createPipeline(deviceCtx_.device(), vpRenderPass_, VULKAN_SHADER_DIR)) {
         std::fprintf(stderr, "[EditorVk] Tonemap pipeline unavailable.\n");
         return false;
@@ -780,6 +786,301 @@ void EditorVkContext::destroyBoneResources()
     }
     if (boneBuffer_) { vkDestroyBuffer(dev, boneBuffer_, nullptr); boneBuffer_ = VK_NULL_HANDLE; }
     if (boneMemory_) { vkFreeMemory(dev, boneMemory_, nullptr);    boneMemory_ = VK_NULL_HANDLE; }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Bone Structure panel preview — independent small offscreen target + a
+// minimal pipeline (skinned.vert.spv + skinned.frag.spv, the PLAIN variant
+// compiled without DASH_SCENE_LIGHTS: no material/light/shadow/terrain/ssao
+// bindings, just the push-constant lighting skinned.frag falls back to when
+// it has no scene lights). Set 1 (bone palette) reuses boneSetLayout_/
+// boneSet_/bonePalette_ as-is: one more claimed slot per frame, same buffer.
+// ─────────────────────────────────────────────────────────────────────────────
+bool EditorVkContext::createPreviewPipeline()
+{
+    VkDevice dev = deviceCtx_.device();
+    VkPhysicalDevice pd = deviceCtx_.physicalDevice();
+    if (boneSetLayout_ == VK_NULL_HANDLE) return false; // no skinning support at all
+
+    constexpr VkFormat kPreviewColorFormat = VK_FORMAT_B8G8R8A8_UNORM;
+    constexpr VkFormat kPreviewDepthFormat = VK_FORMAT_D32_SFLOAT;
+
+    // ── Render pass (color + depth, own target) ──────────────────────────────
+    VkAttachmentDescription colorAttachment{};
+    colorAttachment.format = kPreviewColorFormat;
+    colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+    colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    colorAttachment.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+    VkAttachmentDescription depthAttachment{};
+    depthAttachment.format = kPreviewDepthFormat;
+    depthAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+    depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    depthAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    depthAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    depthAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    depthAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
+    VkAttachmentReference colorRef{0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL};
+    VkAttachmentReference depthRef{1, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL};
+
+    VkSubpassDescription subpass{};
+    subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+    subpass.colorAttachmentCount = 1;
+    subpass.pColorAttachments = &colorRef;
+    subpass.pDepthStencilAttachment = &depthRef;
+
+    // Same dependency shape as HdrTarget::init(): the ImGui pass samples this
+    // attachment later in the same command buffer.
+    std::array<VkSubpassDependency, 2> deps{};
+    deps[0].srcSubpass = VK_SUBPASS_EXTERNAL;
+    deps[0].dstSubpass = 0;
+    deps[0].srcStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+    deps[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
+                           VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+    deps[0].srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+    deps[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
+                            VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+    deps[0].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+    deps[1].srcSubpass = 0;
+    deps[1].dstSubpass = VK_SUBPASS_EXTERNAL;
+    deps[1].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    deps[1].dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+    deps[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    deps[1].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+    deps[1].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+
+    std::array<VkAttachmentDescription, 2> attachments = {colorAttachment, depthAttachment};
+    VkRenderPassCreateInfo rpInfo{VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO};
+    rpInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
+    rpInfo.pAttachments = attachments.data();
+    rpInfo.subpassCount = 1;
+    rpInfo.pSubpasses = &subpass;
+    rpInfo.dependencyCount = static_cast<uint32_t>(deps.size());
+    rpInfo.pDependencies = deps.data();
+    if (vkCreateRenderPass(dev, &rpInfo, nullptr, &previewRenderPass_) != VK_SUCCESS) {
+        std::fprintf(stderr, "[EditorVk][Preview] vkCreateRenderPass failed.\n");
+        return false;
+    }
+
+    // ── Camera-only descriptor set: set 0 binding 0, all skinned.vert needs ──
+    VkDescriptorSetLayoutBinding camBinding{};
+    camBinding.binding = 0;
+    camBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    camBinding.descriptorCount = 1;
+    camBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+
+    VkDescriptorSetLayoutCreateInfo camLci{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
+    camLci.bindingCount = 1; camLci.pBindings = &camBinding;
+    if (vkCreateDescriptorSetLayout(dev, &camLci, nullptr, &previewCamSetLayout_) != VK_SUCCESS)
+        return false;
+
+    VkDescriptorPoolSize poolSize{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1};
+    VkDescriptorPoolCreateInfo pci{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
+    pci.maxSets = 1; pci.poolSizeCount = 1; pci.pPoolSizes = &poolSize;
+    if (vkCreateDescriptorPool(dev, &pci, nullptr, &previewDescPool_) != VK_SUCCESS) return false;
+
+    VkDescriptorSetAllocateInfo dsai{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
+    dsai.descriptorPool = previewDescPool_; dsai.descriptorSetCount = 1;
+    dsai.pSetLayouts = &previewCamSetLayout_;
+    if (vkAllocateDescriptorSets(dev, &dsai, &previewCamSet_) != VK_SUCCESS) return false;
+
+    if (!createBuffer(pd, dev, sizeof(float) * 16,
+                      VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                      previewCamBuffer_, previewCamMemory_))
+        return false;
+    if (vkMapMemory(dev, previewCamMemory_, 0, VK_WHOLE_SIZE, 0, &previewCamMapped_) != VK_SUCCESS)
+        return false;
+
+    VkDescriptorBufferInfo camBufInfo{previewCamBuffer_, 0, sizeof(float) * 16};
+    VkWriteDescriptorSet camWrite{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+    camWrite.dstSet = previewCamSet_; camWrite.dstBinding = 0;
+    camWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    camWrite.descriptorCount = 1; camWrite.pBufferInfo = &camBufInfo;
+    vkUpdateDescriptorSets(dev, 1, &camWrite, 0, nullptr);
+
+    // ── Sampler ──────────────────────────────────────────────────────────────
+    VkSamplerCreateInfo sci{VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
+    sci.magFilter = VK_FILTER_LINEAR; sci.minFilter = VK_FILTER_LINEAR;
+    sci.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    sci.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    sci.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    if (vkCreateSampler(dev, &sci, nullptr, &previewSampler_) != VK_SUCCESS) return false;
+
+    // ── Pipeline: skinned.vert.spv + skinned.frag.spv, PLAIN (no -D flags) ───
+    const std::string shaderDir = VULKAN_SHADER_DIR;
+    const VkExtent2D extent{1, 1};  // dynamic viewport/scissor set at draw time below
+    std::string error;
+    if (!dash::vkexp::PipelineBuilder::createSkinnedPipeline(
+            dev, extent, previewRenderPass_, previewCamSetLayout_, boneSetLayout_,
+            shaderDir + "/skinned.vert.spv", shaderDir + "/skinned.frag.spv",
+            previewPipelineLayout_, previewPipeline_, error)) {
+        std::fprintf(stderr, "[EditorVk][Preview] skinned pipeline: %s\n", error.c_str());
+        return false;
+    }
+
+    std::fprintf(stdout, "[EditorVk][Preview] Bone Structure preview pipeline ready.\n");
+    return true;
+}
+
+bool EditorVkContext::ensurePreviewTarget(uint32_t width, uint32_t height)
+{
+    if (previewRenderPass_ == VK_NULL_HANDLE) return false; // createPreviewPipeline() failed/not run
+
+    width = std::max<uint32_t>(width, 1);
+    height = std::max<uint32_t>(height, 1);
+    if (previewWidth_ == width && previewHeight_ == height && previewFramebuffer_ != VK_NULL_HANDLE)
+        return true;
+
+    VkDevice dev = deviceCtx_.device();
+    VkPhysicalDevice pd = deviceCtx_.physicalDevice();
+
+    destroyPreviewTarget();
+
+    constexpr VkFormat kPreviewColorFormat = VK_FORMAT_B8G8R8A8_UNORM;
+    constexpr VkFormat kPreviewDepthFormat = VK_FORMAT_D32_SFLOAT;
+
+    if (!createImage(pd, dev, width, height, kPreviewColorFormat,
+            VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+            previewColorImage_, previewColorMemory_))
+        return false;
+    previewColorView_ = createView(dev, previewColorImage_, kPreviewColorFormat, VK_IMAGE_ASPECT_COLOR_BIT);
+
+    if (!createImage(pd, dev, width, height, kPreviewDepthFormat,
+            VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+            previewDepthImage_, previewDepthMemory_))
+        return false;
+    previewDepthView_ = createView(dev, previewDepthImage_, kPreviewDepthFormat, VK_IMAGE_ASPECT_DEPTH_BIT);
+
+    std::array<VkImageView, 2> atts = {previewColorView_, previewDepthView_};
+    VkFramebufferCreateInfo fci{VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO};
+    fci.renderPass = previewRenderPass_;
+    fci.attachmentCount = static_cast<uint32_t>(atts.size());
+    fci.pAttachments = atts.data();
+    fci.width = width; fci.height = height; fci.layers = 1;
+    if (vkCreateFramebuffer(dev, &fci, nullptr, &previewFramebuffer_) != VK_SUCCESS)
+        return false;
+
+    previewImGuiDesc_ = ImGui_ImplVulkan_AddTexture(previewSampler_, previewColorView_,
+                                                    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    previewWidth_ = width; previewHeight_ = height;
+    return true;
+}
+
+void EditorVkContext::destroyPreviewTarget()
+{
+    VkDevice dev = deviceCtx_.device();
+    if (dev == VK_NULL_HANDLE) return;
+
+    if (previewImGuiDesc_ != VK_NULL_HANDLE) {
+        if (ImGui::GetCurrentContext() != nullptr && ImGui::GetIO().BackendRendererUserData != nullptr)
+            ImGui_ImplVulkan_RemoveTexture(previewImGuiDesc_);
+        previewImGuiDesc_ = VK_NULL_HANDLE;
+    }
+    if (previewFramebuffer_) { vkDestroyFramebuffer(dev, previewFramebuffer_, nullptr); previewFramebuffer_ = VK_NULL_HANDLE; }
+    if (previewDepthView_)   { vkDestroyImageView(dev, previewDepthView_, nullptr);     previewDepthView_ = VK_NULL_HANDLE; }
+    if (previewDepthImage_)  { vkDestroyImage(dev, previewDepthImage_, nullptr);        previewDepthImage_ = VK_NULL_HANDLE; }
+    if (previewDepthMemory_) { vkFreeMemory(dev, previewDepthMemory_, nullptr);         previewDepthMemory_ = VK_NULL_HANDLE; }
+    if (previewColorView_)   { vkDestroyImageView(dev, previewColorView_, nullptr);     previewColorView_ = VK_NULL_HANDLE; }
+    if (previewColorImage_)  { vkDestroyImage(dev, previewColorImage_, nullptr);        previewColorImage_ = VK_NULL_HANDLE; }
+    if (previewColorMemory_) { vkFreeMemory(dev, previewColorMemory_, nullptr);         previewColorMemory_ = VK_NULL_HANDLE; }
+    previewWidth_ = 0; previewHeight_ = 0;
+}
+
+bool EditorVkContext::loadPreviewMesh(const std::string& dashMeshPath)
+{
+    if (dashMeshPath.empty()) {
+        previewMeshValid_ = false;
+        previewMeshPath_.clear();
+        return false;
+    }
+    if (previewMeshValid_ && dashMeshPath == previewMeshPath_) return true;
+
+    VkDevice dev = deviceCtx_.device();
+    if (previewMeshValid_) previewMesh_.shutdown(dev);
+    previewMeshValid_ = previewMesh_.initFromDashMesh(deviceCtx_.physicalDevice(), dev, dashMeshPath);
+    previewMeshPath_ = dashMeshPath;
+    if (!previewMeshValid_ || !previewMesh_.isSkinned()) {
+        if (!previewMeshValid_)
+            std::fprintf(stderr, "[EditorVk][Preview] Could not load mesh: %s\n", dashMeshPath.c_str());
+        previewMeshValid_ = false;
+    }
+    return previewMeshValid_;
+}
+
+ImTextureID EditorVkContext::renderBoneStructurePreview(uint32_t width, uint32_t height,
+                                                        const float viewProj[16],
+                                                        const float* boneMatrices,
+                                                        uint32_t boneMatrixCount)
+{
+    if (!frameInFlight_ || !previewMeshValid_ || previewPipeline_ == VK_NULL_HANDLE)
+        return 0;
+    if (!bonePalette_.usable())
+        return 0;
+    if (!ensurePreviewTarget(width, height))
+        return 0;
+
+    // Claims one more slot in the region updateViewportAnimators() already
+    // beginFrame()'d this frame; never calls beginFrame() itself, or it would
+    // reset nextSlot and invalidate every slot the main viewport just wrote.
+    const int64_t boneOffset = bonePalette_.writeSlot(boneMatrices, boneMatrixCount);
+    if (boneOffset < 0) return 0;
+
+    std::memcpy(previewCamMapped_, viewProj, sizeof(float) * 16);
+
+    VkCommandBuffer cmd = currentCmd();
+    if (cmd == VK_NULL_HANDLE) return 0;
+
+    std::array<VkClearValue, 2> clears{};
+    clears[0].color = {{0.11f, 0.11f, 0.13f, 1.0f}};
+    clears[1].depthStencil = {1.0f, 0};
+
+    VkRenderPassBeginInfo rpBegin{VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
+    rpBegin.renderPass = previewRenderPass_;
+    rpBegin.framebuffer = previewFramebuffer_;
+    rpBegin.renderArea = {{0, 0}, {previewWidth_, previewHeight_}};
+    rpBegin.clearValueCount = static_cast<uint32_t>(clears.size());
+    rpBegin.pClearValues = clears.data();
+    vkCmdBeginRenderPass(cmd, &rpBegin, VK_SUBPASS_CONTENTS_INLINE);
+
+    VkViewport vp{0.f, 0.f, static_cast<float>(previewWidth_), static_cast<float>(previewHeight_), 0.f, 1.f};
+    VkRect2D scissor{{0, 0}, {previewWidth_, previewHeight_}};
+    vkCmdSetViewport(cmd, 0, 1, &vp);
+    vkCmdSetScissor(cmd, 0, 1, &scissor);
+
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, previewPipeline_);
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                            previewPipelineLayout_, 0, 1, &previewCamSet_, 0, nullptr);
+    const uint32_t dynOffset = static_cast<uint32_t>(boneOffset);
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                            previewPipelineLayout_, 1, 1, &boneSet_, 1, &dynOffset);
+
+    VkBuffer vb[] = { previewMesh_.vertexBuffer(), previewMesh_.skinBuffer() };
+    VkDeviceSize offsets[] = { 0, 0 };
+    vkCmdBindVertexBuffers(cmd, 0, 2, vb, offsets);
+    vkCmdBindIndexBuffer(cmd, previewMesh_.indexBuffer(), 0, previewMesh_.indexType());
+
+    // InstancePC layout (SceneRenderer.h): model(16) + color(4) + lightDir+intensity(4)
+    // + lightParams(4, unused by the plain fragment) + material(4, unused).
+    float pc[dash::vkexp::kInstancePushConstantFloats] = {};
+    pc[0] = 1.f; pc[5] = 1.f; pc[10] = 1.f; pc[15] = 1.f;              // identity model
+    pc[16] = 0.82f; pc[17] = 0.82f; pc[18] = 0.85f; pc[19] = 1.0f;     // pale gray, "clay" look
+    pc[20] = 0.4f; pc[21] = 0.8f; pc[22] = 0.3f; pc[23] = 1.0f;        // key light direction + intensity
+    vkCmdPushConstants(cmd, previewPipelineLayout_,
+                       VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+                       0, sizeof(pc), pc);
+
+    vkCmdDrawIndexed(cmd, previewMesh_.indexCount(), 1, 0, 0, 0);
+
+    vkCmdEndRenderPass(cmd);
+
+    return reinterpret_cast<ImTextureID>(previewImGuiDesc_);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1349,6 +1650,20 @@ void EditorVkContext::shutdown()
     if (dev) vkDeviceWaitIdle(dev);
 
     destroyOffscreenTarget();
+
+    destroyPreviewTarget();
+    previewMesh_.shutdown(dev);
+    PipelineBuilder::destroy(dev, previewPipelineLayout_, previewPipeline_);
+    previewPipelineLayout_ = VK_NULL_HANDLE; previewPipeline_ = VK_NULL_HANDLE;
+    if (previewSampler_) { vkDestroySampler(dev, previewSampler_, nullptr); previewSampler_ = VK_NULL_HANDLE; }
+    if (previewRenderPass_) { vkDestroyRenderPass(dev, previewRenderPass_, nullptr); previewRenderPass_ = VK_NULL_HANDLE; }
+    if (previewCamBuffer_) { vkDestroyBuffer(dev, previewCamBuffer_, nullptr); previewCamBuffer_ = VK_NULL_HANDLE; }
+    if (previewCamMemory_) {
+        if (previewCamMapped_) { vkUnmapMemory(dev, previewCamMemory_); previewCamMapped_ = nullptr; }
+        vkFreeMemory(dev, previewCamMemory_, nullptr); previewCamMemory_ = VK_NULL_HANDLE;
+    }
+    if (previewDescPool_) { vkDestroyDescriptorPool(dev, previewDescPool_, nullptr); previewDescPool_ = VK_NULL_HANDLE; }
+    if (previewCamSetLayout_) { vkDestroyDescriptorSetLayout(dev, previewCamSetLayout_, nullptr); previewCamSetLayout_ = VK_NULL_HANDLE; }
 
     cubeMeshBuf_.shutdown(dev);
     terrainMeshBuf_.shutdown(dev);

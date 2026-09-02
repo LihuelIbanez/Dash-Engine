@@ -144,6 +144,24 @@ public:
                         const std::vector<dash::vfx::ParticleInstance>& alphaBatch,
                         const std::vector<dash::vfx::ParticleInstance>& additiveBatch);
 
+    // ── Bone Structure panel: standalone mesh preview ──────────────────────
+    // Independent of the main viewport: its own small offscreen target and a
+    // minimal pipeline (skinned.vert/frag, the plain variant with no material/
+    // light/shadow/terrain/ssao bindings) so a single mesh can be inspected
+    // without the HDR/shadow/SSAO pipeline. Loads (and caches) the .dashmesh at
+    // `dashMeshPath`; a no-op if it is already the cached mesh. False (and
+    // clears the cache) if the file could not be read.
+    bool loadPreviewMesh(const std::string& dashMeshPath);
+
+    // Renders the cached preview mesh with `boneMatrices` (GPU skinning
+    // matrices, boneMatrixCount * 16 column-major floats) and `viewProj` into
+    // the preview target (created/resized on demand). Returns the ImGui
+    // texture id to draw with ImGui::Image()/ImDrawList::AddImage(), or
+    // nullptr if the preview mesh/pipeline/target are not ready.
+    ImTextureID renderBoneStructurePreview(uint32_t width, uint32_t height,
+                                           const float viewProj[16],
+                                           const float* boneMatrices, uint32_t boneMatrixCount);
+
     // The actual size of the offscreen render target right now, which can lag
     // a frame or more behind the panel's own size: ensureViewportSize() only
     // reallocates past a hysteresis threshold. Anything building a projection
@@ -164,6 +182,13 @@ private:
     // every skinned draw in a frame. Mirrors Renderer::createBoneResources.
     bool createBoneResources();
     void destroyBoneResources();
+
+    // Bone Structure panel preview: one-time setup (render pass, camera-only
+    // descriptor set, pipeline) plus the per-size target, mirroring
+    // createOffscreenTarget()/destroyOffscreenTarget() at a much smaller scale.
+    bool createPreviewPipeline();
+    bool ensurePreviewTarget(uint32_t width, uint32_t height);
+    void destroyPreviewTarget();
 
     // Vulkan core
     VkInstance                       instance_    = VK_NULL_HANDLE;
@@ -250,6 +275,34 @@ private:
     dash::vkexp::MeshBuffers terrainMeshBuf_;
     dash::vkexp::MeshBuffers waterMeshBuf_;
     dash::vkexp::MeshBuffers cubeMeshBuf_;
+
+    // ── Bone Structure panel preview (see loadPreviewMesh/renderBoneStructurePreview) ──
+    VkRenderPass    previewRenderPass_  = VK_NULL_HANDLE;
+    VkImage         previewColorImage_  = VK_NULL_HANDLE;
+    VkDeviceMemory  previewColorMemory_ = VK_NULL_HANDLE;
+    VkImageView     previewColorView_   = VK_NULL_HANDLE;
+    VkImage         previewDepthImage_  = VK_NULL_HANDLE;
+    VkDeviceMemory  previewDepthMemory_ = VK_NULL_HANDLE;
+    VkImageView     previewDepthView_   = VK_NULL_HANDLE;
+    VkFramebuffer   previewFramebuffer_ = VK_NULL_HANDLE;
+    VkSampler       previewSampler_     = VK_NULL_HANDLE;
+    VkDescriptorSet previewImGuiDesc_   = VK_NULL_HANDLE;
+    uint32_t        previewWidth_  = 0;
+    uint32_t        previewHeight_ = 0;
+
+    VkDescriptorSetLayout previewCamSetLayout_ = VK_NULL_HANDLE;
+    VkDescriptorPool      previewDescPool_     = VK_NULL_HANDLE;
+    VkDescriptorSet       previewCamSet_       = VK_NULL_HANDLE;
+    VkBuffer              previewCamBuffer_    = VK_NULL_HANDLE;
+    VkDeviceMemory        previewCamMemory_    = VK_NULL_HANDLE;
+    void*                 previewCamMapped_    = nullptr;
+
+    VkPipelineLayout previewPipelineLayout_ = VK_NULL_HANDLE;
+    VkPipeline       previewPipeline_       = VK_NULL_HANDLE;
+
+    dash::vkexp::MeshBuffers previewMesh_;
+    std::string               previewMeshPath_;
+    bool                       previewMeshValid_ = false;
 
     uint32_t currentImageIndex_ = 0;
     bool     frameInFlight_     = false;

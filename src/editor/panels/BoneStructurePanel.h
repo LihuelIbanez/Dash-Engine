@@ -484,6 +484,21 @@ inline void recomputeOffsetsFromBindPose(SkeletonDoc& doc)
             dash::anim::inverse(dash::anim::multiply(doc.globalInverse, globals[i]));
 }
 
+/// GPU-ready skinning matrices (globalInverse * jointGlobal * offsetMatrix) for
+/// an arbitrary pose's globals — the same formula as Skeleton::bindPoseMatrices(),
+/// generalized to the animated globals bs::animatedGlobals() produces. Every
+/// entry is near-identity only when `globals` is the bind pose the offsets
+/// were computed against.
+inline std::vector<Mat4> skinningMatricesFromGlobals(const SkeletonDoc& doc,
+                                                     const std::vector<Mat4>& globals)
+{
+    std::vector<Mat4> out(doc.bones.size(), dash::anim::identity());
+    for (std::size_t i = 0; i < doc.bones.size() && i < globals.size(); ++i)
+        out[i] = dash::anim::multiply(dash::anim::multiply(doc.globalInverse, globals[i]),
+                                      doc.bones[i].offsetMatrix);
+    return out;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // File operations
 // ─────────────────────────────────────────────────────────────────────────────
@@ -833,6 +848,21 @@ public:
     const std::string& loadedPath() const { return path_; }
     bool               hasSkeleton() const { return !path_.empty(); }
 
+    // ── GPU mesh preview (rendered by EditorVkContext, see recordBoneStructurePreview) ──
+    // The actual render happens once per frame from EditorApp (the command
+    // buffer is only valid after vkCtx_.beginFrame(), which runs after every
+    // panel's draw()), so this panel only exposes the pose/camera it wants
+    // rendered and caches back the texture id the *previous* frame produced.
+    // Plain types (not ImVec2/ImTextureID) so this header stays includable
+    // without imgui.h, like dash::editor::bonestruct above (test_bone_structure
+    // links no ImGui at all).
+    std::string previewMeshPath() const { return siblingPath(".dashmesh"); }
+    const std::vector<dash::anim::Mat4>& previewSkinningMatrices() const { return previewSkinningMatrices_; }
+    const float* previewViewProj() const { return previewViewProjFlat_; }
+    float previewCanvasWidth() const { return previewCanvasW_; }
+    float previewCanvasHeight() const { return previewCanvasH_; }
+    void setGpuPreviewTexture(uint64_t tex) { gpuPreviewTex_ = tex; }
+
 private:
     struct SaveReport {
         bool        ok = false;
@@ -914,6 +944,13 @@ private:
     bool                                  previewGizmoUndoPushed_ = false;
     dash::anim::Vec3                      previewGizmoStartLocalT_{0.f, 0.f, 0.f};
     dash::anim::Mat4                      previewGizmoParentGlobal_ = dash::anim::identity();
+
+    // ── GPU preview backing state (written in drawPreviewCanvas, read by EditorApp) ──
+    std::vector<dash::anim::Mat4> previewSkinningMatrices_;
+    float                          previewViewProjFlat_[16] = {};
+    float                          previewCanvasW_ = 0.f;
+    float                          previewCanvasH_ = 0.f;
+    uint64_t                       gpuPreviewTex_ = 0;
 
     // ── Bind vs animated pose ────────────────────────────────────────────────
     PreviewPose                            previewPose_ = PreviewPose::Bind;

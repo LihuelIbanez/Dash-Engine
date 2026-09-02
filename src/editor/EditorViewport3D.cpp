@@ -374,6 +374,28 @@ void EditorApp::renderWorldToTexture()
     // Before every pass that draws the instances: all three read the same slots.
     updateViewportAnimators(std::min(ImGui::GetIO().DeltaTime, 0.1f), instances, resources);
 
+    // ── Bone Structure panel: standalone mesh preview ───────────────────────
+    // Recorded here (own render pass, no nesting) and claims one more bone
+    // palette slot in the region updateViewportAnimators() just filled above.
+    // The resulting texture is shown by the panel next frame (drawn earlier
+    // in the ImGui pass, before vkCtx_.beginFrame() makes the cmd buffer valid).
+    if (showBoneStructurePanel_ && boneStructurePanel_.hasSkeleton()) {
+        const std::string previewMeshPathStr = boneStructurePanel_.previewMeshPath();
+        uint64_t previewTex = 0;
+        if (!previewMeshPathStr.empty() && vkCtx_.loadPreviewMesh(previewMeshPathStr)) {
+            const uint32_t pw = static_cast<uint32_t>(std::max(4.0f, boneStructurePanel_.previewCanvasWidth()));
+            const uint32_t ph = static_cast<uint32_t>(std::max(4.0f, boneStructurePanel_.previewCanvasHeight()));
+            const auto& boneMats = boneStructurePanel_.previewSkinningMatrices();
+            std::vector<float> flatBones(boneMats.size() * 16);
+            for (std::size_t bi = 0; bi < boneMats.size(); ++bi)
+                std::memcpy(&flatBones[bi * 16], boneMats[bi].m, sizeof(float) * 16);
+            previewTex = static_cast<uint64_t>(vkCtx_.renderBoneStructurePreview(
+                pw, ph, boneStructurePanel_.previewViewProj(),
+                flatBones.data(), static_cast<uint32_t>(boneMats.size())));
+        }
+        boneStructurePanel_.setGpuPreviewTexture(previewTex);
+    }
+
     vkCtx_.recordShadowPass(instances, resources);
 
     dash::vkexp::Mat4 ssaoViewProj{};

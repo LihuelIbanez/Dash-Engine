@@ -789,8 +789,16 @@ void BoneStructurePanel::drawPreviewCanvas(LogCallback& logCb)
     }
 
     ImDrawList* dl = ImGui::GetWindowDrawList();
-    dl->AddRectFilled(canvasPos, ImVec2(canvasPos.x + canvasSize.x, canvasPos.y + canvasSize.y),
-                      IM_COL32(28, 28, 34, 255));
+    if (gpuPreviewTex_ != 0) {
+        // Real render from last frame (see EditorApp::renderWorldToTexture()):
+        // one frame of latency, imperceptible at interactive rates and the
+        // same pipelining every offscreen viewport in this editor already has.
+        dl->AddImage(reinterpret_cast<ImTextureID>(gpuPreviewTex_), canvasPos,
+                     ImVec2(canvasPos.x + canvasSize.x, canvasPos.y + canvasSize.y));
+    } else {
+        dl->AddRectFilled(canvasPos, ImVec2(canvasPos.x + canvasSize.x, canvasPos.y + canvasSize.y),
+                          IM_COL32(28, 28, 34, 255));
+    }
 
     const bs::Mat4 viewOnly = bs::lookAtMatrix(bs::orbitEye(previewCam_), previewCam_.focus,
                                                dash::anim::Vec3{0.f, 1.f, 0.f});
@@ -802,6 +810,13 @@ void BoneStructurePanel::drawPreviewCanvas(LogCallback& logCb)
             ? bs::animatedGlobals(doc_, previewClips_[static_cast<std::size_t>(previewClipIndex_)],
                                   previewClipTimeTicks_)
             : bs::bindGlobals(doc_);
+
+    // Cached for EditorApp to render the actual skinned mesh next frame; see
+    // the "GPU mesh preview" getters on this class.
+    previewSkinningMatrices_ = bs::skinningMatricesFromGlobals(doc_, globals);
+    std::memcpy(previewViewProjFlat_, viewProj.m, sizeof(previewViewProjFlat_));
+    previewCanvasW_ = canvasSize.x;
+    previewCanvasH_ = canvasSize.y;
 
     std::vector<dash::anim::Vec3> jointWorld(globals.size());
     std::vector<bs::ScreenPoint>  jointScreen(globals.size());
