@@ -137,6 +137,48 @@ inline int addBiome(BiomeTable& table, const std::string& baseId = "new_biome")
     return static_cast<int>(table.biomes.size()) - 1;
 }
 
+// ── Undo/redo: a plain stack of full-table snapshots, capped so a long edit
+// session cannot grow it without bound. Same shape as BoneStructurePanel's
+// UndoStack<T>, kept local here rather than shared: each panel's pure-logic
+// namespace is self-contained by design in this codebase.
+class UndoStack {
+public:
+    void push(const BiomeTable& snapshot)
+    {
+        undo_.push_back(snapshot);
+        if (undo_.size() > kMaxDepth) undo_.erase(undo_.begin());
+        redo_.clear();
+    }
+
+    bool canUndo() const { return !undo_.empty(); }
+    bool canRedo() const { return !redo_.empty(); }
+
+    bool undoTo(BiomeTable& current)
+    {
+        if (undo_.empty()) return false;
+        redo_.push_back(current);
+        current = undo_.back();
+        undo_.pop_back();
+        return true;
+    }
+
+    bool redoTo(BiomeTable& current)
+    {
+        if (redo_.empty()) return false;
+        undo_.push_back(current);
+        current = redo_.back();
+        redo_.pop_back();
+        return true;
+    }
+
+    void clear() { undo_.clear(); redo_.clear(); }
+
+private:
+    static constexpr std::size_t kMaxDepth = 50;
+    std::vector<BiomeTable> undo_;
+    std::vector<BiomeTable> redo_;
+};
+
 // ── Palettes shared with the UI ──────────────────────────────────────────────
 
 inline const char* const* vegetationKinds(int& count)
@@ -195,6 +237,10 @@ private:
     void drawPreview(const dash::world::BiomeTable& table, const TerrainMesh& terrain);
     void drawBiomeEditor(dash::world::BiomeTable& table);
     void drawIssues(const dash::world::BiomeTable& table);
+    // Pushes an undo snapshot on the false->true edge of "some widget is being
+    // edited", so a whole drag/typing session is one undo step instead of one
+    // per changed pixel. Also handles Cmd+Z / Cmd+Shift+Z.
+    void handleUndoRedo(dash::world::BiomeTable& table, const LogCallback& log);
 
     int   selected_ = 0;
     int   previewSize_ = 128;
@@ -204,6 +250,9 @@ private:
     std::vector<int> previewCounts_;
     unsigned int previewGeneration_ = 0;
     char saveAsNameBuf_[96] = {0};
+
+    dash::editor::biomedesign::UndoStack tableUndo_;
+    bool wasAnyItemActive_ = false;
 };
 
 #endif // DASH_BIOME_DESIGNER_NO_IMGUI

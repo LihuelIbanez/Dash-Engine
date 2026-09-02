@@ -58,6 +58,8 @@ void BiomeDesignerPanel::draw(BiomeTable& table,
         return;
     }
 
+    handleUndoRedo(table, log);
+
     const std::string path = biomeTableId.empty()
         ? dash::world::biomeTablePath(assetsRoot)
         : (assetsRoot + "/world/biomes/" + biomeTableId + ".json");
@@ -90,8 +92,21 @@ void BiomeDesignerPanel::draw(BiomeTable& table,
     }
     ImGui::SameLine();
     if (ImGui::Button("Add Biome")) {
+        tableUndo_.push(table);
         selected_ = dash::editor::biomedesign::addBiome(table);
     }
+    ImGui::SameLine();
+    ImGui::BeginDisabled(!tableUndo_.canUndo());
+    if (ImGui::Button("Undo")) {
+        if (tableUndo_.undoTo(table)) { previewDirty_ = true; log("Biomes: undo"); }
+    }
+    ImGui::EndDisabled();
+    ImGui::SameLine();
+    ImGui::BeginDisabled(!tableUndo_.canRedo());
+    if (ImGui::Button("Redo")) {
+        if (tableUndo_.redoTo(table)) { previewDirty_ = true; log("Biomes: redo"); }
+    }
+    ImGui::EndDisabled();
 
     if (ImGui::BeginPopupModal("Save Biome As", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
         ImGui::TextUnformatted("Saves this table under assets/world/biomes/<name>.json");
@@ -163,6 +178,30 @@ void BiomeDesignerPanel::draw(BiomeTable& table,
     ImGui::EndChild();
 
     ImGui::End();
+}
+
+void BiomeDesignerPanel::handleUndoRedo(BiomeTable& table, const LogCallback& log)
+{
+    // Rising edge of "some widget is active" = one undo step per drag/typing
+    // session, not one per changed pixel. IsAnyItemActive() is global to the
+    // whole ImGui context, so an edit elsewhere can push a (harmless, no-op)
+    // snapshot too; the alternative is instrumenting every one of the ~15
+    // fields in drawBiomeEditor() individually.
+    const bool activeNow = ImGui::IsAnyItemActive();
+    if (activeNow && !wasAnyItemActive_) tableUndo_.push(table);
+    wasAnyItemActive_ = activeNow;
+
+    if (!ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows)) return;
+    ImGuiIO& io = ImGui::GetIO();
+    if (io.KeyShift) {
+        if (ImGui::IsKeyPressed(ImGuiKey_Z, false) && tableUndo_.redoTo(table)) {
+            previewDirty_ = true;
+            if (log) log("Biomes: redo");
+        }
+    } else if (ImGui::IsKeyPressed(ImGuiKey_Z, false) && tableUndo_.undoTo(table)) {
+        previewDirty_ = true;
+        if (log) log("Biomes: undo");
+    }
 }
 
 void BiomeDesignerPanel::drawPreview(const BiomeTable& table, const TerrainMesh& terrain)
@@ -284,14 +323,17 @@ void BiomeDesignerPanel::drawBiomeEditor(BiomeTable& table)
     ImGui::EndChild();
 
     if (ImGui::Button("Move Up")) {
+        tableUndo_.push(table);
         if (dash::editor::biomedesign::moveBiome(table, selected_, -1)) --selected_;
     }
     ImGui::SameLine();
     if (ImGui::Button("Move Down")) {
+        tableUndo_.push(table);
         if (dash::editor::biomedesign::moveBiome(table, selected_, 1)) ++selected_;
     }
     ImGui::SameLine();
     if (ImGui::Button("Remove")) {
+        tableUndo_.push(table);
         dash::editor::biomedesign::removeBiome(table, selected_);
         if (table.biomes.empty()) return;
         selected_ = std::max(0, std::min(selected_, static_cast<int>(table.biomes.size()) - 1));
@@ -358,9 +400,13 @@ void BiomeDesignerPanel::drawBiomeEditor(BiomeTable& table)
         ImGui::Separator();
         ImGui::PopID();
     }
-    if (removeRule >= 0) b.vegetation.erase(b.vegetation.begin() + removeRule);
+    if (removeRule >= 0) {
+        tableUndo_.push(table);
+        b.vegetation.erase(b.vegetation.begin() + removeRule);
+    }
 
     if (ImGui::Button("Add Vegetation Rule")) {
+        tableUndo_.push(table);
         dash::world::VegetationRule rule;
         rule.kind = "grass";
         rule.density = 0.05f;
